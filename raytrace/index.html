@@ -37,17 +37,8 @@
   </style>
 </head>
 <body>
+  <script src="https://cdn.jsdelivr.net/npm/dat.gui@0.7.6/build/dat.gui.min.js"></script>
   <canvas width="320" height="200"></canvas>
-  <div class="ui-wrap">
-    <select>
-      <option value="0">sphere 1</option>
-      <option value="1">sphere 2</option>
-      <option value="2">sphere 3</option>
-    </select>
-    <button>dump</button>
-    <table class="ui">
-    </table>
-  </div>
   <script>
     let mem;
 
@@ -71,125 +62,60 @@
         updateUI();
       });
 
-    let els = [];
-
-    let select = document.querySelector('select');
-    select.addEventListener('change', event => {
-      updateUI();
-    });
-
-    function updateUI() {
-      let sphere = select.value | 0;
-      f32 = new Float32Array(mem.buffer, 124 + sphere * 16 * 7, 16 * 7);
-      for (let i = 0; i < els.length; ++i) {
-        els[i].input.value = f32[i];
-        els[i].span.textContent = f32[i].toFixed(2);
-      }
-    }
-
     let ranges = [
-      {name: 'x.a', min: -10, max: 10, step: 0.1},
-      {name: 'x.b', min: -3, max: 3, step: 0.01},
-      {name: 'x.c', min: 0, max: 2*Math.PI, step: 0.1},
-      {name: 'x.d', min: -10, max: 10, step: 0.1},
+      ['x.a', -10, 10, 0.1],
+      ['x.b', -3, 3, 0.01],
+      ['x.c', 0, 2*Math.PI, 0.1],
+      ['x.d', -10, 10, 0.1],
 
-      {name: 'y.a', min: -10, max: 10, step: 0.1},
-      {name: 'y.b', min: -3, max: 3, step: 0.01},
-      {name: 'y.c', min: 0, max: 2*Math.PI, step: 0.1},
-      {name: 'y.d', min: -20, max: 10, step: 0.1},
+      ['y.a', -10, 10, 0.1],
+      ['y.b', -3, 3, 0.01],
+      ['y.c', 0, 2*Math.PI, 0.1],
+      ['y.d', -20, 10, 0.1],
 
-      {name: 'z.a', min: -10, max: 10, step: 0.1},
-      {name: 'z.b', min: -3, max: 3, step: 0.01},
-      {name: 'z.c', min: 0, max: 2*Math.PI, step: 0.1},
-      {name: 'z.d', min: -30, max: -5, step: 0.1},
+      ['z.a', -10, 10, 0.1],
+      ['z.b', -3, 3, 0.01],
+      ['z.c', 0, 2*Math.PI, 0.1],
+      ['z.d', -30, -5, 0.1],
 
-      {name: 'r.a', min: -3, max: 3, step: 0.1},
-      {name: 'r.b', min: -3, max: 3, step: 0.01},
-      {name: 'r.c', min: 0, max: 2*Math.PI, step: 0.1},
-      {name: 'r.d', min: 0, max: 5, step: 0.1},
+      ['r.a', -3, 3, 0.1],
+      ['r.b', -3, 3, 0.01],
+      ['r.c', 0, 2*Math.PI, 0.1],
+      ['r.d', 0, 5, 0.1],
 
-      {name: 'R.a', min: 0, max: 1, step: 0.01},
-      {name: 'R.b', min: -3, max: 3, step: 0.01},
-      {name: 'R.c', min: 0, max: 2*Math.PI, step: 0.1},
-      {name: 'R.d', min: 0, max: 1, step: 0.01},
+      ['R.a', 0, 1, 0.01],
+      ['R.b', -3, 3, 0.01],
+      ['R.c', 0, 2*Math.PI, 0.1],
+      ['R.d', 0, 1, 0.01],
 
-      {name: 'G.a', min: 0, max: 1, step: 0.01},
-      {name: 'G.b', min: -3, max: 3, step: 0.01},
-      {name: 'G.c', min: 0, max: 2*Math.PI, step: 0.1},
-      {name: 'G.d', min: 0, max: 1, step: 0.01},
+      ['G.a', 0, 1, 0.01],
+      ['G.b', -3, 3, 0.01],
+      ['G.c', 0, 2*Math.PI, 0.1],
+      ['G.d', 0, 1, 0.01],
 
-      {name: 'B.a', min: 0, max: 1, step: 0.01},
-      {name: 'B.b', min: -3, max: 3, step: 0.01},
-      {name: 'B.c', min: 0, max: 2*Math.PI, step: 0.1},
-      {name: 'B.d', min: 0, max: 1, step: 0.01},
+      ['B.a', 0, 1, 0.01],
+      ['B.b', -3, 3, 0.01],
+      ['B.c', 0, 2*Math.PI, 0.1],
+      ['B.d', 0, 1, 0.01],
     ];
 
-    let ui = document.querySelector('.ui');
-    for (let i = 0; i < ranges.length; ++i) {
-      let range = ranges[i];
+    let spheres = [{}, {}, {}];
+    let gui = new dat.GUI();
 
-      let tr = document.createElement('tr');
-      ui.appendChild(tr);
-
-      let td = document.createElement('td');
-      let name = range.name;
-      let label = document.createElement('label');
-      label.setAttribute('for', name);
-      label.textContent = name;
-      td.appendChild(label);
-      tr.append(td);
-
-      td = document.createElement('td');
-      let input = document.createElement('input');
-      input.setAttribute('id', name);
-      input.setAttribute('type', 'range');
-      input.setAttribute('min', range.min);
-      input.setAttribute('max', range.max);
-      input.setAttribute('value', range.value);
-      input.setAttribute('step', range.step);
-      td.appendChild(input);
-      tr.append(td);
-
-      td = document.createElement('td');
-      td.classList.add('value');
-      let span = document.createElement('span');
-      span.textContent = range.value;
-      td.appendChild(span);
-      tr.append(td);
-
-      input.addEventListener('input', event => {
-        let value = +event.target.value;
-        f32[i] = value;
-        span.textContent = value.toFixed(2);
-      });
-
-      els.push({input, span});
-    }
-
-    document.querySelector('button').addEventListener('click', event => {
-      let u8 = new Uint8Array(mem.buffer, 124, 16 * 7 * 3);
-
-      let hex = b => b.toString(16);
-      let hex2 = b => `\\${hex(b >> 4)}${hex(b & 0xf)}`;
-      let row = (name, base) => {
-        let s = '"';
-        for (let i = 0; i < 16; ++i) {
-          s += hex2(u8[base + i]);
-        }
-        return s + `" ;; ${name}`;
-      };
-
+    function updateUI() {
       for (let i = 0; i < 3; ++i) {
-        console.log(row(`s${i+1}.x`, 16 * (7 * i + 0)));
-        console.log(row(`s${i+1}.y`, 16 * (7 * i + 1)));
-        console.log(row(`s${i+1}.z`, 16 * (7 * i + 2)));
-        console.log(row(`s${i+1}.r`, 16 * (7 * i + 3)));
-        console.log(row(`s${i+1}.R`, 16 * (7 * i + 4)));
-        console.log(row(`s${i+1}.G`, 16 * (7 * i + 5)));
-        console.log(row(`s${i+1}.B`, 16 * (7 * i + 6)));
+        let f = gui.addFolder(`sphere ${i}`);
+        let f32 = new Float32Array(mem.buffer, 124 + i * 16 * 7, 16 * 7);
+        let j = 0;
+        for (let j = 0; j < ranges.length; ++j) {
+          let [name, min, max, step] = ranges[j];
+          spheres[i][name] = f32[j];
+          f.add(spheres[i], name, min, max, step).onChange(value => {
+            f32[j] = value;
+          });
+        }
       }
-    });
-
+    }
   </script>
 </body>
 
