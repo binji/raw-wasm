@@ -17,7 +17,7 @@ just updates every pixel.
 
 ## Raytrace
 
-A simple raytracer, using techniques from [tinytracer][5], in hand-written
+A simple raytracer, using techniques from [tinyraytracer][5], in hand-written
 WebAssembly.
 
 [Demo!][6]
