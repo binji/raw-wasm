@@ -3,7 +3,7 @@
 ## Doomfire
 
 An implementation of the Doom fire effect described in
-[Fabien Sanglard's blog][1], using hand-written WebAssembly.
+[Fabien Sanglard's blog][1], using hand-written WebAssembly. [**398 bytes**]
 
 [Demo!][2]
 
@@ -11,14 +11,14 @@ An implementation of the Doom fire effect described in
 
 An implementation of the metaball effect described in [Jamie Wong's blog][3],
 using hand-written WebAssembly. Unlike the implementation described there, this
-just updates every pixel.
+just updates every pixel. [**452 bytes**]
 
 [Demo!][4]
 
 ## Raytrace
 
 A simple raytracer, using techniques from [tinyraytracer][5], in hand-written
-WebAssembly.
+WebAssembly. 4 spheres, 1 light, reflections, and shadows. [**1486 bytes**]
 
 [Demo!][6]
 
