@@ -25,6 +25,6 @@ WebAssembly.
 [1]: http://fabiensanglard.net/doom_fire_psx/index.html
 [2]: https://binji.github.io/raw-wasm/doomfire
 [3]: http://jamie-wong.com/2014/08/19/metaballs-and-marching-squares/
-[4]: https://binji.github.com/raw-wasm/metaball
+[4]: https://binji.github.io/raw-wasm/metaball
 [5]: https://github.com/ssloy/tinyraytracer/wiki/Part-1:-understandable-raytracing
-[6]: https://binji.github.com/raw-wasm/raytrace
+[6]: https://binji.github.io/raw-wasm/raytrace
