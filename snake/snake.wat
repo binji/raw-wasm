@@ -131,7 +131,7 @@
 
 (func $line (param $i i32) (param $di i32) (param $end i32) (param $color i32)
   (loop $loop
-    (i32.store8 offset=0x2400
+    (i32.store16 offset=0x2400
       (local.get $i)
       (local.get $color))
     (br_if $loop
@@ -382,29 +382,26 @@
   (local $i i32)
   (local $input i32)
 
-  ;; clear screen
-  (call $line (i32.const 0) (i32.const 1) (i32.const 76800) (i32.const 0))
-
-  ;; top two rows
-  (call $line (i32.const 0) (i32.const 1) (i32.const 480) (i32.const 3))
-  ;; bottom two rows
-  (call $line (i32.const 76320) (i32.const 1) (i32.const 76800) (i32.const 3))
-  ;; left two columns
-  (call $line (i32.const 480) (i32.const 240) (i32.const 76320) (i32.const 3))
-  (call $line (i32.const 481) (i32.const 240) (i32.const 76321) (i32.const 3))
-
-  ;; right two columns
-  (call $line (i32.const 718) (i32.const 240) (i32.const 76558) (i32.const 3))
-  (call $line (i32.const 719) (i32.const 240) (i32.const 76559) (i32.const 3))
-
-  ;; draw SCORE
-  (call $string (i32.const 8) (i32.const 8) (i32.const 645) (i32.const 3))
-  (call $string (i32.const 146) (i32.const 8) (i32.const 650) (i32.const 3))
-
   (local.set $input
     (i32.sub
       (i32.load8_u offset=0x2c1 (i32.const 0))
       (i32.load8_u offset=0x2c0 (i32.const 0))))
+
+  ;; clear screen
+  (call $line (i32.const 0) (i32.const 2) (i32.const 76800) (i32.const 0))
+
+  ;; top two rows
+  (call $line (i32.const 0) (i32.const 2) (i32.const 480) (i32.const 0x303))
+  ;; bottom two rows
+  (call $line (i32.const 76320) (i32.const 2) (i32.const 76800) (i32.const 0x303))
+  ;; left two columns
+  (call $line (i32.const 480) (i32.const 240) (i32.const 76320) (i32.const 0x303))
+
+  (call $line (i32.const 718) (i32.const 240) (i32.const 76558) (i32.const 0x303))
+
+  ;; draw SCORE
+  (call $string (i32.const 8) (i32.const 8) (i32.const 645) (i32.const 3))
+  (call $string (i32.const 146) (i32.const 8) (i32.const 650) (i32.const 3))
 
   (block $done
     (block $button
