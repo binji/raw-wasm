@@ -159,11 +159,11 @@
 
 (func $start
   ;; x, y
-  (f32.store offset=0x300 (i32.const 0) (f32.const 100))
+  (f32.store offset=0x300 (i32.const 0) (f32.const 80))
   (f32.store offset=0x304 (i32.const 0) (f32.const 180))
 
   (global.set $angle (i32.const 1024))
-  (global.set $speed (f32.const 0.4))
+  (global.set $speed (f32.const 0.6))
   (global.set $turnspeed (i32.const 12))
   (global.set $len (i32.const 0))
   (global.set $tolen (i32.const 40))
