@@ -1,11 +1,12 @@
 (import "Math" "random" (func $random (result f32)))
 (import "Math" "sin" (func $sin (param f32) (result f32)))
 
-;; 0..0x3ff       : sprite data
-;; 0x400          : left
-;; 0x401          : right
-;; 0x1000..0x1fff : (x, y) for each snake node
-;; 0x2000..       : palette RGBA
+;; 0..0x27f       : sprite data
+;; 0x280..0x28a   : strings
+;; 0x290..0x2b4   : palette
+;; 0x2c0          : left
+;; 0x2c1          : right
+;; 0x300..0x1fff  : (x, y) for each snake node
 ;; 0x2400..       : 1bpp screen
 ;; 0x15000..      : 4bpp screen
 (memory (export "mem") 6)
@@ -115,7 +116,7 @@
 )
 
 ;; Palette data.
-(data (i32.const 0x2000)
+(data (i32.const 0x290)
   "\00\00\00\00"  ;; 0 0000 background
   "\28\A9\21\FF"  ;; 1 0001 snake
   "\28\A9\21\FF"  ;; 2 0010 snake head
@@ -150,38 +151,19 @@
       (i32.const 10))))
 
 (func $score (param i32)
-  ;; erase previous score
-  (call $string (i32.const 146) (i32.const 8) (i32.const 650) (i32.const 0))
   (global.set $score (local.get 0))
   (call $digit (i32.const 0) (i32.const 10000))
   (call $digit (i32.const 1) (i32.const 1000))
   (call $digit (i32.const 2) (i32.const 100))
-  (call $digit (i32.const 3) (i32.const 10))
-  (call $digit (i32.const 4) (i32.const 1))
 )
 
 (func $start
-  ;; clear screen
-  (call $line (i32.const 0) (i32.const 1) (i32.const 76800) (i32.const 0))
-
-  ;; top two rows
-  (call $line (i32.const 0) (i32.const 1) (i32.const 480) (i32.const 3))
-  ;; bottom two rows
-  (call $line (i32.const 76320) (i32.const 1) (i32.const 76800) (i32.const 3))
-  ;; left two columns
-  (call $line (i32.const 480) (i32.const 240) (i32.const 76320) (i32.const 3))
-  (call $line (i32.const 481) (i32.const 240) (i32.const 76321) (i32.const 3))
-
-  ;; right two columns
-  (call $line (i32.const 718) (i32.const 240) (i32.const 76558) (i32.const 3))
-  (call $line (i32.const 719) (i32.const 240) (i32.const 76559) (i32.const 3))
-
   ;; x, y
-  (f32.store offset=0x1000 (i32.const 0) (f32.const 100))
-  (f32.store offset=0x1004 (i32.const 0) (f32.const 180))
+  (f32.store offset=0x300 (i32.const 0) (f32.const 100))
+  (f32.store offset=0x304 (i32.const 0) (f32.const 180))
 
   (global.set $angle (i32.const 1024))
-  (global.set $speed (f32.const 0.3))
+  (global.set $speed (f32.const 0.4))
   (global.set $turnspeed (i32.const 12))
   (global.set $len (i32.const 0))
   (global.set $tolen (i32.const 40))
@@ -257,13 +239,13 @@
     (i32.trunc_f32_s
       (f32.add
         (f32.add
-          (f32.load offset=0x1000 (i32.const 0))
+          (f32.load offset=0x300 (i32.const 0))
           (f32.mul (global.get $dx) (f32.const 8)))
         (f32.mul (global.get $dy) (local.get $xoff))))
     (i32.trunc_f32_s
       (f32.add
         (f32.add
-          (f32.load offset=0x1004 (i32.const 0))
+          (f32.load offset=0x304 (i32.const 0))
           (f32.mul (global.get $dy) (f32.const 8)))
         (f32.mul (global.get $dx) (f32.neg (local.get $xoff)))))
     (i32.const 64)
@@ -281,8 +263,8 @@
       (loop $loop
         (drop
           (call $blit
-            (i32.trunc_f32_s (f32.load offset=0xff8 (local.get $i)))
-            (i32.trunc_f32_s (f32.load offset=0xffc (local.get $i)))
+            (i32.trunc_f32_s (f32.load offset=0x2f8 (local.get $i)))
+            (i32.trunc_f32_s (f32.load offset=0x2fc (local.get $i)))
             (i32.const 0)
             (local.get $color)))
         (br_if $loop
@@ -291,8 +273,8 @@
       ;; draw the head again, but in a different color.
       (drop
         (call $blit
-          (i32.trunc_f32_s (f32.load offset=0x1000 (i32.const 0)))
-          (i32.trunc_f32_s (f32.load offset=0x1004 (i32.const 0)))
+          (i32.trunc_f32_s (f32.load offset=0x300 (i32.const 0)))
+          (i32.trunc_f32_s (f32.load offset=0x304 (i32.const 0)))
           (i32.const 0)
           (i32.add (local.get $color) (i32.const 1))))
 
@@ -308,19 +290,16 @@
 (func $snake (param $input i32)
   (local $i i32)
 
-  ;; erase all
-  (drop (call $drawsnake (i32.const 0) (i32.const 0)))
-
   (local.set $i (i32.shl (global.get $tolen) (i32.const 3)))
   (loop $loop
     ;; move y
-    (f32.store offset=0xffc
+    (f32.store offset=0x2fc
       (local.get $i)
-      (f32.load offset=0xff4 (local.get $i)))
+      (f32.load offset=0x2f4 (local.get $i)))
     ;; move x
-    (f32.store offset=0xff8
+    (f32.store offset=0x2f8
       (local.get $i)
-      (f32.load offset=0xff0 (local.get $i)))
+      (f32.load offset=0x2f0 (local.get $i)))
 
     (br_if $loop
       (local.tee $i (i32.sub (local.get $i) (i32.const 8)))))
@@ -344,16 +323,16 @@
       (f32.const 0.0015339807878856412))))
 
   ;; x += dx
-  (f32.store offset=0x1000 (i32.const 0)
+  (f32.store offset=0x300 (i32.const 0)
     (f32.add
-      (f32.load offset=0x1008 (i32.const 0))
+      (f32.load offset=0x308 (i32.const 0))
       (f32.mul
         (global.get $dx)
         (global.get $speed))))
   ;; y += dy
-  (f32.store offset=0x1004 (i32.const 0)
+  (f32.store offset=0x304 (i32.const 0)
     (f32.add
-      (f32.load offset=0x100c (i32.const 0))
+      (f32.load offset=0x30c (i32.const 0))
       (f32.mul
         (global.get $dy)
         (global.get $speed))))
@@ -374,10 +353,6 @@
   ;; if hit food
   (if (i32.and (local.get $i) (i32.const 8))
     (then
-      ;; erase the old food
-      (drop
-        (call $blit
-          (global.get $foodx) (global.get $foody) (i32.const 32) (i32.const 0)))
       (call $newfood)
       (global.set $speed (f32.add (global.get $speed) (f32.const 0.05)))
       (global.set $turnspeed (i32.add (global.get $turnspeed) (i32.const 1)))
@@ -407,10 +382,29 @@
   (local $i i32)
   (local $input i32)
 
+  ;; clear screen
+  (call $line (i32.const 0) (i32.const 1) (i32.const 76800) (i32.const 0))
+
+  ;; top two rows
+  (call $line (i32.const 0) (i32.const 1) (i32.const 480) (i32.const 3))
+  ;; bottom two rows
+  (call $line (i32.const 76320) (i32.const 1) (i32.const 76800) (i32.const 3))
+  ;; left two columns
+  (call $line (i32.const 480) (i32.const 240) (i32.const 76320) (i32.const 3))
+  (call $line (i32.const 481) (i32.const 240) (i32.const 76321) (i32.const 3))
+
+  ;; right two columns
+  (call $line (i32.const 718) (i32.const 240) (i32.const 76558) (i32.const 3))
+  (call $line (i32.const 719) (i32.const 240) (i32.const 76559) (i32.const 3))
+
+  ;; draw SCORE
+  (call $string (i32.const 8) (i32.const 8) (i32.const 645) (i32.const 3))
+  (call $string (i32.const 146) (i32.const 8) (i32.const 650) (i32.const 3))
+
   (local.set $input
     (i32.sub
-      (i32.load8_u offset=1025 (i32.const 0))
-      (i32.load8_u offset=1024 (i32.const 0))))
+      (i32.load8_u offset=0x2c1 (i32.const 0))
+      (i32.load8_u offset=0x2c0 (i32.const 0))))
 
   (block $done
     (block $button
@@ -427,15 +421,11 @@
           (br $button))
 
         ;; $playing:
-        ;; draw SCORE
-        (call $string (i32.const 8) (i32.const 8) (i32.const 645) (i32.const 3))
-        (call $string (i32.const 146) (i32.const 8) (i32.const 650) (i32.const 3))
-
-        (call $snake (local.get $input))
         ;; draw food
         (drop
           (call $blit
             (global.get $foodx) (global.get $foody) (i32.const 32) (i32.const 8)))
+        (call $snake (local.get $input))
         (br $done))
 
       ;; $title
@@ -459,7 +449,7 @@
   (loop $loop
     (i32.store offset=0x15000
       (i32.shl (local.get $i) (i32.const 2))
-      (i32.load offset=0x2000
+      (i32.load offset=0x290
         (i32.shl
           (i32.load8_u offset=0x2400 (local.get $i))
           (i32.const 2))))
