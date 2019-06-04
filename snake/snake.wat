@@ -287,6 +287,11 @@
       (i32.const 0)))
 )
 
+(func $drawfood
+  (drop
+    (call $blit
+      (global.get $foodx) (global.get $foody) (i32.const 32) (i32.const 8))))
+
 (func $snake (param $input i32)
   (local $i i32)
 
@@ -424,11 +429,9 @@
           (br $button))
 
         ;; $playing:
-        ;; draw food
-        (drop
-          (call $blit
-            (global.get $foodx) (global.get $foody) (i32.const 32) (i32.const 8)))
+        (call $drawfood)  ;; draw before so it can be seen by snake.
         (call $snake (local.get $input))
+        (call $drawfood)  ;; draw after so it is always displayed on top.
         (br $done))
 
       ;; $title
