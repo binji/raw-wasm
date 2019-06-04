@@ -39,6 +39,17 @@
         document.addEventListener('keydown', onkey.bind(null, 1), false);
         document.addEventListener('keyup', onkey.bind(null, 0), false);
 
+        let ontouch = (down, event) => {
+          if (event.changedTouches[0].clientX < event.target.clientWidth / 2) {
+            u8[0] = down;
+          } else {
+            u8[1] = down;
+          }
+          event.preventDefault();
+        };
+        canvas.addEventListener('touchstart', ontouch.bind(null, 1), false);
+        canvas.addEventListener('touchend', ontouch.bind(null, 0), false);
+
         (function update() {
           requestAnimationFrame(update);
           instance.exports.run();

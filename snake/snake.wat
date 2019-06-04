@@ -354,9 +354,15 @@
   (if (i32.and (local.get $i) (i32.const 8))
     (then
       (call $newfood)
+      ;; update speed
       (global.set $speed (f32.add (global.get $speed) (f32.const 0.05)))
-      (global.set $turnspeed (i32.add (global.get $turnspeed) (i32.const 1)))
-      (global.set $tolen (i32.add (global.get $tolen) (i32.const 10)))
+      ;; update turn speed, and clamp
+      (if (i32.lt_u (global.get $turnspeed) (i32.const 40))
+        (global.set $turnspeed (i32.add (global.get $turnspeed) (i32.const 1))))
+      ;; update snake length, and clamp
+      (if (i32.lt_u (global.get $tolen) (i32.const 900))
+        (global.set $tolen (i32.add (global.get $tolen) (i32.const 10))))
+      ;; update score
       (call $score (i32.add (global.get $score) (i32.const 100)))))
 )
 
