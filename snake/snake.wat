@@ -307,7 +307,7 @@
       (global.get $foodx) (global.get $foody) (i32.const 32) (i32.const 8))))
 
 (func $inccolor (param $addr i32) (param $amount i32)
-  (i32.store offset=0x294
+  (i32.store
     (local.get $addr)
     (i32.add (i32.load (local.get $addr)) (local.get $amount))))
 
