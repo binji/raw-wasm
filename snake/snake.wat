@@ -129,7 +129,7 @@
   "\FF\21\37\FF"  ;; 5 0101 dead snake
   "\FF\21\37\FF"  ;; 6 0110 dead snake head
   "\00\00\00\00"  ;; 7 0111
-  "\FF\BF\78\FF"  ;; 8 1000 food
+  "\FF\27\B8\FF"  ;; 8 1000 food
 )
 
 (func $line (param $i i32) (param $di i32) (param $end i32) (param $color i32)
@@ -161,6 +161,9 @@
 )
 
 (func $start
+  ;; reset snake color
+  (i32.store (i32.const 0x294) (i32.const 0xff21a928))
+  (i32.store (i32.const 0x298) (i32.const 0xff21a928))
   (global.set $x (f32.const 80))
   (global.set $y (f32.const 180))
   (global.set $angle (i32.const 1024))
@@ -303,6 +306,11 @@
     (call $blit
       (global.get $foodx) (global.get $foody) (i32.const 32) (i32.const 8))))
 
+(func $inccolor (param $addr i32) (param $amount i32)
+  (i32.store offset=0x294
+    (local.get $addr)
+    (i32.add (i32.load (local.get $addr)) (local.get $amount))))
+
 (func $snake (param $input i32)
   (local $i i32)
 
@@ -371,7 +379,12 @@
       (global.set $speed (f32.add (global.get $speed) (f32.const 0.05)))
       ;; update turn speed, and clamp
       (if (i32.lt_u (global.get $turnspeed) (i32.const 40))
-        (global.set $turnspeed (i32.add (global.get $turnspeed) (i32.const 1))))
+        (then
+          (global.set $turnspeed (i32.add (global.get $turnspeed) (i32.const 1)))
+          ;; change snake color
+          (call $inccolor (i32.const 0x294) (i32.const 0x307))
+          (call $inccolor (i32.const 0x298) (i32.const 0x307))))
+
       ;; update snake length, and clamp
       (if (i32.lt_u (global.get $tolen) (i32.const 900))
         (global.set $tolen (i32.add (global.get $tolen) (i32.const 10))))
