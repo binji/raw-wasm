@@ -15,6 +15,8 @@
 (global $angle (mut i32) (i32.const 0))
 (global $speed (mut f32) (f32.const 0))
 (global $turnspeed (mut i32) (i32.const 0))
+(global $x (mut f32) (f32.const 0))
+(global $y (mut f32) (f32.const 0))
 (global $dx (mut f32) (f32.const 0))
 (global $dy (mut f32) (f32.const 0))
 (global $len (mut i32) (i32.const 0))
@@ -158,10 +160,8 @@
 )
 
 (func $start
-  ;; x, y
-  (f32.store offset=0x300 (i32.const 0) (f32.const 80))
-  (f32.store offset=0x304 (i32.const 0) (f32.const 180))
-
+  (global.set $x (f32.const 80))
+  (global.set $y (f32.const 180))
   (global.set $angle (i32.const 1024))
   (global.set $speed (f32.const 0.6))
   (global.set $turnspeed (i32.const 12))
@@ -187,28 +187,28 @@
 (func $blit (param $px i32) (param $py i32) (param $data i32) (param $color i32)
             (result i32)
   (local $res i32)
-  (local $w i32)
-  (local $h i32)
   (local $addr i32)
   (local $bits i32)
-  (local.set $h (i32.const 16))
 
-  (loop $hloop
-    (local.set $w (i32.const 16))
+  ;; calculate pixel address
+  (local.set $addr
+    (i32.add
+      (i32.mul (local.get $py) (i32.const 240))
+      (local.get $px)))
+
+  ;; reuse px, py as loop variables.
+  (local.set $py (i32.const 16))
+
+  (loop $yloop
+    (local.set $px (i32.const 16))
     (local.set $bits (i32.load16_u (local.get $data)))
     (local.set $data (i32.add (local.get $data) (i32.const 2)))
-    (loop $wloop
+    (loop $xloop
 
       (local.set $bits (i32.rotl (local.get $bits) (i32.const 1)))
       (if
         (i32.and (local.get $bits) (i32.const 0x10000))
         (then
-          ;; calculate pixel address
-          (local.set $addr
-            (i32.add
-              (i32.mul (local.get $py) (i32.const 240))
-              (local.get $px)))
-
           ;; or together all previous bits, before drawing.
           (local.set $res
             (i32.or
@@ -220,16 +220,15 @@
             (local.get $addr)
             (local.get $color))))
 
-      (local.set $px (i32.add (local.get $px) (i32.const 1)))
+      (local.set $addr (i32.add (local.get $addr) (i32.const 1)))
 
-      (br_if $wloop
-        (local.tee $w (i32.sub (local.get $w) (i32.const 1)))))
+      (br_if $xloop
+        (local.tee $px (i32.sub (local.get $px) (i32.const 1)))))
 
-    (local.set $px (i32.sub (local.get $px) (i32.const 16)))
-    (local.set $py (i32.add (local.get $py) (i32.const 1)))
+    (local.set $addr (i32.add (local.get $addr) (i32.const 224)))
 
-    (br_if $hloop
-      (local.tee $h (i32.sub (local.get $h) (i32.const 1)))))
+    (br_if $yloop
+      (local.tee $py (i32.sub (local.get $py) (i32.const 1)))))
 
   (local.get $res)
 )
@@ -239,13 +238,13 @@
     (i32.trunc_f32_s
       (f32.add
         (f32.add
-          (f32.load offset=0x300 (i32.const 0))
+          (global.get $x)
           (f32.mul (global.get $dx) (f32.const 8)))
         (f32.mul (global.get $dy) (local.get $xoff))))
     (i32.trunc_f32_s
       (f32.add
         (f32.add
-          (f32.load offset=0x304 (i32.const 0))
+          (global.get $y)
           (f32.mul (global.get $dy) (f32.const 8)))
         (f32.mul (global.get $dx) (f32.neg (local.get $xoff)))))
     (i32.const 64)
@@ -270,11 +269,11 @@
         (br_if $loop
           (local.tee $i (i32.sub (local.get $i) (i32.const 8)))))
 
-      ;; draw the head again, but in a different color.
+      ;; draw the head in a different color, so it has no collision.
       (drop
         (call $blit
-          (i32.trunc_f32_s (f32.load offset=0x300 (i32.const 0)))
-          (i32.trunc_f32_s (f32.load offset=0x304 (i32.const 0)))
+          (i32.trunc_f32_s (global.get $x))
+          (i32.trunc_f32_s (global.get $y))
           (i32.const 0)
           (i32.add (local.get $color) (i32.const 1))))
 
@@ -297,17 +296,16 @@
 
   (local.set $i (i32.shl (global.get $tolen) (i32.const 3)))
   (loop $loop
-    ;; move y
-    (f32.store offset=0x2fc
+    ;; move node[i] -> node[i+1]
+    (i64.store offset=0x2f8
       (local.get $i)
-      (f32.load offset=0x2f4 (local.get $i)))
-    ;; move x
-    (f32.store offset=0x2f8
-      (local.get $i)
-      (f32.load offset=0x2f0 (local.get $i)))
-
+      (i64.load offset=0x2f0 (local.get $i)))
     (br_if $loop
       (local.tee $i (i32.sub (local.get $i) (i32.const 8)))))
+
+  ;; write old head x/y to front.
+  (f32.store offset=0x300 (i32.const 0) (global.get $x))
+  (f32.store offset=0x304 (i32.const 0) (global.get $y))
 
   ;; rotate snake from input
   (global.set $angle
@@ -328,19 +326,15 @@
       (f32.const 0.0015339807878856412))))
 
   ;; x += dx
-  (f32.store offset=0x300 (i32.const 0)
+  (global.set $x
     (f32.add
-      (f32.load offset=0x308 (i32.const 0))
-      (f32.mul
-        (global.get $dx)
-        (global.get $speed))))
+      (global.get $x)
+      (f32.mul (global.get $dx) (global.get $speed))))
   ;; y += dy
-  (f32.store offset=0x304 (i32.const 0)
+  (global.set $y
     (f32.add
-      (f32.load offset=0x30c (i32.const 0))
-      (f32.mul
-        (global.get $dy)
-        (global.get $speed))))
+      (global.get $y)
+      (f32.mul (global.get $dy) (global.get $speed))))
 
   ;; make snake longer, if necessary
   (if
