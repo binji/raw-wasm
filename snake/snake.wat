@@ -257,17 +257,17 @@
   (if (result i32)
     (global.get $len)
     (then
-      (local.set $i (i32.shl (global.get $len) (i32.const 3)))
+      (local.set $i (i32.shl (global.get $len) (i32.const 2)))
 
       (loop $loop
         (drop
           (call $blit
-            (i32.trunc_f32_s (f32.load offset=0x2f8 (local.get $i)))
-            (i32.trunc_f32_s (f32.load offset=0x2fc (local.get $i)))
+            (i32.load16_s offset=0x2fc (local.get $i))
+            (i32.load16_s offset=0x2fe (local.get $i))
             (i32.const 0)
             (local.get $color)))
         (br_if $loop
-          (local.tee $i (i32.sub (local.get $i) (i32.const 8)))))
+          (local.tee $i (i32.sub (local.get $i) (i32.const 4)))))
 
       ;; draw the head in a different color, so it has no collision.
       (drop
@@ -294,18 +294,17 @@
 (func $snake (param $input i32)
   (local $i i32)
 
-  (local.set $i (i32.shl (global.get $tolen) (i32.const 3)))
+  (local.set $i (i32.shl (global.get $tolen) (i32.const 2)))
   (loop $loop
     ;; move node[i] -> node[i+1]
-    (i64.store offset=0x2f8
-      (local.get $i)
-      (i64.load offset=0x2f0 (local.get $i)))
+    (i32.store offset=0x2fc (local.get $i)
+      (i32.load offset=0x2f8 (local.get $i)))
     (br_if $loop
-      (local.tee $i (i32.sub (local.get $i) (i32.const 8)))))
+      (local.tee $i (i32.sub (local.get $i) (i32.const 4)))))
 
   ;; write old head x/y to front.
-  (f32.store offset=0x300 (i32.const 0) (global.get $x))
-  (f32.store offset=0x304 (i32.const 0) (global.get $y))
+  (i32.store16 offset=0x300 (i32.const 0) (i32.trunc_f32_s (global.get $x)))
+  (i32.store16 offset=0x302 (i32.const 0) (i32.trunc_f32_s (global.get $y)))
 
   ;; rotate snake from input
   (global.set $angle
