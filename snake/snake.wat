@@ -23,8 +23,9 @@
 (global $tolen (mut i32) (i32.const 0))
 (global $foodx (mut i32) (i32.const 0))
 (global $foody (mut i32) (i32.const 0))
-(global $deadtimer (mut i32) (i32.const 60))
+(global $timer (mut i32) (i32.const 30))
 (global $score (mut i32) (i32.const 0))
+(global $shake (mut f32) (f32.const 0))
 
 (data (i32.const 0)
   ;; 0: big circle
@@ -123,12 +124,12 @@
   "\28\A9\21\FF"  ;; 1 0001 snake
   "\28\A9\21\FF"  ;; 2 0010 snake head
   "\EE\EE\EE\FF"  ;; 3 0011 wall
-  "\51\79\E3\FF"  ;; 4 0100 eye
+  "\FF\FE\6B\FF"  ;; 4 0100 eye
 
-  "\FF\00\00\FF"  ;; 5 0101 dead snake
-  "\FF\00\00\FF"  ;; 6 0110 dead snake head
+  "\FF\21\37\FF"  ;; 5 0101 dead snake
+  "\FF\21\37\FF"  ;; 6 0110 dead snake head
   "\00\00\00\00"  ;; 7 0111
-  "\FF\00\00\FF"  ;; 8 1000 food
+  "\FF\BF\78\FF"  ;; 8 1000 food
 )
 
 (func $line (param $i i32) (param $di i32) (param $end i32) (param $color i32)
@@ -346,7 +347,7 @@
   (if (i32.and (local.get $i) (i32.const 1))
     (then
       (global.set $mode (i32.const 2))
-      (global.set $deadtimer (i32.const 0))))
+      (global.set $timer (i32.const 0))))
 
   ;; if hit food
   (if (i32.and (local.get $i) (i32.const 8))
@@ -386,6 +387,8 @@
   (local $i i32)
   (local $input i32)
 
+  (global.set $timer (i32.add (global.get $timer) (i32.const 1)))
+
   (local.set $input
     (i32.sub
       (i32.load8_u offset=0x2c1 (i32.const 0))
@@ -415,9 +418,6 @@
             (br_table $title $playing $dead (global.get $mode)))
 
           ;; $dead
-          (global.set $deadtimer
-            (i32.add (global.get $deadtimer) (i32.const 1)))
-
           (drop (call $drawsnake (i32.const 5) (i32.const 5)))
           (br $button))
 
@@ -439,7 +439,7 @@
     (if
       (i32.and
         (local.get $input)
-        (i32.ge_u (global.get $deadtimer) (i32.const 60)))
+        (i32.ge_u (global.get $timer) (i32.const 60)))
       (then
         (call $start)
         (global.set $mode (i32.const 1)))))
