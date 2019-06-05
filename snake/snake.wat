@@ -185,7 +185,7 @@
 
 (func $newfood
   (global.set $foodx (i32.add (call $rand (i32.const 200)) (i32.const 20)))
-  (global.set $foody (i32.add (call $rand (i32.const 280)) (i32.const 20)))
+  (global.set $foody (i32.add (call $rand (i32.const 270)) (i32.const 30)))
 )
 
 (func $shake (param i32) (result i32)
@@ -375,12 +375,12 @@
       (call $newfood)
       ;; shake screen
       (global.set $shake (f32.const 2))
-      ;; update speed
-      (global.set $speed (f32.add (global.get $speed) (f32.const 0.05)))
       ;; update turn speed, and clamp
       (if (i32.lt_u (global.get $turnspeed) (i32.const 40))
         (then
           (global.set $turnspeed (i32.add (global.get $turnspeed) (i32.const 1)))
+          ;; update speed
+          (global.set $speed (f32.add (global.get $speed) (f32.const 0.05)))
           ;; change snake color
           (call $inccolor (i32.const 0x294) (i32.const 0x307))
           (call $inccolor (i32.const 0x298) (i32.const 0x307))))
