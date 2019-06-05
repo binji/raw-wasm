@@ -185,11 +185,22 @@
   (global.set $foody (i32.add (call $rand (i32.const 280)) (i32.const 20)))
 )
 
+(func $shake (param i32) (result i32)
+  (i32.trunc_f32_s
+    (f32.add
+      (f32.convert_i32_s (local.get 0))
+      (f32.mul
+        (global.get $shake)
+        (f32.sub (call $random) (f32.const 0.5))))))
+
 (func $blit (param $px i32) (param $py i32) (param $data i32) (param $color i32)
             (result i32)
   (local $res i32)
   (local $addr i32)
   (local $bits i32)
+
+  (local.set $px (call $shake (local.get $px)))
+  (local.set $py (call $shake (local.get $py)))
 
   ;; calculate pixel address
   (local.set $addr
@@ -347,12 +358,15 @@
   (if (i32.and (local.get $i) (i32.const 1))
     (then
       (global.set $mode (i32.const 2))
+      (global.set $shake (f32.const 5))
       (global.set $timer (i32.const 0))))
 
   ;; if hit food
   (if (i32.and (local.get $i) (i32.const 8))
     (then
       (call $newfood)
+      ;; shake screen
+      (global.set $shake (f32.const 2))
       ;; update speed
       (global.set $speed (f32.add (global.get $speed) (f32.const 0.05)))
       ;; update turn speed, and clamp
@@ -388,6 +402,8 @@
   (local $input i32)
 
   (global.set $timer (i32.add (global.get $timer) (i32.const 1)))
+  (global.set $shake
+    (f32.max (f32.sub (global.get $shake) (f32.const 0.1)) (f32.const 0)))
 
   (local.set $input
     (i32.sub
