@@ -22,9 +22,17 @@ WebAssembly. 4 spheres, 1 light, reflections, and shadows. [**1486 bytes**]
 
 [Demo!][6]
 
+## Snake
+
+A snake-eats-the-dots game, but with 360° rotation. Use left and right arrow
+keys, or tap on the left or right side of the screen to turn. [**1976 bytes**]
+
+[Demo!][7]
+
 [1]: http://fabiensanglard.net/doom_fire_psx/index.html
 [2]: https://binji.github.io/raw-wasm/doomfire
 [3]: http://jamie-wong.com/2014/08/19/metaballs-and-marching-squares/
 [4]: https://binji.github.io/raw-wasm/metaball
 [5]: https://github.com/ssloy/tinyraytracer/wiki/Part-1:-understandable-raytracing
 [6]: https://binji.github.io/raw-wasm/raytrace
+[7]: https://binji.github.io/raw-wasm/snake
