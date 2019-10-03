@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<head>
+  <style>
+    body {
+      position: absolute;
+      display: flex;
+      flex-direction: column;
+      background-color: #555;
+      margin: 0;
+      width: 100%;
+      height: 100%;
+    }
+    canvas {
+      object-fit: contain;
+      width: 100%;
+      height: 100%;
+    }
+  </style>
+</head>
+<body>
+  <canvas width="320" height="240"></canvas>
+  <script>
+    let memory;
+    fetch('maze.wasm')
+      .then(response => response.arrayBuffer())
+      .then(bytes => WebAssembly.instantiate(bytes, {Math}))
+      .then(source => {
+        let instance = source.instance;
+        let canvasData = new Uint8Array(instance.exports.mem.buffer, 0x3000, 307200);
+        let canvas = document.querySelector('canvas');
+        let context = canvas.getContext('2d');
+        let imageData = context.createImageData(320, 240);
+        // XXX
+        memory = instance.exports.mem.buffer;
+        let u8 = new Uint8Array(instance.exports.mem.buffer, 0x0, 3);
+        let onkey = (down, event) => {
+          switch (event.code) {
+            case 'ArrowLeft': u8[0] = down; break;
+            case 'ArrowRight': u8[1] = down; break;
+            case 'ArrowUp': u8[2] = down; break;
+          }
+        };
+        document.addEventListener('keydown', onkey.bind(null, 1), false);
+        document.addEventListener('keyup', onkey.bind(null, 0), false);
+
+        let ontouch = (down, event) => {
+          if (event.changedTouches[0].clientY < event.target.clientWidth / 2) {
+            u8[2] = down;
+          } else {
+            if (event.changedTouches[0].clientX < event.target.clientWidth / 2) {
+              u8[0] = down;
+            } else {
+              u8[1] = down;
+            }
+          }
+          event.preventDefault();
+        };
+        canvas.addEventListener('touchstart', ontouch.bind(null, 1), false);
+        canvas.addEventListener('touchend', ontouch.bind(null, 0), false);
+
+        instance.exports.init();
+
+        (function update() {
+          requestAnimationFrame(update);
+          instance.exports.run();
+          imageData.data.set(canvasData);
+          context.putImageData(imageData, 0, 0);
+        })();
+      });
+  </script>
+</body>
+
