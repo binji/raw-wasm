@@ -388,7 +388,7 @@
         (i32.const 2)))))
 
 (func $draw-ceiling-and-floor
-      (param $top-addr i32) (param $height i32) (param $ray-x f32) (param $ray-y f32)
+      (param $top-addr i32) (param $height f32) (param $ray-x f32) (param $ray-y f32)
       (result i32)
   (local $bot-addr i32)
   (local $dist-addr i32)
@@ -398,7 +398,7 @@
 
   (local.set $bot-addr (i32.add (local.get $top-addr) (i32.const 307200)))
 
-  (if (i32.gt_s (local.get $height) (i32.const 0))
+  (if (f32.gt (local.get $height) (f32.const 0))
     (then
       (loop $loop
         ;; update distance
@@ -415,7 +415,7 @@
         (i32.store offset=0x3000
           (local.get $top-addr)
           (call $texture
-            (i32.const 0x500) (i32.const 0xd10)
+            (i32.const 0x400) (i32.const 0xd10)
             (local.get $u) (local.get $v)))
         (local.set $top-addr (i32.add (local.get $top-addr) (i32.const 1280)))
 
@@ -429,29 +429,38 @@
 
 
         (br_if $loop
-          (local.tee $height (i32.sub (local.get $height) (i32.const 1)))))))
+          (f32.gt
+            (local.tee $height (f32.sub (local.get $height) (f32.const 1)))
+            (f32.const 0))))))
   (local.get $top-addr))
 
-(func $draw-wall (param $addr i32) (param $height i32)
+(func $draw-wall (param $addr i32) (param $height f32)
   (local $u f32)
   (local $v f32)
   (local $dv f32)
 
   (local.set $u (global.get $t2))
-  (local.set $dv (f32.div (f32.const 1) (f32.convert_i32_s (local.get $height))))
+  (local.set $dv (f32.div (f32.const 1) (local.get $height)))
 
-  (if (i32.gt_s (local.get $height) (i32.const 240))
+  (local.set $v (f32.mul (local.get $height) (f32.const 0.5)))
+  (local.set $v
+    (f32.mul
+      (f32.sub (local.get $v) (f32.trunc (local.get $v)))
+      (local.get $dv)))
+
+  (if (f32.gt (local.get $height) (f32.const 240))
     (then
       (local.set $v
-        (f32.mul
-          (local.get $dv)
-          (f32.convert_i32_s
-            (i32.shr_s
-              (i32.sub (local.get $height) (i32.const 240))
-              (i32.const 1)))))
-      (local.set $height (i32.const 240))))
+        (f32.add
+          (local.get $v
+            (f32.mul
+              (local.get $dv)
+              (f32.mul
+                (f32.sub (local.get $height) (f32.const 240))
+                (f32.const 0.5))))))
+      (local.set $height (f32.const 240))))
 
-  (if (local.get $height)
+  (if (f32.gt (local.get $height) (f32.const 0))
     (then
       (loop $loop
         (i32.store offset=0x3000 (local.get $addr)
@@ -461,7 +470,9 @@
         (local.set $v (f32.add (local.get $v) (local.get $dv)))
         (local.set $addr (i32.add (local.get $addr) (i32.const 1280)))
         (br_if $loop
-          (local.tee $height (i32.sub (local.get $height) (i32.const 1))))))))
+          (f32.gt
+            (local.tee $height (f32.sub (local.get $height) (f32.const 1)))
+            (f32.const 0)))))))
 
 (func (export "run")
   (local $x i32)
@@ -469,7 +480,7 @@
   (local $xproj f32)
   (local $Dx f32)
   (local $Dy f32)
-  (local $height i32)
+  (local $height f32)
   (local $addr i32)
   (local $rotate f32)
 
@@ -513,16 +524,15 @@
       (f32.add (local.get $Dy) (f32.mul (local.get $xproj) (local.get $Dx))))
 
     (local.set $height
-      (i32.trunc_f32_s
-        (f32.div
-          (f32.const 240)
-          (call $ray-walls (local.get $ray-x) (local.get $ray-y)))))
+      (f32.div
+        (f32.const 240)
+        (call $ray-walls (local.get $ray-x) (local.get $ray-y))))
 
     ;; draw ceiling and floor
     (local.set $addr
       (call $draw-ceiling-and-floor
         (i32.shl (local.get $x) (i32.const 2))
-        (i32.shr_s (i32.sub (i32.const 240) (local.get $height)) (i32.const 1))
+        (f32.mul (f32.sub (f32.const 240) (local.get $height)) (f32.const 0.5))
         (local.get $ray-x) (local.get $ray-y)))
 
     ;; draw wall
