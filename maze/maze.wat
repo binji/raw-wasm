@@ -7,10 +7,11 @@
 
 ;; [0x0000, 0x0100)   u8[12*12]       maze cells for Kruskal's algo
 ;; [0x0100, 0x0310)   Cell2[12*11*2]  walls for Kruskal's algo
-;; [0x0400, 0x0500)   u8[32*32/4]     2bpp brick texture
-;; [0x0500, 0x0600)   u8[32*32/4]     2bpp floor/ceil texture
-;; [0x0c00, 0x0c02)   u8[3]           left/right/forward keys
-;; [0x0d00, 0x0d1c)   Color[4+3+3]    palettes
+;; [0x0400, 0x0500)   u8[32*32]       RLE compressed 2bpp textures
+;; [0x0500, 0x0900)   u8[32*32]       8bpp brick texture
+;; [0x0900, 0x0d00)   u8[32*32]       8bpp spot texture
+;; [0x0d00, 0x0d2c)   Color[4+3+3]    palettes
+;; [0x0d30, 0x0d32)   u8[3]           left/right/forward keys
 ;; [0x0e00, 0x0fe0)   f32[120]        Table of 120/(120-y)
 ;; [0x1000, 0x19c4)   Wall[11*11+4]   walls used in-game
 ;; [0x3000, 0x4e000)  Color[320*240]  canvas
@@ -43,40 +44,28 @@
   "\00\00\40\41"  ;; scale=24
 )
 
-;; brick texture 2bpp
 (data (i32.const 0x400)
-  "\aa\aa\aa\aa\aa\aa\aa\aa\00\00\00\00\02\00\00\00\ff\ff\ff\7f\f2\ff\ff\ff"
-  "\ff\ff\ff\7f\f2\ff\ff\ff\fc\fc\fc\7c\f2\fc\fc\fc\f7\f7\f7\77\f2\f7\f7\f7"
-  "\ff\ff\ff\7f\f2\ff\ff\ff\ff\ff\ff\7f\f2\ff\ff\ff\fc\fc\fc\7c\f2\fc\fc\fc"
-  "\f7\f7\f7\77\f2\f7\f7\f7\ff\ff\ff\7f\f2\ff\ff\ff\ff\ff\ff\7f\f2\ff\ff\ff"
-  "\fc\fc\fc\7c\f2\fc\fc\fc\f7\f7\f7\77\f2\f7\f7\f7\ff\ff\ff\7f\f2\ff\ff\ff"
-  "\55\55\55\55\52\55\55\55\aa\aa\aa\aa\aa\aa\aa\aa\02\00\00\00\00\00\00\00"
-  "\f2\ff\ff\ff\ff\ff\ff\7f\f2\ff\ff\ff\ff\ff\ff\7f\f2\fc\fc\fc\fc\fc\fc\7c"
-  "\f2\f7\f7\f7\f7\f7\f7\77\f2\ff\ff\ff\ff\ff\ff\7f\f2\ff\ff\ff\ff\ff\ff\7f"
-  "\f2\fc\fc\fc\fc\fc\fc\7c\f2\f7\f7\f7\f7\f7\f7\77\f2\ff\ff\ff\ff\ff\ff\7f"
-  "\f2\ff\ff\ff\ff\ff\ff\7f\f2\fc\fc\fc\fc\fc\fc\7c\f2\f7\f7\f7\f7\f7\f7\77"
-  "\f2\ff\ff\ff\ff\ff\ff\7f\52\55\55\55\55\55\55\55"
-)
+  ;; brick texture 2bpp RLE compressed
+  "\08\aa\04\00\ff\02\03\00\03\55\fe\d5\52\06\55\fe\d5\52\06\55\fe\d5\52\06"
+  "\55\fe\d5\52\06\55\fe\d5\52\06\55\fe\d5\52\06\55\fe\d5\52\06\55\fe\d5\52"
+  "\06\55\fe\d5\52\06\55\fe\d5\52\06\55\fe\d5\52\06\55\fe\d5\52\06\55\fe\d5"
+  "\52\03\55\04\ff\ff\f2\03\ff\08\aa\ff\02\07\00\ff\52\06\55\fe\d5\52\06\55"
+  "\fe\d5\52\06\55\fe\d5\52\06\55\fe\d5\52\06\55\fe\d5\52\06\55\fe\d5\52\06"
+  "\55\fe\d5\52\06\55\fe\d5\52\06\55\fe\d5\52\06\55\fe\d5\52\06\55\fe\d5\52"
+  "\06\55\fe\d5\52\06\55\fe\d5\f2\07\ff"
 
-;; floor and ceiling texture
-(data (i32.const 0x500)
-  "\00\56\55\55\55\55\55\02\80\56\55\55\55\55\55\0a\a0\55\55\55\55\55\55\29"
-  "\68\55\55\55\55\55\55\a5\5a\55\55\55\55\55\55\95\55\55\55\55\55\55\55\55"
-  "\55\55\55\55\55\55\55\55\55\55\55\55\55\55\55\55\55\55\55\55\55\55\55\55"
-  "\55\55\55\55\55\55\55\55\55\55\55\55\55\55\55\55\55\55\55\55\55\55\55\55"
-  "\55\55\55\95\5a\55\55\55\55\55\55\a5\68\55\55\55\55\55\55\29\a0\55\55\55"
-  "\55\55\55\0a\80\56\55\55\55\55\55\02\00\56\55\55\55\55\55\0a\80\56\55\55"
-  "\55\55\55\29\a0\55\55\55\55\55\55\a5\68\55\55\55\55\55\55\95\5a\55\55\55"
-  "\55\55\55\55\55\55\55\55\55\55\55\55\55\55\55\55\55\55\55\55\55\55\55\55"
-  "\55\55\55\55\55\55\55\55\55\55\55\55\55\55\55\55\55\55\55\55\55\55\55\55"
-  "\55\55\55\55\55\55\55\55\5a\55\55\55\55\55\55\95\68\55\55\55\55\55\55\a5"
-  "\a0\55\55\55\55\55\55\29\80\56\55\55\55\55\55\0a"
+  ;; floor and ceiling texture 2bpp RLE compressed
+  "\fe\00\56\05\55\fd\02\80\56\05\55\fe\0a\a0\06\55\fe\29\68\06\55\fe\a5\5a"
+  "\06\55\ff\95\3b\55\fe\95\5a\06\55\fe\a5\68\06\55\fe\29\a0\06\55\fd\0a\80"
+  "\56\05\55\fd\02\00\56\05\55\fd\0a\80\56\05\55\fe\29\a0\06\55\fe\a5\68\06"
+  "\55\fe\95\5a\3b\55\ff\5a\06\55\fe\95\68\06\55\fe\a5\a0\06\55\fd\29\80\56"
+  "\05\55\ff\0a"
 )
 
 ;; palette
 (data (i32.const 0xd00)
   ;; brick palette
-  "\f3\5f\5f\ff\79\0e\0e\ff\00\00\00\ff\9f\25\25\ff"
+  "\f3\5f\5f\ff\9f\25\25\ff\00\00\00\ff\79\0e\0e\ff"
   ;; ceiling palette
   "\62\8d\c6\ff\81\95\af\ff\62\8d\c6\ff"
   ;; floor palette
@@ -90,7 +79,8 @@
 (global $angle (mut f32) (f32.const 0.7853981633974483))
 (global $t2 (mut f32) (f32.const 0))
 
-(func (export "init")
+(start $init)
+(func $init
   ;; initialize distance table:
   ;;   120 / (120 - y) for y in [0, 120)
   (local $y i32)
@@ -107,6 +97,7 @@
         (i32.const 120))))
 
   (call $gen-maze)
+  (call $decompress-textures)
 )
 
 ;; Generate maze using Kruskal's algorithm.
@@ -243,6 +234,61 @@
         (local.tee $wall-addr (i32.add (local.get $wall-addr) (i32.const 2)))
         (i32.const 0x1f2)))))   ;; 0x100 + 11 * 11 * 2
 
+(func $decompress-textures
+  (local $src i32)
+  (local $dst i32)
+  (local $count i32)
+  (local $d-src i32)
+  (local $byte i32)
+
+  (local.set $src (i32.const 0x400))
+  (local.set $dst (i32.const 0x500))
+  (loop $src-loop
+    (local.set $count (i32.load8_s (local.get $src)))
+
+    (if (i32.gt_s (local.get $count) (i32.const 0))
+      (then
+        ;; Run of length $count.
+        (local.set $src (i32.add (local.get $src) (i32.const 1)))
+        (local.set $d-src (i32.const 0)))
+      (else
+        ;; -$count singleton elements.
+        (local.set $count (i32.sub (i32.const 0) (local.get $count)))
+        (local.set $d-src (i32.const 1))))
+
+    ;; Write the run.
+    (loop $dst-loop
+      (local.set $src (i32.add (local.get $src) (local.get $d-src)))
+      (local.set $byte (i32.load8_u (local.get $src)))
+
+      ;; Each byte is 2bpp, unpack into 8bpp palette index.
+      (i32.store8
+        (local.get $dst)
+        (i32.shl (i32.and (local.get $byte) (i32.const 3)) (i32.const 2)))
+      (i32.store8 offset=1
+        (local.get $dst)
+        (i32.shl
+          (i32.and (i32.shr_u (local.get $byte) (i32.const 2)) (i32.const 3))
+          (i32.const 2)))
+      (i32.store8 offset=2
+        (local.get $dst)
+        (i32.shl
+          (i32.and (i32.shr_u (local.get $byte) (i32.const 4)) (i32.const 3))
+          (i32.const 2)))
+      (i32.store8 offset=3
+        (local.get $dst)
+        (i32.shl
+          (i32.and (i32.shr_u (local.get $byte) (i32.const 6)) (i32.const 3))
+          (i32.const 2)))
+      (local.set $dst (i32.add (local.get $dst) (i32.const 4)))
+
+      (br_if $dst-loop
+        (local.tee $count (i32.sub (local.get $count) (i32.const 1)))))
+
+    (local.set $src (i32.add (local.get $src) (i32.const 1)))
+    (br_if $src-loop
+      (i32.lt_s (local.get $src) (i32.const 0x500)))))
+
 (func $fmod (param $x f32) (param $y f32) (result f32)
   (f32.sub
     (local.get $x)
@@ -352,6 +398,7 @@
         (i32.const 0x19c4))))
 
   (global.set $t2 (local.get $mint2))
+  ;; (global.set $t2 (f32.const 0.125))
   (local.get $mindist))
 
 (func $scale-frac-i32 (param $x f32) (result i32)
@@ -361,31 +408,23 @@
       (f32.sub (local.get $x) (f32.floor (local.get $x)))
       (f32.const 32))))
 
+;; Returns a color from a 32x32 8bpp texture, using a palette.
 (func $texture
       (param $tex-addr i32) (param $pal-addr i32)
       (param $u f32) (param $v f32)
       (result i32)
-  (local $iu i32)
-  (local $iv i32)
-
-  (local.set $iu (call $scale-frac-i32 (local.get $u)))
-  (local.set $iv (call $scale-frac-i32 (local.get $v)))
-
-  ;; read 2bpp color, then index into palette
   (i32.load
     (i32.add
       (local.get $pal-addr)
-      (i32.shl
-        (i32.and
-          (i32.shr_u
-            (i32.load8_u
-              (i32.add
-                (local.get $tex-addr)
-                (i32.add (i32.shl (local.get $iv) (i32.const 3))
-                         (i32.shr_u (local.get $iu) (i32.const 2)))))
-            (i32.shl (i32.and (local.get $iu) (i32.const 3)) (i32.const 1)))
-          (i32.const 3))
-        (i32.const 2)))))
+      ;; Read from 32x32 texture.
+      (i32.load8_u
+        (i32.add
+          (local.get $tex-addr)
+          (i32.add
+            ;; wrap v coordinate to [0, 32), then multiply by 32.
+            (i32.shl (call $scale-frac-i32 (local.get $v)) (i32.const 5))
+            ;; wrap u coordinate to [0, 32).
+            (call $scale-frac-i32 (local.get $u))))))))
 
 (func $draw-ceiling-and-floor
       (param $top-addr i32) (param $height f32) (param $ray-x f32) (param $ray-y f32)
@@ -415,7 +454,7 @@
         (i32.store offset=0x3000
           (local.get $top-addr)
           (call $texture
-            (i32.const 0x400) (i32.const 0xd10)
+            (i32.const 0x500) (i32.const 0xd10)
             (local.get $u) (local.get $v)))
         (local.set $top-addr (i32.add (local.get $top-addr) (i32.const 1280)))
 
@@ -424,7 +463,7 @@
         (i32.store offset=0x3000
           (local.get $bot-addr)
           (call $texture
-            (i32.const 0x500) (i32.const 0xd1c)
+            (i32.const 0x900) (i32.const 0xd1c)
             (local.get $u) (local.get $v)))
 
 
@@ -465,7 +504,7 @@
       (loop $loop
         (i32.store offset=0x3000 (local.get $addr)
           (call $texture
-            (i32.const 0x400) (i32.const 0xd00)
+            (i32.const 0x500) (i32.const 0xd00)
             (local.get $u) (local.get $v)))
         (local.set $v (f32.add (local.get $v) (local.get $dv)))
         (local.set $addr (i32.add (local.get $addr) (i32.const 1280)))
@@ -476,12 +515,10 @@
 
 (func (export "run")
   (local $x i32)
-  (local $wall i32)
   (local $xproj f32)
   (local $Dx f32)
   (local $Dy f32)
   (local $height f32)
-  (local $addr i32)
   (local $rotate f32)
 
   (local $ray-x f32)
@@ -492,8 +529,8 @@
     (f32.mul
       (f32.convert_i32_s
         (i32.sub
-          (i32.load8_u (i32.const 0xc00))
-          (i32.load8_u (i32.const 0xc01))))
+          (i32.load8_u (i32.const 0xd30))
+          (i32.load8_u (i32.const 0xd31))))
       (f32.const 0.04)))
   (global.set $angle
     (call $fmod (f32.add (global.get $angle) (local.get $rotate))
@@ -503,7 +540,7 @@
   (local.set $Dy (call $sin (f32.add (global.get $angle) (f32.const 1.5707963267948966))))
 
   ;; move forward
-  (if (i32.load8_u (i32.const 0xc02))
+  (if (i32.load8_u (i32.const 0xd32))
     (then
       (global.set $Px
         (f32.add (global.get $Px) (f32.mul (local.get $Dx) (f32.const 0.05))))
@@ -528,19 +565,17 @@
         (f32.const 240)
         (call $ray-walls (local.get $ray-x) (local.get $ray-y))))
 
-    ;; draw ceiling and floor
-    (local.set $addr
+    ;; draw wall
+    (call $draw-wall
+      ;; draw ceiling and floor
       (call $draw-ceiling-and-floor
         (i32.shl (local.get $x) (i32.const 2))
         (f32.mul (f32.sub (f32.const 240) (local.get $height)) (f32.const 0.5))
-        (local.get $ray-x) (local.get $ray-y)))
-
-    ;; draw wall
-    (call $draw-wall (local.get $addr) (local.get $height))
+        (local.get $ray-x) (local.get $ray-y))
+      (local.get $height))
 
     ;; loop on x
     (br_if $x-loop
       (i32.lt_s
         (local.tee $x (i32.add (local.get $x) (i32.const 1)))
-        (i32.const 320))))
-)
+        (i32.const 320)))))
