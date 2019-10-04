@@ -426,18 +426,26 @@
             ;; wrap u coordinate to [0, 32).
             (call $scale-frac-i32 (local.get $u))))))))
 
-(func $draw-ceiling-and-floor
-      (param $top-addr i32) (param $height f32) (param $ray-x f32) (param $ray-y f32)
-      (result i32)
+(func $draw-strip
+      (param $top-addr i32) (param $height f32)
+      (param $ray-x f32) (param $ray-y f32)
   (local $bot-addr i32)
   (local $dist-addr i32)
+  (local $iheight i32)
   (local $dist f32)
   (local $u f32)
   (local $v f32)
+  (local $dv f32)
+  (local $half-height f32)
 
+  (local.set $half-height (f32.mul (local.get $height) (f32.const 0.5)))
   (local.set $bot-addr (i32.add (local.get $top-addr) (i32.const 307200)))
+  (local.set $iheight
+    (i32.trunc_f32_s
+      (f32.ceil (f32.sub (f32.const 120) (local.get $half-height)))))
 
-  (if (f32.gt (local.get $height) (f32.const 0))
+  ;; Draw floor + ceiling.
+  (if (i32.gt_s (local.get $iheight) (i32.const 0))
     (then
       (loop $loop
         ;; update distance
@@ -466,59 +474,49 @@
             (i32.const 0x900) (i32.const 0xd1c)
             (local.get $u) (local.get $v)))
 
-
         (br_if $loop
-          (f32.gt
-            (local.tee $height (f32.sub (local.get $height) (f32.const 1)))
-            (f32.const 0))))))
-  (local.get $top-addr))
+          (local.tee $iheight (i32.sub (local.get $iheight) (i32.const 1)))))))
 
-(func $draw-wall (param $addr i32) (param $height f32)
-  (local $u f32)
-  (local $v f32)
-  (local $dv f32)
-
+  ;; Draw wall.
   (local.set $u (global.get $t2))
   (local.set $dv (f32.div (f32.const 1) (local.get $height)))
 
-  (local.set $v (f32.mul (local.get $height) (f32.const 0.5)))
   (local.set $v
     (f32.mul
-      (f32.sub (local.get $v) (f32.trunc (local.get $v)))
+      (f32.sub (local.get $half-height) (f32.trunc (local.get $half-height)))
       (local.get $dv)))
 
-  (if (f32.gt (local.get $height) (f32.const 240))
+  (local.set $iheight (i32.trunc_f32_s (f32.ceil (local.get $height))))
+
+  ;; If the wall is taller than the screen, adjust the $v coordinate
+  ;; accordingly.
+  (if (i32.gt_s (local.get $iheight) (i32.const 240))
     (then
       (local.set $v
         (f32.add
-          (local.get $v
-            (f32.mul
-              (local.get $dv)
-              (f32.mul
-                (f32.sub (local.get $height) (f32.const 240))
-                (f32.const 0.5))))))
-      (local.set $height (f32.const 240))))
+          (local.get $v)
+          (f32.mul
+            (local.get $dv)
+            (f32.sub (local.get $half-height) (f32.const 120)))))
+      (local.set $iheight (i32.const 240))))
 
-  (if (f32.gt (local.get $height) (f32.const 0))
+  (if (i32.gt_s (local.get $iheight) (i32.const 0))
     (then
       (loop $loop
-        (i32.store offset=0x3000 (local.get $addr)
+        (i32.store offset=0x3000 (local.get $top-addr)
           (call $texture
             (i32.const 0x500) (i32.const 0xd00)
             (local.get $u) (local.get $v)))
         (local.set $v (f32.add (local.get $v) (local.get $dv)))
-        (local.set $addr (i32.add (local.get $addr) (i32.const 1280)))
+        (local.set $top-addr (i32.add (local.get $top-addr) (i32.const 1280)))
         (br_if $loop
-          (f32.gt
-            (local.tee $height (f32.sub (local.get $height) (f32.const 1)))
-            (f32.const 0)))))))
+          (local.tee $iheight (i32.sub (local.get $iheight) (i32.const 1))))))))
 
 (func (export "run")
   (local $x i32)
   (local $xproj f32)
   (local $Dx f32)
   (local $Dy f32)
-  (local $height f32)
   (local $rotate f32)
 
   (local $ray-x f32)
@@ -560,19 +558,13 @@
     (local.set $ray-y
       (f32.add (local.get $Dy) (f32.mul (local.get $xproj) (local.get $Dx))))
 
-    (local.set $height
+    ;; Draw ceiling, wall, floor
+    (call $draw-strip
+      (i32.shl (local.get $x) (i32.const 2))
       (f32.div
         (f32.const 240)
-        (call $ray-walls (local.get $ray-x) (local.get $ray-y))))
-
-    ;; draw wall
-    (call $draw-wall
-      ;; draw ceiling and floor
-      (call $draw-ceiling-and-floor
-        (i32.shl (local.get $x) (i32.const 2))
-        (f32.mul (f32.sub (f32.const 240) (local.get $height)) (f32.const 0.5))
-        (local.get $ray-x) (local.get $ray-y))
-      (local.get $height))
+        (call $ray-walls (local.get $ray-x) (local.get $ray-y)))
+      (local.get $ray-x) (local.get $ray-y))
 
     ;; loop on x
     (br_if $x-loop
