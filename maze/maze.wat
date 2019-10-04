@@ -1,32 +1,46 @@
+(import "Math" "random" (func $random (result f32)))
 (import "Math" "sin" (func $sin (param f32) (result f32)))
 
+;; Color: u32       ; ABGR
+;; Cell2: u8*2      ; left/up cell, right/down cell
+;; Wall: f32*5      ; (x1,y1) -> (x2, y2), and x-scale
+
+;; [0x0000, 0x0100)   u8[12*12]       maze cells for Kruskal's algo
+;; [0x0100, 0x0310)   Cell2[12*11*2]  walls for Kruskal's algo
+;; [0x0400, 0x0500)   u8[32*32/4]     2bpp brick texture
+;; [0x0500, 0x0600)   u8[32*32/4]     2bpp floor/ceil texture
+;; [0x0c00, 0x0c02)   u8[3]           left/right/forward keys
+;; [0x0d00, 0x0d1c)   Color[4+3+3]    palettes
+;; [0x0e00, 0x0fe0)   f32[120]        Table of 120/(120-y)
+;; [0x1000, 0x19c4)   Wall[11*11+4]   walls used in-game
+;; [0x3000, 0x4e000)  Color[320*240]  canvas
 (memory (export "mem") 6)
 
-(data (i32.const 0)
+(data (i32.const 0x1000)
   ;; top wall
-  "\00\00\40\c1"  ;; -12.0
-  "\00\00\40\41"  ;; +12.0
-  "\00\00\40\41"  ;; +12.0
-  "\00\00\40\41"  ;; +12.0
-  "\00\00\40\41"  ;; scale=+12
+  "\00\00\00\00"  ;; 0.0
+  "\00\00\00\00"  ;; 0.0
+  "\00\00\c0\41"  ;; 24.0
+  "\00\00\00\00"  ;; 0.0
+  "\00\00\40\41"  ;; scale=+24
   ;; right wall
-  "\00\00\40\41"  ;; +12.0
-  "\00\00\40\41"  ;; +12.0
-  "\00\00\40\41"  ;; +12.0
-  "\00\00\40\c1"  ;; -12.0
-  "\00\00\40\41"  ;; scale=12
+  "\00\00\c0\41"  ;; 24.0
+  "\00\00\00\00"  ;; 0.0
+  "\00\00\c0\41"  ;; 24.0
+  "\00\00\c0\41"  ;; 24.0
+  "\00\00\40\41"  ;; scale=24
   ;; bottom wall
-  "\00\00\40\41"  ;; +12.0
-  "\00\00\40\c1"  ;; -12.0
-  "\00\00\40\c1"  ;; -12.0
-  "\00\00\40\c1"  ;; -12.0
-  "\00\00\40\41"  ;; scale=12
+  "\00\00\c0\41"  ;; 24.0
+  "\00\00\c0\41"  ;; 24.0
+  "\00\00\00\00"  ;; 0.0
+  "\00\00\c0\41"  ;; 24.0
+  "\00\00\40\41"  ;; scale=24
   ;; left wall
-  "\00\00\40\c1"  ;; -12.0
-  "\00\00\40\c1"  ;; -12.0
-  "\00\00\40\c1"  ;; -12.0
-  "\00\00\40\41"  ;; +12.0
-  "\00\00\40\41"  ;; scale=12
+  "\00\00\00\00"  ;; 0.0
+  "\00\00\c0\41"  ;; 24.0
+  "\00\00\00\00"  ;; 0.0
+  "\00\00\00\00"  ;; 0.0
+  "\00\00\40\41"  ;; scale=24
 )
 
 ;; brick texture 2bpp
@@ -71,8 +85,8 @@
 
 ;; Position and direction vectors. Direction is updated from angle, which is
 ;; expressed in radians.
-(global $Px (mut f32) (f32.const 0))
-(global $Py (mut f32) (f32.const 0))
+(global $Px (mut f32) (f32.const 0.5))
+(global $Py (mut f32) (f32.const 0.5))
 (global $angle (mut f32) (f32.const 0.7853981633974483))
 (global $t2 (mut f32) (f32.const 0))
 
@@ -90,7 +104,147 @@
     (br_if $loop
       (i32.lt_s
         (local.tee $y (i32.add (local.get $y) (i32.const 1)))
-        (i32.const 120)))))
+        (i32.const 120))))
+
+  (call $gen-maze)
+)
+
+;; Generate maze using Kruskal's algorithm.
+;; See http://weblog.jamisbuck.org/2011/1/3/maze-generation-kruskal-s-algorithm
+(func $gen-maze
+  (local $i i32)
+  (local $x i32)
+  (local $y i32)
+  (local $wall-addr i32)
+  (local $dest-wall-addr i32)
+  (local $walls i32)
+  (local $fx f32)
+  (local $fy f32)
+
+  (local.set $wall-addr (i32.const 0x100))
+  (loop $y-loop
+
+    (local.set $x (i32.const 0))
+    (loop $x-loop
+      ;; Each cell is "owned" by itself at the start.
+      (i32.store8 (local.get $i) (local.get $i))
+
+      ;; Add horizontal edge, connecting cell i and i + 1.
+      (if (i32.lt_s (local.get $x) (i32.const 11))
+        (then
+          (i32.store8 (local.get $wall-addr) (local.get $i))
+          (i32.store8 offset=1 (local.get $wall-addr) (i32.add (local.get $i) (i32.const 1)))
+          (local.set $wall-addr (i32.add (local.get $wall-addr) (i32.const 2)))))
+
+      ;; add vertical edge, connecting cell i and i + 12.
+      (if (i32.lt_s (local.get $y) (i32.const 11))
+        (then
+          (i32.store8 (local.get $wall-addr) (local.get $i))
+          (i32.store8 offset=1 (local.get $wall-addr) (i32.add (local.get $i) (i32.const 12)))
+          (local.set $wall-addr (i32.add (local.get $wall-addr) (i32.const 2)))))
+
+      ;; increment cell index.
+      (local.set $i (i32.add (local.get $i) (i32.const 1)))
+
+      (br_if $x-loop
+        (i32.lt_s
+          (local.tee $x (i32.add (local.get $x) (i32.const 1)))
+          (i32.const 12))))
+
+    (br_if $y-loop
+      (i32.lt_s
+        (local.tee $y (i32.add (local.get $y) (i32.const 1)))
+        (i32.const 12))))
+
+  (local.set $walls (i32.const 264))  ;; 12 * 11 * 2
+
+  ;; randomly choose a wall
+  (loop $wall-loop
+    (local.set $wall-addr
+      (i32.add
+        (i32.const 0x100)
+        (i32.shl
+          (i32.trunc_f32_s
+            (f32.mul (call $random) (f32.convert_i32_s (local.get $walls))))
+          (i32.const 1))))
+
+    ;; repurpose $x as the left/up cell, and $y as the right/down cell of the
+    ;; wall.
+    (local.set $x (i32.load8_u (i32.load8_u (local.get $wall-addr))))
+    (local.set $y (i32.load8_u (i32.load8_u offset=1 (local.get $wall-addr))))
+
+    ;; if each side of the wall is not part of the same set:
+    (if (i32.ne (local.get $x) (local.get $y))
+      (then
+        ;; remove this wall by copying the last wall over it.
+        (local.set $walls (i32.sub (local.get $walls) (i32.const 1)))
+        (i32.store16
+          (local.get $wall-addr)
+          (i32.load16_u offset=0x100
+            (i32.shl (local.get $walls) (i32.const 1))))
+
+        ;; replace all cells that contain $y with $x.
+        (local.set $i (i32.const 0))
+        (loop $remove-loop
+          (if (i32.eq (i32.load8_u (local.get $i)) (local.get $y))
+            (then (i32.store8 (local.get $i) (local.get $x))))
+
+          (br_if $remove-loop
+            (i32.lt_s
+              (local.tee $i (i32.add (local.get $i) (i32.const 1)))
+              (i32.const 144))))
+        ))
+
+    ;; loop until there are exactly 11 * 11 walls.
+    (br_if $wall-loop (i32.gt_s (local.get $walls) (i32.const 121))))
+
+  ;; generate walls for use in-game.
+  (local.set $walls (i32.const 0))
+  (loop $wall-loop
+    (local.set $wall-addr
+      (i32.add (i32.const 0x100) (i32.shl (local.get $walls) (i32.const 1))))
+
+    (local.set $dest-wall-addr
+      (i32.add (i32.const 0x1050) (i32.mul (local.get $walls) (i32.const 20))))
+
+    ;; Save the right/bottom cell of the wall as $i.
+    (local.set $i (i32.load8_u offset=1 (local.get $wall-addr)))
+
+    ;; Get the x,y coordinate of the wall from the cell index.
+    ;; Multiply by 2 so each cell is 2x2 units.
+    (local.set $fx
+      (f32.convert_i32_s
+        (i32.shl (i32.rem_s (local.get $i) (i32.const 12)) (i32.const 1))))
+    (local.set $fy
+      (f32.convert_i32_s
+        (i32.shl (i32.div_s (local.get $i) (i32.const 12)) (i32.const 1))))
+
+    (f32.store (local.get $dest-wall-addr) (local.get $fx))
+    (f32.store offset=4 (local.get $dest-wall-addr) (local.get $fy))
+    (f32.store offset=16 (local.get $dest-wall-addr) (f32.const 2))
+
+    ;; Get the two cells of the wall. If the difference is 1, it must be
+    ;; left/right.
+    (if (i32.eq
+          (i32.sub
+            (local.get $i)
+            (i32.load8_u (local.get $wall-addr)))
+          (i32.const 1))
+      ;; left-right wall
+      (then
+        (local.set $fy (f32.add (local.get $fy) (f32.const 2))))
+      ;; top-bottom wall
+      (else
+        (local.set $fx (f32.add (local.get $fx) (f32.const 2)))))
+
+    (f32.store offset=8 (local.get $dest-wall-addr) (local.get $fx))
+    (f32.store offset=12 (local.get $dest-wall-addr) (local.get $fy))
+
+    (br_if $wall-loop
+      (i32.lt_s
+        (local.tee $walls (i32.add (local.get $walls) (i32.const 1)))
+        (i32.const 121))))
+)
 
 (func $fmod (param $x f32) (param $y f32) (result f32)
   (f32.sub
@@ -273,9 +427,9 @@
     (f32.mul
       (f32.convert_i32_s
         (i32.sub
-          (i32.load8_u (i32.const 0))
-          (i32.load8_u (i32.const 1))))
-      (f32.const 0.08)))
+          (i32.load8_u (i32.const 0xc00))
+          (i32.load8_u (i32.const 0xc01))))
+      (f32.const 0.04)))
   (global.set $angle
     (call $fmod (f32.add (global.get $angle) (local.get $rotate))
                 (f32.const 6.283185307179586)))
@@ -284,12 +438,12 @@
   (local.set $Dy (call $sin (f32.add (global.get $angle) (f32.const 1.5707963267948966))))
 
   ;; move forward
-  (if (i32.load8_u (i32.const 2))
+  (if (i32.load8_u (i32.const 0xc02))
     (then
       (global.set $Px
-        (f32.add (global.get $Px) (f32.mul (local.get $Dx) (f32.const 0.10))))
+        (f32.add (global.get $Px) (f32.mul (local.get $Dx) (f32.const 0.05))))
       (global.set $Py
-        (f32.add (global.get $Py) (f32.mul (local.get $Dy) (f32.const 0.10))))))
+        (f32.add (global.get $Py) (f32.mul (local.get $Dy) (f32.const 0.05))))))
 
   ;; Loop for each column.
   (loop $x-loop
@@ -302,7 +456,7 @@
 
     ;; for each wall
     (local.set $mindist (f32.const inf))
-    (local.set $wall (i32.const 0))
+    (local.set $wall (i32.const 0x1000))
     (loop $wall-loop
 
       ;; Shoot a ray against a wall. Use rays projected onto screen plane.
@@ -330,7 +484,7 @@
       (br_if $wall-loop
         (i32.lt_s
           (local.tee $wall (i32.add (local.get $wall) (i32.const 20)))
-          (i32.const 80))))
+          (i32.const 0x19c4))))
 
     (local.set $height
       (i32.trunc_f32_s
