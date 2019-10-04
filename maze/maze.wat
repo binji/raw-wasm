@@ -363,13 +363,13 @@
 
 (func $texture
       (param $tex-addr i32) (param $pal-addr i32)
-      (param $x f32) (param $y f32)
+      (param $u f32) (param $v f32)
       (result i32)
-  (local $ix i32)
-  (local $iy i32)
+  (local $iu i32)
+  (local $iv i32)
 
-  (local.set $ix (call $scale-frac-i32 (local.get $x)))
-  (local.set $iy (call $scale-frac-i32 (local.get $y)))
+  (local.set $iu (call $scale-frac-i32 (local.get $u)))
+  (local.set $iv (call $scale-frac-i32 (local.get $v)))
 
   ;; read 2bpp color, then index into palette
   (i32.load
@@ -381,9 +381,9 @@
             (i32.load8_u
               (i32.add
                 (local.get $tex-addr)
-                (i32.add (i32.shl (local.get $iy) (i32.const 3))
-                         (i32.shr_u (local.get $ix) (i32.const 2)))))
-            (i32.shl (i32.and (local.get $ix) (i32.const 3)) (i32.const 1)))
+                (i32.add (i32.shl (local.get $iv) (i32.const 3))
+                         (i32.shr_u (local.get $iu) (i32.const 2)))))
+            (i32.shl (i32.and (local.get $iu) (i32.const 3)) (i32.const 1)))
           (i32.const 3))
         (i32.const 2)))))
 
@@ -393,8 +393,8 @@
   (local $bot-addr i32)
   (local $dist-addr i32)
   (local $dist f32)
-  (local $x f32)
-  (local $y f32)
+  (local $u f32)
+  (local $v f32)
 
   (local.set $bot-addr (i32.add (local.get $top-addr) (i32.const 307200)))
 
@@ -406,9 +406,9 @@
         (local.set $dist-addr (i32.add (local.get $dist-addr) (i32.const 4)))
 
         ;; find UV using distance table
-        (local.set $x
+        (local.set $u
           (f32.add (global.get $Px) (f32.mul (local.get $ray-x) (local.get $dist))))
-        (local.set $y
+        (local.set $v
           (f32.add (global.get $Py) (f32.mul (local.get $ray-y) (local.get $dist))))
 
         ;; draw ceiling (decrement after)
@@ -416,7 +416,7 @@
           (local.get $top-addr)
           (call $texture
             (i32.const 0x500) (i32.const 0xd10)
-            (local.get $x) (local.get $y)))
+            (local.get $u) (local.get $v)))
         (local.set $top-addr (i32.add (local.get $top-addr) (i32.const 1280)))
 
         ;; draw-floor (decrement before)
@@ -425,7 +425,7 @@
           (local.get $bot-addr)
           (call $texture
             (i32.const 0x500) (i32.const 0xd1c)
-            (local.get $x) (local.get $y)))
+            (local.get $u) (local.get $v)))
 
 
         (br_if $loop
