@@ -1,8 +1,11 @@
 (import "Math" "random" (func $random (result f32)))
 (import "Math" "sin" (func $sin (param f32) (result f32)))
 
+;; The current game mode. 0: init, 1: intro-anim, 2:game, 3:winning
 (global $mode (mut i32) (i32.const 3))
+;; The mode timer, in frames.
 (global $mode-timer (mut i32) (i32.const 120))
+;; The maximum wall to render or collide against. Used to clear the maze.
 (global $max-wall-addr (mut i32) (i32.const 0x1078))
 
 ;; Position and direction vectors. Direction is updated from angle, which is
@@ -11,7 +14,9 @@
 (global $Py (mut f32) (f32.const 23))
 (global $angle (mut f32) (f32.const 0.7853981633974483))
 
+;; The "time" of the ray-line collision along the wall in the range [0,1].
 (global $min-t2 (mut f32) (f32.const 0))
+;; The address of the wall hit by the most recent raycast.
 (global $min-wall (mut i32) (i32.const 0))
 
 ;; Color: u32        ; ABGR
@@ -30,45 +35,46 @@
 ;; [0x0e00, 0x0fe0)   f32[120]        Table of 120/(120-y)
 ;; [0x1000, 0x19ec)   Wall[6+11*11]   walls used in-game
 ;; [0x3000, 0x4e000)  Color[320*240]  canvas
-(memory (export "mem") 6)
+(memory (export "mem") 5)
 
+;; The default 6 walls.
 (data (i32.const 0x1000)
   ;; bottom wall
   "\00\00\00\00"  ;; 0.0
   "\00\00\00\00"  ;; 0.0
   "\00\00\c0\41"  ;; 24.0
   "\00\00\00\00"  ;; 0.0
-  "\18\00\00\00"  ;; scale=24
+  "\18\00\00\00"  ;; scale:24, tex:0, pal:0
   ;; right wall (minus goal)
   "\00\00\c0\41"  ;; 24.0
   "\00\00\00\00"  ;; 0.0
   "\00\00\c0\41"  ;; 24.0
   "\00\00\b0\41"  ;; 22.0
-  "\16\00\01\00"  ;; scale=22
+  "\16\00\01\00"  ;; scale:22, tex:0, pal:1
   ;; right goal
   "\00\00\c0\41"  ;; 24.0
   "\00\00\b0\41"  ;; 22.0
   "\00\00\c0\41"  ;; 24.0
   "\00\00\c0\41"  ;; 24.0
-  "\02\00\04\00"  ;; scale=2
+  "\02\00\04\00"  ;; scale:2, tex:0, pal:4
   ;; top goal
   "\00\00\c0\41"  ;; 24.0
   "\00\00\c0\41"  ;; 24.0
   "\00\00\b0\41"  ;; 22.0
   "\00\00\c0\41"  ;; 24.0
-  "\02\00\04\00"  ;; scale=2
+  "\02\00\04\00"  ;; scale:2, tex:0, pal:4
   ;; top wall (minus goal)
   "\00\00\b0\41"  ;; 22.0
   "\00\00\c0\41"  ;; 24.0
   "\00\00\00\00"  ;;  0.0
   "\00\00\c0\41"  ;; 24.0
-  "\16\00\00\00"  ;; scale=22
+  "\16\00\00\00"  ;; scale:22, tex:0, pal:0
   ;; left wall
   "\00\00\00\00"  ;; 0.0
   "\00\00\c0\41"  ;; 24.0
   "\00\00\00\00"  ;; 0.0
   "\00\00\00\00"  ;; 0.0
-  "\18\00\01\00"  ;; scale=24
+  "\18\00\01\00"  ;; scale:24, tex:0, pal:1
 )
 
 (data (i32.const 0x400)
@@ -92,15 +98,15 @@
 ;; palette
 (data (i32.const 0xd00)
   ;; 0xd00: left-right brick palette
-  "\f3\5f\5f\ff\9f\25\25\ff\00\00\00\ff\79\0e\0e\ff"
+  "\f3\5f\5f\ff\9f\25\25\ff\51\0a\0a\ff\79\0e\0e\ff"
   ;; 0xd10: top-bottom brick palette
-  "\c2\4c\4c\ff\7f\1d\1d\ff\00\00\00\ff\60\0b\0b\ff"
+  "\c2\4c\4c\ff\7f\1d\1d\ff\51\0a\0a\ff\60\0b\0b\ff"
   ;; 0xd20: ceiling palette
-  "\62\8d\c6\ff\81\95\af\ff\62\8d\c6\ff\00\00\00\ff"
+  "\cb\c8\b8\ff\cb\c8\b8\ff\9b\97\81\ff\9b\97\81\ff"
   ;; 0xd30: floor palette
   "\81\95\af\ff\b5\b5\b5\ff\b5\b5\b5\ff\00\00\00\ff"
   ;; 0xd40: goal palette
-  "\10\df\10\ff\10\df\10\ff\10\df\10\ff\10\df\10\ff"
+  "\10\df\10\ff\10\cf\10\ff\10\bf\10\ff\10\af\10\ff"
 )
 
 (start $init)
@@ -120,8 +126,7 @@
         (local.tee $y (i32.add (local.get $y) (i32.const 1)))
         (i32.const 120))))
 
-  (call $decompress-textures)
-)
+  (call $decompress-textures))
 
 ;; Generate maze using Kruskal's algorithm.
 ;; See http://weblog.jamisbuck.org/2011/1/3/maze-generation-kruskal-s-algorithm
@@ -257,6 +262,12 @@
         (local.tee $wall-addr (i32.add (local.get $wall-addr) (i32.const 2)))
         (i32.const 0x1f2)))))   ;; 0x100 + 11 * 11 * 2
 
+;; Decompress RLE-encoded 2bpp textures
+;; RLE is encoded as:
+;;  v**n        => (+n, v)
+;;  v1,v2,..,vn => (-n, v1, v2,..,vn)
+;;
+;; Where each cell is one byte.
 (func $decompress-textures
   (local $src i32)
   (local $dst i32)
@@ -316,11 +327,11 @@
           (local.get $y)))
       (local.get $y))))
 
-;; Ray/line segment intersection. see https://rootllama.wordpress.com/2014/06/20/ray-line-segment-intersection-test-in-2d/
+;; Ray/line segment intersection.
+;; see https://rootllama.wordpress.com/2014/06/20/ray-line-segment-intersection-test-in-2d/
 ;;
 ;;   ray is defined by [Px,Py] -> [Dx,Dy].
 ;;   line segment is [sx,sy] -> [ex,ey].
-;;
 ;;   Returns distance to the segment, or inf if it doesn't hit.
 (func $ray-line
       (param $Dx f32) (param $Dy f32)
@@ -385,6 +396,9 @@
 
   (f32.const inf))
 
+;; Shoot a ray against all walls in the scene, and return the minimum distance
+;; (or inf) if no wall was hit.
+;; This function also sets $min-t2 and $min-wall.
 (func $ray-walls (param $ray-x f32) (param $ray-y f32) (result f32)
   (local $wall i32)
   (local $min-wall i32)
@@ -404,6 +418,7 @@
         (f32.load offset=8 (local.get $wall))
         (f32.load offset=12 (local.get $wall))))
 
+    ;; If the ray was a closer hit, update the min values.
     (if (f32.lt (local.get $dist) (local.get $min-dist))
       (then
         (local.set $min-dist (local.get $dist))
@@ -423,6 +438,8 @@
   (global.set $min-wall (local.get $min-wall))
   (local.get $min-dist))
 
+;; Takes an f32, doubles it, then take the fractional part of that and scales
+;; it to [0, 32). Used to index into a 32x32 texture.
 (func $scale-frac-i32 (param $x f32) (result i32)
   (local.set $x (f32.add (local.get $x) (local.get $x)))
   (i32.trunc_f32_s
@@ -448,8 +465,12 @@
             ;; wrap u coordinate to [0, 32).
             (call $scale-frac-i32 (local.get $u))))))))
 
+;; Draw a vertical strip of the scene, including ceiling, wall, and floor.
+;;   $top-addr: the x coordinate of the column * 4
+;;   $half-height: half the height of the wall, in pixels
+;;   $ray-{x,y}: the ray that hit this wall (used for ceiling/floor textures)
 (func $draw-strip
-      (param $top-addr i32) (param $height f32)
+      (param $top-addr i32) (param $half-height f32)
       (param $ray-x f32) (param $ray-y f32)
   (local $bot-addr i32)
   (local $dist-addr i32)
@@ -464,7 +485,7 @@
   (local.set $bot-addr (i32.add (local.get $top-addr) (i32.const 307200)))
   (local.set $iheight
     (i32.trunc_f32_s
-      (f32.ceil (f32.sub (f32.const 120) (local.get $height)))))
+      (f32.ceil (f32.sub (f32.const 120) (local.get $half-height)))))
 
   ;; Draw floor + ceiling.
   (if (i32.gt_s (local.get $iheight) (i32.const 0))
@@ -501,16 +522,16 @@
 
   ;; Draw wall.
   (local.set $u (global.get $min-t2))
-  (local.set $dv (f32.div (f32.const 0.5) (local.get $height)))
+  (local.set $dv (f32.div (f32.const 0.5) (local.get $half-height)))
 
   (local.set $v
     (f32.mul
-      (f32.sub (local.get $height) (f32.trunc (local.get $height)))
+      (f32.sub (local.get $half-height) (f32.trunc (local.get $half-height)))
       (local.get $dv)))
 
   (local.set $iheight
     (i32.shl
-      (i32.trunc_f32_s (f32.ceil (local.get $height)))
+      (i32.trunc_f32_s (f32.ceil (local.get $half-height)))
       (i32.const 1)))
 
   ;; If the wall is taller than the screen, adjust the $v coordinate
@@ -522,7 +543,7 @@
           (local.get $v)
           (f32.mul
             (local.get $dv)
-            (f32.sub (local.get $height) (f32.const 120)))))
+            (f32.sub (local.get $half-height) (f32.const 120)))))
       (local.set $iheight (i32.const 240))))
 
   (if (i32.gt_s (local.get $iheight) (i32.const 0))
@@ -545,6 +566,10 @@
         (br_if $loop
           (local.tee $iheight (i32.sub (local.get $iheight) (i32.const 1))))))))
 
+;; Changes the rotation speed or movement speed fluidly given an input value.
+;;   $input-addr: Address of 2 bytes of input (either left/right or up/down)
+;;   $value-addr: The value to modify (either rotation or movement speed)
+;; Returns the new value.
 (func $move (param $input-addr i32) (param $value-addr i32) (result f32)
   (local $result f32)
   (f32.store (local.get $value-addr)
@@ -727,15 +752,22 @@
       (f32.div
         (f32.convert_i32_s (global.get $mode-timer))
         (f32.const 120)))
+
+    ;; Move the player back to the beginning.
     (global.set $Px
-      (f32.add (f32.const 0.5) (f32.mul (f32.sub (global.get $Px) (f32.const 0.5)) (local.get $dist))))
+      (f32.add
+        (f32.const 0.5)
+        (f32.mul (f32.sub (global.get $Px) (f32.const 0.5)) (local.get $dist))))
     (global.set $Py
-      (f32.add (f32.const 0.5) (f32.mul (f32.sub (global.get $Py) (f32.const 0.5)) (local.get $dist))))
+      (f32.add
+        (f32.const 0.5)
+        (f32.mul (f32.sub (global.get $Py) (f32.const 0.5)) (local.get $dist))))
     (global.set $angle
       (f32.add
         (f32.const 0.7853981633974483)
-        (f32.mul (f32.sub (global.get $angle) (f32.const 0.7853981633974483))
-                 (local.get $dist))))
+        (f32.mul
+          (f32.sub (global.get $angle) (f32.const 0.7853981633974483))
+          (local.get $dist))))
 
     (if (i32.eqz (global.get $mode-timer))
       (then
