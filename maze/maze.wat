@@ -226,15 +226,13 @@
 
     (f32.store (local.get $dest-wall-addr) (local.get $fx))
     (f32.store offset=4 (local.get $dest-wall-addr) (local.get $fy))
-    (i32.store8 offset=16 (local.get $dest-wall-addr) (i32.const 2))  ;; scale
-    (i32.store8 offset=17 (local.get $dest-wall-addr) (i32.const 1))  ;; tex
+    ;; pal | tex | scale
+    (i32.store offset=16 (local.get $dest-wall-addr) (i32.const 0x00_01_02))
 
     ;; Get the two cells of the wall. If the difference is 1, it must be
     ;; left/right.
     (if (i32.eq
-          (i32.sub
-            (local.get $i)
-            (i32.load8_u (local.get $wall-addr)))
+          (i32.sub (local.get $i) (i32.load8_u (local.get $wall-addr)))
           (i32.const 1))
       ;; left-right wall
       (then
@@ -242,7 +240,6 @@
         (local.set $fy (f32.add (local.get $fy) (f32.const 2))))
       ;; top-bottom wall
       (else
-        (i32.store8 offset=18 (local.get $dest-wall-addr) (i32.const 0))  ;; pal
         (local.set $fx (f32.add (local.get $fx) (f32.const 2)))))
 
     (f32.store offset=8 (local.get $dest-wall-addr) (local.get $fx))
@@ -286,22 +283,16 @@
       ;; Each byte is 2bpp, unpack into 8bpp palette index.
       (i32.store8
         (local.get $dst)
-        (i32.shl (i32.and (local.get $byte) (i32.const 3)) (i32.const 2)))
+        (i32.and (i32.shl (local.get $byte) (i32.const 2)) (i32.const 0xc)))
       (i32.store8 offset=1
         (local.get $dst)
-        (i32.shl
-          (i32.and (i32.shr_u (local.get $byte) (i32.const 2)) (i32.const 3))
-          (i32.const 2)))
+        (i32.and (local.get $byte) (i32.const 0xc)))
       (i32.store8 offset=2
         (local.get $dst)
-        (i32.shl
-          (i32.and (i32.shr_u (local.get $byte) (i32.const 4)) (i32.const 3))
-          (i32.const 2)))
+        (i32.and (i32.shr_u (local.get $byte) (i32.const 2)) (i32.const 0xc)))
       (i32.store8 offset=3
         (local.get $dst)
-        (i32.shl
-          (i32.and (i32.shr_u (local.get $byte) (i32.const 6)) (i32.const 3))
-          (i32.const 2)))
+        (i32.and (i32.shr_u (local.get $byte) (i32.const 4)) (i32.const 0xc)))
       (local.set $dst (i32.add (local.get $dst) (i32.const 4)))
 
       (br_if $dst-loop
@@ -440,11 +431,11 @@
       (param $tex-addr i32) (param $pal-addr i32)
       (param $u f32) (param $v f32)
       (result i32)
-  (i32.load
+  (i32.load offset=0xd00
     (i32.add
       (local.get $pal-addr)
       ;; Read from 32x32 texture.
-      (i32.load8_u
+      (i32.load8_u offset=0x500
         (i32.add
           (local.get $tex-addr)
           (i32.add
@@ -489,7 +480,7 @@
         (i32.store offset=0x3000
           (local.get $top-addr)
           (call $texture
-            (i32.const 0x500) (i32.const 0xd20)
+            (i32.const 0) (i32.const 0x20)
             (local.get $u) (local.get $v)))
         (local.set $top-addr (i32.add (local.get $top-addr) (i32.const 1280)))
 
@@ -498,7 +489,7 @@
         (i32.store offset=0x3000
           (local.get $bot-addr)
           (call $texture
-            (i32.const 0x900) (i32.const 0xd30)
+            (i32.const 0x400) (i32.const 0x30)
             (local.get $u) (local.get $v)))
 
         (br_if $loop
@@ -533,17 +524,13 @@
   (if (i32.gt_s (local.get $iheight) (i32.const 0))
     (then
       (local.set $wall-tex
-        (i32.add
-          (i32.const 0x500)
-          (i32.shl
-            (i32.load8_u offset=17 (global.get $min-wall))
-            (i32.const 10))))
+        (i32.shl
+          (i32.load8_u offset=17 (global.get $min-wall))
+          (i32.const 10)))
       (local.set $wall-pal
-        (i32.add
-          (i32.const 0xd00)
-          (i32.shl
-            (i32.load8_u offset=18 (global.get $min-wall))
-            (i32.const 4))))
+        (i32.shl
+          (i32.load8_u offset=18 (global.get $min-wall))
+          (i32.const 4)))
       (loop $loop
         (i32.store offset=0x3000 (local.get $top-addr)
           (call $texture
