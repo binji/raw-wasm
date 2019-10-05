@@ -1,11 +1,16 @@
 (import "Math" "random" (func $random (result f32)))
 (import "Math" "sin" (func $sin (param f32) (result f32)))
 
+(global $mode (mut i32) (i32.const 3))
+(global $mode-timer (mut i32) (i32.const 120))
+(global $max-wall-addr (mut i32) (i32.const 0x1078))
+
 ;; Position and direction vectors. Direction is updated from angle, which is
 ;; expressed in radians.
-(global $Px (mut f32) (f32.const 0.5))
-(global $Py (mut f32) (f32.const 0.5))
+(global $Px (mut f32) (f32.const 23))
+(global $Py (mut f32) (f32.const 23))
 (global $angle (mut f32) (f32.const 0.7853981633974483))
+
 (global $min-t2 (mut f32) (f32.const 0))
 (global $min-wall (mut i32) (i32.const 0))
 
@@ -115,7 +120,6 @@
         (local.tee $y (i32.add (local.get $y) (i32.const 1)))
         (i32.const 120))))
 
-  (call $gen-maze)
   (call $decompress-textures)
 )
 
@@ -413,7 +417,7 @@
     (br_if $wall-loop
       (i32.lt_s
         (local.tee $wall (i32.add (local.get $wall) (i32.const 20)))
-        (i32.const 0x19ec))))
+        (global.get $max-wall-addr))))
 
   (global.set $min-t2 (local.get $min-t2))
   (global.set $min-wall (local.get $min-wall))
@@ -576,15 +580,7 @@
   (local $wall-scale f32)
   (local $dot-product f32)
 
-  ;; Rotate if left or right is pressed.
-  (global.set $angle
-    (call $fmod
-      (f32.add
-        (global.get $angle)
-        (call $move (i32.const 0xdfc) (i32.const 0xdf0)))
-      (f32.const 6.283185307179586)))
-
-  ;; Set both $ray-x/$Dx and $ray-y $Dy.
+  ;; Set both $move-x/$Dx and $move-y $Dy.
   ;; $Dx/$Dy is used for the view direction, and $move-x/$move-y is used for
   ;; the movement vector.
   (local.set $move-x
@@ -594,91 +590,160 @@
     (local.tee $Dy
       (call $sin (f32.add (global.get $angle) (f32.const 1.5707963267948966)))))
 
-  ;; Move forward if up is pressed.
-  (local.set $speed (call $move (i32.const 0xdfe) (i32.const 0xdf4)))
+  ;; Always decrement the mode timer.
+  (global.set $mode-timer (i32.sub (global.get $mode-timer) (i32.const 1)))
 
-  ;; If the speed is negative, flip the movement vector
-  (if (f32.lt (local.get $speed) (f32.const 0))
-    (then
-      (local.set $speed (f32.neg (local.get $speed)))
-      (local.set $move-x (f32.neg (local.get $move-x)))
-      (local.set $move-y (f32.neg (local.get $move-y)))))
+  (block $done
+    (block $winning
+      (block $game
+        (block $intro-anim
+          (block $init
+            (br_table $init $intro-anim $game $winning (global.get $mode)))
 
-  (if (f32.gt (local.get $speed) (f32.const 0))
-    (then
-      ;; Try to move, but stop at the nearest wall.
-      ;; Afterward, $dist is the distance to the wall.
-      (local.set $dist
-        (f32.min
+          ;; MODE: $init
+          (f32.store (i32.const 0xdf0) (f32.const 0)) ;; rotation speed
+          (f32.store (i32.const 0xdf4) (f32.const 0)) ;; speed
+          (call $gen-maze) ;; generate walls into 0x2000
+          (global.set $mode (i32.const 1)) ;; intro-anim
+          (br $done))
+
+        ;; MODE: intro-anim
+        (if (i32.eqz (global.get $mode-timer))
+          (then
+            (global.set $max-wall-addr (i32.const 0x19ec))
+            (global.set $mode (i32.const 2)))) ;; game
+        (br $done))
+
+      ;; MODE: $game
+
+      ;; Rotate if left or right is pressed.
+      (global.set $angle
+        (call $fmod
           (f32.add
-            (call $ray-walls (local.get $move-x) (local.get $move-y))
-            (f32.const 0.001953125))  ;; Epsilon to prevent landing on the wall.
-          (local.get $speed)))  ;; Current speed.
+            (global.get $angle)
+            (call $move (i32.const 0xdfc) (i32.const 0xdf0)))
+          (f32.const 6.283185307179586)))
 
-      (global.set $Px
-        (f32.add
-          (global.get $Px)
-          (f32.mul (local.get $move-x) (local.get $dist))))
-      (global.set $Py
-        (f32.add
-          (global.get $Py)
-          (f32.mul (local.get $move-y) (local.get $dist))))
+      ;; Move forward if up is pressed.
+      (local.set $speed (call $move (i32.const 0xdfe) (i32.const 0xdf4)))
 
-      (local.set $wall-x (f32.load (global.get $min-wall)))
-      (local.set $wall-y (f32.load offset=4 (global.get $min-wall)))
-      (local.set $wall-scale
-        (f32.convert_i32_u (i32.load8_u offset=16 (global.get $min-wall))))
-
-      ;; Store the normal of the nearest wall.
-      ;; Wall is stored as (x0,y0),(x1,y1),scale.
-      ;; Since we want the normal, store (-(y0-y1), x0-x1).
-      (local.set $normal-x
-        (f32.neg
-          (f32.div
-            (f32.sub
-              (local.get $wall-y)
-              (f32.load offset=12 (global.get $min-wall)))
-            (local.get $wall-scale))))
-      (local.set $normal-y
-        (f32.div
-          (f32.sub
-            (local.get $wall-x)
-            (f32.load offset=8 (global.get $min-wall)))
-          (local.get $wall-scale)))
-
-      ;; Store the dot product of the normal and the vector to P, to see if the
-      ;; normal is pointing in the right direction.
-      (local.set $dot-product
-        (f32.add
-          (f32.mul
-            (local.get $normal-x)
-            (f32.sub (global.get $Px) (local.get $wall-x)))
-          (f32.mul
-            (local.get $normal-y)
-            (f32.sub (global.get $Py) (local.get $wall-y)))))
-
-      ;; If the normal is in the wrong direction (e.g. away from the player)
-      ;; flip it.
-      (if (f32.lt (local.get $dot-product) (f32.const 0))
+      ;; If the speed is negative, flip the movement vector
+      (if (f32.lt (local.get $speed) (f32.const 0))
         (then
-          (local.set $dot-product (f32.neg (local.get $dot-product)))
-          (local.set $normal-x (f32.neg (local.get $normal-x)))
-          (local.set $normal-y (f32.neg (local.get $normal-y)))))
+          (local.set $speed (f32.neg (local.get $speed)))
+          (local.set $move-x (f32.neg (local.get $move-x)))
+          (local.set $move-y (f32.neg (local.get $move-y)))))
 
-      ;; Push the player away from the wall if they're too close.
-      (local.set $dot-product
-        (f32.sub (f32.const 0.25) (local.get $dot-product)))
-      (if (f32.gt (local.get $dot-product) (f32.const 0))
+      ;; Move if the speed is non-zero.
+      (if (f32.gt (local.get $speed) (f32.const 0))
         (then
+          ;; Try to move, but stop at the nearest wall.
+          ;; Afterward, $dist is the distance to the wall.
+          (local.set $dist
+            (f32.min
+              (f32.add
+                (call $ray-walls (local.get $move-x) (local.get $move-y))
+                (f32.const 0.001953125))  ;; Epsilon to prevent landing on the wall.
+              (local.get $speed)))  ;; Current speed.
+
           (global.set $Px
             (f32.add
               (global.get $Px)
-              (f32.mul (local.get $normal-x) (local.get $dot-product))))
+              (f32.mul (local.get $move-x) (local.get $dist))))
           (global.set $Py
             (f32.add
               (global.get $Py)
-              (f32.mul (local.get $normal-y) (local.get $dot-product))))))))
+              (f32.mul (local.get $move-y) (local.get $dist))))
 
+          (local.set $wall-x (f32.load (global.get $min-wall)))
+          (local.set $wall-y (f32.load offset=4 (global.get $min-wall)))
+          (local.set $wall-scale
+            (f32.convert_i32_u (i32.load8_u offset=16 (global.get $min-wall))))
+
+          ;; Store the normal of the nearest wall.
+          ;; Wall is stored as (x0,y0),(x1,y1),scale.
+          ;; Since we want the normal, store (-(y0-y1), x0-x1).
+          (local.set $normal-x
+            (f32.neg
+              (f32.div
+                (f32.sub
+                  (local.get $wall-y)
+                  (f32.load offset=12 (global.get $min-wall)))
+                (local.get $wall-scale))))
+          (local.set $normal-y
+            (f32.div
+              (f32.sub
+                (local.get $wall-x)
+                (f32.load offset=8 (global.get $min-wall)))
+              (local.get $wall-scale)))
+
+          ;; Store the dot product of the normal and the vector to P, to see if
+          ;; the normal is pointing in the right direction.
+          (local.set $dot-product
+            (f32.add
+              (f32.mul
+                (local.get $normal-x)
+                (f32.sub (global.get $Px) (local.get $wall-x)))
+              (f32.mul
+                (local.get $normal-y)
+                (f32.sub (global.get $Py) (local.get $wall-y)))))
+
+          ;; If the normal is in the wrong direction (e.g. away from the player)
+          ;; flip it.
+          (if (f32.lt (local.get $dot-product) (f32.const 0))
+            (then
+              (local.set $dot-product (f32.neg (local.get $dot-product)))
+              (local.set $normal-x (f32.neg (local.get $normal-x)))
+              (local.set $normal-y (f32.neg (local.get $normal-y)))))
+
+          ;; Push the player away from the wall if they're too close.
+          (local.set $dot-product
+            (f32.sub (f32.const 0.25) (local.get $dot-product)))
+          (if (f32.gt (local.get $dot-product) (f32.const 0))
+            (then
+              (global.set $Px
+                (f32.add
+                  (global.get $Px)
+                  (f32.mul (local.get $normal-x) (local.get $dot-product))))
+              (global.set $Py
+                (f32.add
+                  (global.get $Py)
+                  (f32.mul (local.get $normal-y) (local.get $dot-product))))))))
+
+      ;; If the player reaches the goal, generate a new maze, and reset their
+      ;; position.
+      (if (i32.and
+            (f32.gt (global.get $Px) (f32.const 22))
+            (f32.gt (global.get $Py) (f32.const 22)))
+        (then
+          (global.set $mode (i32.const 3)) ;; winning
+          (global.set $mode-timer (i32.const 120)) ;; reset position over time
+          (global.set $max-wall-addr (i32.const 0x1078))))
+
+      (br $done))
+
+    ;; MODE: $winning
+    (local.set $dist
+      (f32.div
+        (f32.convert_i32_s (global.get $mode-timer))
+        (f32.const 120)))
+    (global.set $Px
+      (f32.add (f32.const 0.5) (f32.mul (f32.sub (global.get $Px) (f32.const 0.5)) (local.get $dist))))
+    (global.set $Py
+      (f32.add (f32.const 0.5) (f32.mul (f32.sub (global.get $Py) (f32.const 0.5)) (local.get $dist))))
+    (global.set $angle
+      (f32.add
+        (f32.const 0.7853981633974483)
+        (f32.mul (f32.sub (global.get $angle) (f32.const 0.7853981633974483))
+                 (local.get $dist))))
+
+    (if (i32.eqz (global.get $mode-timer))
+      (then
+        (global.set $mode (i32.const 0)) ;; init
+        (global.set $mode-timer (i32.const 15)))) ;; shorter wait
+    (br $done))
+
+  ;; DRAWING:
   ;; Loop for each column.
   (loop $x-loop
     (local.set $xproj
