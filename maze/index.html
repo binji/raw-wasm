@@ -15,23 +15,61 @@
       width: 100%;
       height: 100%;
     }
+    .timer {
+      position: absolute;
+      top: 0;
+      right: 0;
+      font-size: xx-large;
+      background-color: #0000009c;
+      color: white;
+      text-shadow: 1px 1px 2px black;
+      width: fit-content;
+      padding: 8px;
+      margin: 8px;
+      font-variant-numeric: tabular-nums;
+    }
   </style>
 </head>
 <body>
+  <span class="timer">0.0 / 0.0</span>
   <canvas width="320" height="240"></canvas>
   <script>
-    let memory;
+    let timerRunning = false;
+    let startTime = 0;
+    let bestTime = Infinity;
+    const now = () => +new Date();
+    let env = {
+      t: start => {
+        if (start) {
+          startTime = now();
+        } else {
+          let elapsed = (now() - startTime);
+          if (elapsed < bestTime) {
+            bestTime = elapsed;
+          }
+          // Reuse startTime as the final time in the display.
+          startTime = elapsed;
+        }
+        timerRunning = start;
+      },
+    };
+
+    setInterval(()=>{
+      const toSec = x => { return x == Infinity ? '\u221e' : (x / 1000).toFixed(2); };
+      let timer = document.querySelector('.timer');
+      let elapsed = timerRunning ? (now() - startTime) : startTime;
+      timer.textContent = `${toSec(elapsed)} / ${toSec(bestTime)}`;
+    }, 100);
+
     fetch('maze.wasm')
       .then(response => response.arrayBuffer())
-      .then(bytes => WebAssembly.instantiate(bytes, {Math}))
+      .then(bytes => WebAssembly.instantiate(bytes, {Math, env}))
       .then(source => {
         let instance = source.instance;
         let canvasData = new Uint8Array(instance.exports.mem.buffer, 0x3000, 307200);
         let canvas = document.querySelector('canvas');
         let context = canvas.getContext('2d');
         let imageData = context.createImageData(320, 240);
-        // XXX
-        memory = instance.exports.mem.buffer;
         let u8 = new Uint8Array(instance.exports.mem.buffer, 0xdfc, 4);
         let onkey = (down, event) => {
           switch (event.code) {

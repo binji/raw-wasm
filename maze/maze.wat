@@ -1,5 +1,6 @@
 (import "Math" "random" (func $random (result f32)))
 (import "Math" "sin" (func $sin (param f32) (result f32)))
+(import "env" "t" (func $timer (param i32))) ;; 1:start, 0:stop
 
 ;; The current game mode. 0: init, 1: intro-anim, 2:game, 3:winning
 (global $mode (mut i32) (i32.const 3))
@@ -635,6 +636,7 @@
         ;; MODE: intro-anim
         (if (i32.eqz (global.get $mode-timer))
           (then
+            (call $timer (i32.const 1)) ;; start timer
             (global.set $max-wall-addr (i32.const 0x19ec))
             (global.set $mode (i32.const 2)))) ;; game
         (br $done))
@@ -741,6 +743,7 @@
             (f32.gt (global.get $Px) (f32.const 22))
             (f32.gt (global.get $Py) (f32.const 22)))
         (then
+          (call $timer (i32.const 0)) ;; stop timer
           (global.set $mode (i32.const 3)) ;; winning
           (global.set $mode-timer (i32.const 120)) ;; reset position over time
           (global.set $max-wall-addr (i32.const 0x1078))))
