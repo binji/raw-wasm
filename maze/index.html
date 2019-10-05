@@ -32,7 +32,7 @@
         let imageData = context.createImageData(320, 240);
         // XXX
         memory = instance.exports.mem.buffer;
-        let u8 = new Uint8Array(instance.exports.mem.buffer, 0xd30, 3);
+        let u8 = new Uint8Array(instance.exports.mem.buffer, 0xdfd, 3);
         let onkey = (down, event) => {
           switch (event.code) {
             case 'ArrowLeft': u8[0] = down; break;
