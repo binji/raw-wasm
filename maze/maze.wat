@@ -19,7 +19,9 @@
 ;; [0x0500, 0x0900)   u8[32*32]       8bpp brick texture
 ;; [0x0900, 0x0d00)   u8[32*32]       8bpp spot texture
 ;; [0x0d00, 0x0d2c)   Color[4+4+4]    palettes
-;; [0x0dfd, 0x0e00)   u8[3]           left/right/forward keys
+;; [0x0df0, 0x0df4)   f32             rotation speed
+;; [0x0df4, 0x0df8)   f32             speed
+;; [0x0dfc, 0x0e00)   u8[4]           left/right/forward/back keys
 ;; [0x0e00, 0x0fe0)   f32[120]        Table of 120/(120-y)
 ;; [0x1000, 0x19ec)   Wall[6+11*11]   walls used in-game
 ;; [0x3000, 0x4e000)  Color[320*240]  canvas
@@ -36,26 +38,26 @@
   "\00\00\c0\41"  ;; 24.0
   "\00\00\00\00"  ;; 0.0
   "\00\00\c0\41"  ;; 24.0
-  "\00\00\b8\41"  ;; 23.0
-  "\17\00\01\00"  ;; scale=23
+  "\00\00\b0\41"  ;; 22.0
+  "\16\00\01\00"  ;; scale=22
   ;; right goal
   "\00\00\c0\41"  ;; 24.0
-  "\00\00\b8\41"  ;; 23.0
+  "\00\00\b0\41"  ;; 22.0
   "\00\00\c0\41"  ;; 24.0
   "\00\00\c0\41"  ;; 24.0
-  "\01\00\04\00"  ;; scale=1
+  "\02\00\04\00"  ;; scale=2
   ;; top goal
   "\00\00\c0\41"  ;; 24.0
   "\00\00\c0\41"  ;; 24.0
-  "\00\00\b8\41"  ;; 23.0
+  "\00\00\b0\41"  ;; 22.0
   "\00\00\c0\41"  ;; 24.0
-  "\01\00\04\00"  ;; scale=1
+  "\02\00\04\00"  ;; scale=2
   ;; top wall (minus goal)
-  "\00\00\b8\41"  ;; 23.0
+  "\00\00\b0\41"  ;; 22.0
   "\00\00\c0\41"  ;; 24.0
   "\00\00\00\00"  ;;  0.0
   "\00\00\c0\41"  ;; 24.0
-  "\17\00\00\00"  ;; scale=23
+  "\16\00\00\00"  ;; scale=22
   ;; left wall
   "\00\00\00\00"  ;; 0.0
   "\00\00\c0\41"  ;; 24.0
@@ -87,13 +89,13 @@
   ;; 0xd00: left-right brick palette
   "\f3\5f\5f\ff\9f\25\25\ff\00\00\00\ff\79\0e\0e\ff"
   ;; 0xd10: top-bottom brick palette
-  "\f3\5f\5f\ff\9f\25\25\ff\00\00\00\ff\79\0e\0e\ff"
+  "\c2\4c\4c\ff\7f\1d\1d\ff\00\00\00\ff\60\0b\0b\ff"
   ;; 0xd20: ceiling palette
   "\62\8d\c6\ff\81\95\af\ff\62\8d\c6\ff\00\00\00\ff"
   ;; 0xd30: floor palette
   "\81\95\af\ff\b5\b5\b5\ff\b5\b5\b5\ff\00\00\00\ff"
   ;; 0xd40: goal palette
-  "\00\ff\00\ff\00\ff\00\ff\00\ff\00\ff\00\ff\00\ff"
+  "\10\df\10\ff\10\df\10\ff\10\df\10\ff\10\df\10\ff"
 )
 
 (start $init)
@@ -225,7 +227,7 @@
     (f32.store (local.get $dest-wall-addr) (local.get $fx))
     (f32.store offset=4 (local.get $dest-wall-addr) (local.get $fy))
     (i32.store8 offset=16 (local.get $dest-wall-addr) (i32.const 2))  ;; scale
-    (i32.store8 offset=17 (local.get $dest-wall-addr) (i32.const 0))  ;; tex
+    (i32.store8 offset=17 (local.get $dest-wall-addr) (i32.const 1))  ;; tex
 
     ;; Get the two cells of the wall. If the difference is 1, it must be
     ;; left/right.
@@ -236,11 +238,11 @@
           (i32.const 1))
       ;; left-right wall
       (then
-        (i32.store8 offset=18 (local.get $dest-wall-addr) (i32.const 0))  ;; pal
+        (i32.store8 offset=18 (local.get $dest-wall-addr) (i32.const 1))  ;; pal
         (local.set $fy (f32.add (local.get $fy) (f32.const 2))))
       ;; top-bottom wall
       (else
-        (i32.store8 offset=18 (local.get $dest-wall-addr) (i32.const 1))  ;; pal
+        (i32.store8 offset=18 (local.get $dest-wall-addr) (i32.const 0))  ;; pal
         (local.set $fx (f32.add (local.get $fx) (f32.const 2)))))
 
     (f32.store offset=8 (local.get $dest-wall-addr) (local.get $fx))
@@ -552,12 +554,27 @@
         (br_if $loop
           (local.tee $iheight (i32.sub (local.get $iheight) (i32.const 1))))))))
 
+(func $move (param $input-addr i32) (param $value-addr i32) (result f32)
+  (local $result f32)
+  (f32.store (local.get $value-addr)
+    (local.tee $result
+      (f32.mul
+        (f32.add
+          (f32.load (local.get $value-addr))
+          (f32.mul
+            (f32.convert_i32_s
+              (i32.sub
+                (i32.load8_u (local.get $input-addr))
+                (i32.load8_u offset=1 (local.get $input-addr))))
+            (f32.const 0.0078125)))
+        (f32.const 0.875))))
+  (local.get $result))
+
 (func (export "run")
   (local $x i32)
   (local $xproj f32)
   (local $Dx f32)
   (local $Dy f32)
-  (local $rotate f32)
   (local $dist f32)
 
   (local $ray-x f32)
@@ -565,36 +582,49 @@
   (local $wall-x f32)
   (local $wall-y f32)
 
-  ;; rotate
-  (local.set $rotate
-    (f32.mul
-      (f32.convert_i32_s
-        (i32.sub
-          (i32.load8_u (i32.const 0xdfd))
-          (i32.load8_u (i32.const 0xdfe))))
-      (f32.const 0.03125)))
+  ;; Rotate if left or right is pressed.
   (global.set $angle
-    (call $fmod (f32.add (global.get $angle) (local.get $rotate))
-                (f32.const 6.283185307179586)))
+    (call $fmod
+      (f32.add
+        (global.get $angle)
+        (call $move (i32.const 0xdfc) (i32.const 0xdf0)))
+      (f32.const 6.283185307179586)))
 
-  (local.set $Dx (call $sin (global.get $angle)))
-  (local.set $Dy (call $sin (f32.add (global.get $angle) (f32.const 1.5707963267948966))))
+  ;; Set both $ray-x/$Dx and $ray-y $Dy.
+  ;; $Dx/$Dy is used for the view direction, and $ray-x/$ray-y is used for the
+  ;; movement vector.
+  (local.set $ray-x
+    (local.tee $Dx
+      (call $sin (global.get $angle))))
+  (local.set $ray-y
+    (local.tee $Dy
+      (call $sin (f32.add (global.get $angle) (f32.const 1.5707963267948966)))))
 
-  ;; Move forward
-  (if (i32.load8_u (i32.const 0xdff))
+  ;; Move forward if up is pressed. Use $dist for current speed.
+  (local.set $dist (call $move (i32.const 0xdfe) (i32.const 0xdf4)))
+
+  ;; If the speed ($dist) is negative, flip the movement vector
+  (if (f32.lt (local.get $dist) (f32.const 0))
+    (then
+      (local.set $dist (f32.neg (local.get $dist)))
+      (local.set $ray-x (f32.neg (local.get $ray-x)))
+      (local.set $ray-y (f32.neg (local.get $ray-y)))))
+
+  (if (f32.gt (local.get $dist) (f32.const 0))
     (then
       ;; Try to move, but stop at the nearest wall.
+      ;; Afterward, $dist is the distance to the wall.
       (local.set $dist
         (f32.min
           (f32.add
-            (call $ray-walls (local.get $Dx) (local.get $Dy))
+            (call $ray-walls (local.get $ray-x) (local.get $ray-y))
             (f32.const 0.001953125))  ;; Epsilon to prevent landing on the wall.
-          (f32.const 0.0625)))
+          (local.get $dist)))  ;; Current speed.
 
       (global.set $Px
-        (f32.add (global.get $Px) (f32.mul (local.get $Dx) (local.get $dist))))
+        (f32.add (global.get $Px) (f32.mul (local.get $ray-x) (local.get $dist))))
       (global.set $Py
-        (f32.add (global.get $Py) (f32.mul (local.get $Dy) (local.get $dist))))
+        (f32.add (global.get $Py) (f32.mul (local.get $ray-y) (local.get $dist))))
 
       (local.set $wall-x (f32.load (global.get $min-wall)))
       (local.set $wall-y (f32.load offset=4 (global.get $min-wall)))
