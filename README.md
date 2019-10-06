@@ -29,6 +29,14 @@ keys, or tap on the left or right side of the screen to turn. [**1976 bytes**]
 
 [Demo!][7]
 
+## Maze
+
+A Wolfenstein-style 3d maze race. Each ray is tested against all walls,
+brute-force style. Walls, floors and ceilings are textured. Palettes are made
+up of 120-levels of brightness, which fade into black in the distance. [**2558 bytes**]
+
+[Demo!][8]
+
 [1]: http://fabiensanglard.net/doom_fire_psx/index.html
 [2]: https://binji.github.io/raw-wasm/doomfire
 [3]: http://jamie-wong.com/2014/08/19/metaballs-and-marching-squares/
@@ -36,3 +44,4 @@ keys, or tap on the left or right side of the screen to turn. [**1976 bytes**]
 [5]: https://github.com/ssloy/tinyraytracer/wiki/Part-1:-understandable-raytracing
 [6]: https://binji.github.io/raw-wasm/raytrace
 [7]: https://binji.github.io/raw-wasm/snake
+[8]: https://binji.github.io/raw-wasm/maze
