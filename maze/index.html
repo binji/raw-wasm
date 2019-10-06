@@ -82,14 +82,24 @@
         document.addEventListener('keydown', onkey.bind(null, 1), false);
         document.addEventListener('keyup', onkey.bind(null, 0), false);
 
+        let touches = {};
         let ontouch = (down, event) => {
-          if (event.changedTouches[0].clientY < event.target.clientWidth / 2) {
-            u8[2] = down;
-          } else {
-            if (event.changedTouches[0].clientX < event.target.clientWidth / 2) {
-              u8[0] = down;
+          for (let touch of event.changedTouches) {
+            if (down) {
+              let width = event.target.clientWidth;
+              let index;
+              if (touch.clientX < width * 0.3) {
+                index = 0; // left
+              } else if (touch.clientX > width * 0.7) {
+                index = 1; // up
+              } else {
+                index = 2; // forward
+              }
+              u8[index] = 1;
+              touches[touch.identifier] = index;
             } else {
-              u8[1] = down;
+              u8[touches[touch.identifier]] = 0;
+              delete touches[touch.identifier];
             }
           }
           event.preventDefault();
