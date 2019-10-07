@@ -56,32 +56,32 @@
   ;; right wall (minus goal)
   "\00\00\c0\41"  ;; 24.0
   "\00\00\00\00"  ;; 0.0
-  "\00\00\c0\41"  ;; 24.0
+  "\00\00\00\00"  ;; 0.0
   "\00\00\b0\41"  ;; 22.0
   "\16\00\01\00"  ;; scale:22, tex:0, pal:1
   ;; right goal
   "\00\00\c0\41"  ;; 24.0
   "\00\00\b0\41"  ;; 22.0
-  "\00\00\c0\41"  ;; 24.0
-  "\00\00\c0\41"  ;; 24.0
+  "\00\00\00\00"  ;; 0.0
+  "\00\00\00\40"  ;; 2.0
   "\02\00\04\00"  ;; scale:2, tex:0, pal:4
   ;; top goal
   "\00\00\c0\41"  ;; 24.0
   "\00\00\c0\41"  ;; 24.0
-  "\00\00\b0\41"  ;; 22.0
-  "\00\00\c0\41"  ;; 24.0
+  "\00\00\00\c0"  ;; -2.0
+  "\00\00\00\00"  ;; 0.0
   "\02\00\04\00"  ;; scale:2, tex:0, pal:4
   ;; top wall (minus goal)
   "\00\00\b0\41"  ;; 22.0
   "\00\00\c0\41"  ;; 24.0
-  "\00\00\00\00"  ;;  0.0
-  "\00\00\c0\41"  ;; 24.0
+  "\00\00\b0\c1"  ;; -22.0
+  "\00\00\00\00"  ;; 0.0
   "\16\00\00\00"  ;; scale:22, tex:0, pal:0
   ;; left wall
   "\00\00\00\00"  ;; 0.0
   "\00\00\c0\41"  ;; 24.0
   "\00\00\00\00"  ;; 0.0
-  "\00\00\00\00"  ;; 0.0
+  "\00\00\c0\c1"  ;; -24.0
   "\18\00\01\00"  ;; scale:24, tex:0, pal:1
 )
 
@@ -291,12 +291,9 @@
       (local.get $dest-wall-addr)
       (f32.convert_i32_s
         (i32.shl (i32.div_s (local.get $i) (i32.const 12)) (i32.const 1))))
-    ;; pal | tex | scale
-    (i32.store offset=16 (local.get $dest-wall-addr) (i32.const 0x05_01_02))
 
-    ;; Copy x/y coordinate of P0 to P1.
-    (i64.store offset=8
-      (local.get $dest-wall-addr) (i64.load (local.get $dest-wall-addr)))
+    ;; Set dx/dy to zero by default.
+    (i64.store offset=8 (local.get $dest-wall-addr) (i64.const 0))
 
     ;; Get the two cells of the wall. If the difference is 1, it must be
     ;; left/right.
@@ -305,19 +302,24 @@
           (i32.const 1))
       ;; left-right wall
       (then
-        (i32.store8 offset=18 (local.get $dest-wall-addr) (i32.const 6))  ;; pal
-        ;; Set i to &P0.y
-        (local.set $i (i32.add (local.get $dest-wall-addr) (i32.const 4))))
+        ;; 2.0 is encoded as 0x40000000, so we can write it with just one byte.
+        ;; We can use an unaligned write to combine this with updating pal,
+        ;; tex, and scale too.
+        ;; This ends up writing:
+        ;;    \00\00\00\40  ;; f32:2.0
+        ;;    \02\01\06\00  ;; scale:2, tex:1, pal:6
+        (i32.store offset=15 align=1
+          (local.get $dest-wall-addr)
+          (i32.const 0x06_01_02_40)))
       ;; top-bottom wall
       (else
-        ;; Set i to &P0.x
-        (local.set $i (local.get $dest-wall-addr))))
-
-    ;; Add 2.0 to either P1's x or y coordinate, depending on the wall
-    ;; direction.
-    (f32.store offset=8
-      (local.get $i)
-      (f32.add (f32.load (local.get $i)) (f32.const 2)))
+        ;; Same as above, except we have to write 64-bits.
+        ;;    \00\00\00\40  ;; f32:2.0
+        ;;    \00\00\00\00  ;; f32:0.0
+        ;;    \02\01\05\00  ;; scale:2, tex:1, pal:5
+        (i64.store offset=11 align=1
+          (local.get $dest-wall-addr)
+          (i64.const 0x05_01_02_00000000_40))))
 
     (local.set $dest-wall-addr
       (i32.add (local.get $dest-wall-addr) (i32.const 20)))
@@ -390,8 +392,6 @@
   (local $min-t1 f32)
   (local $min-t2 f32)
 
-  (local $sx f32)
-  (local $sy f32)
   (local $v1x f32)
   (local $v1y f32)
   (local $v2x f32)
@@ -405,18 +405,13 @@
   (loop $wall-loop
     ;; Ray/line segment intersection.
     ;; see https://rootllama.wordpress.com/2014/06/20/ray-line-segment-intersection-test-in-2d/
-    (local.set $sx (f32.load (local.get $wall)))
-    (local.set $sy (f32.load offset=4 (local.get $wall)))
-
     ;; v1 = P - s
-    (local.set $v1x (f32.sub (global.get $Px) (local.get $sx)))
-    (local.set $v1y (f32.sub (global.get $Py) (local.get $sy)))
+    (local.set $v1x (f32.sub (global.get $Px) (f32.load (local.get $wall))))
+    (local.set $v1y (f32.sub (global.get $Py) (f32.load offset=4 (local.get $wall))))
 
-    ;; v2 = e - s
-    (local.set $v2x
-      (f32.sub (f32.load offset=8 (local.get $wall)) (local.get $sx)))
-    (local.set $v2y
-      (f32.sub (f32.load offset=12 (local.get $wall)) (local.get $sy)))
+    ;; v2 = dP
+    (local.set $v2x (f32.load offset=8 (local.get $wall)))
+    (local.set $v2y (f32.load offset=12 (local.get $wall)))
 
     (local.set $inv-v2-dot-ray-perp
       (f32.div
@@ -649,8 +644,6 @@
   (local $move-y f32)
   (local $ray-x f32)
   (local $ray-y f32)
-  (local $wall-x f32)
-  (local $wall-y f32)
   (local $normal-x f32)
   (local $normal-y f32)
   (local $wall-scale f32)
@@ -740,26 +733,20 @@
               (global.get $Py)
               (f32.mul (local.get $move-y) (local.get $dist))))
 
-          (local.set $wall-x (f32.load (global.get $min-wall)))
-          (local.set $wall-y (f32.load offset=4 (global.get $min-wall)))
           (local.set $wall-scale
             (f32.convert_i32_u (i32.load8_u offset=16 (global.get $min-wall))))
 
           ;; Store the normal of the nearest wall.
-          ;; Wall is stored as (x0,y0),(x1,y1),scale.
-          ;; Since we want the normal, store (-(y0-y1), x0-x1).
+          ;; Wall is stored as (x,y),(dx,dy),scale.
+          ;; Since we want the normal, store (-dy/scale, dx/scale).
           (local.set $normal-x
             (f32.neg
               (f32.div
-                (f32.sub
-                  (local.get $wall-y)
-                  (f32.load offset=12 (global.get $min-wall)))
+                (f32.load offset=12 (global.get $min-wall))
                 (local.get $wall-scale))))
           (local.set $normal-y
             (f32.div
-              (f32.sub
-                (local.get $wall-x)
-                (f32.load offset=8 (global.get $min-wall)))
+              (f32.load offset=8 (global.get $min-wall))
               (local.get $wall-scale)))
 
           ;; Store the dot product of the normal and the vector to P, to see if
@@ -768,10 +755,12 @@
             (f32.add
               (f32.mul
                 (local.get $normal-x)
-                (f32.sub (global.get $Px) (local.get $wall-x)))
+                (f32.sub (global.get $Px) (f32.load (global.get $min-wall))))
               (f32.mul
                 (local.get $normal-y)
-                (f32.sub (global.get $Py) (local.get $wall-y)))))
+                (f32.sub
+                  (global.get $Py)
+                  (f32.load offset=4 (global.get $min-wall))))))
 
           ;; If the normal is in the wrong direction (e.g. away from the player)
           ;; flip it.
