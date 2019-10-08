@@ -7,7 +7,7 @@
 ;; The mode timer, in frames.
 (global $mode-timer (mut i32) (i32.const 90))
 ;; The maximum wall to render or collide against. Used to clear the maze.
-(global $max-wall-addr (mut i32) (i32.const 0x1078))
+(global $max-wall-addr (mut i32) (i32.const 0x0e28))
 
 ;; Position and direction vectors. Direction is updated from angle, which is
 ;; expressed in radians.
@@ -27,25 +27,27 @@
 
 ;; Color: u32        ; ABGR
 ;; Cell2: u8*2       ; left/up cell, right/down cell
-;; Wall: f32*4,u8*3  ; (x1,y1),(x2, y2), scale, texture, palette
+;; Wall: f32*4,u8*4  ; (x0,y0),(dx, dy), scale/texture/palette/dummy
 
-;; [0x0000, 0x0100)   u8[12*12]       maze cells for Kruskal's algo
-;; [0x0100, 0x0310)   Cell2[12*11*2]  walls for Kruskal's algo
-;; [0x0400, 0x0500)   u8[32*32]       RLE compressed 2bpp textures
-;; [0x0500, 0x0900)   u8[32*32]       8bpp brick texture
-;; [0x0900, 0x0d00)   u8[32*32]       8bpp spot texture
-;; [0x0d00, 0x0d14)   u8[20]          color index (into Palette table @0x2000)
-;; [0x0df0, 0x0df4)   f32             rotation speed
-;; [0x0df4, 0x0df8)   f32             speed
-;; [0x0dfc, 0x0e00)   u8[4]           left/right/forward/back keys
-;; [0x0e00, 0x0fe0)   f32[120]        Table of 120/(120-y)
-;; [0x1000, 0x19ec)   Wall[6+11*11]   walls used in-game
-;; [0x2000, 0x4000)   Color[128][16]  Palette table (120 levels of darkness)
+;; [0x0000, 0x0004)   u8[4]           left/right/forward/back keys
+;; [0x0004, 0x0008)   f32             rotation speed
+;; [0x0008, 0x000c)   f32             speed
+;; [0x0010, 0x00a0)   u8[12*12]       maze cells for Kruskal's algo
+;; [0x00a0, 0x0192)   Cell2[11*11]    walls for Kruskal's algo
+;; [0x0192, 0x02b0)   Cell2[120]      extra walls that are removed to make maze
+;; [0x02b0, 0x06b0)   u8[32*32]       8bpp brick texture
+;; [0x06b0, 0x0ab0)   u8[32*32]       8bpp spot texture
+;; [0x0ab0, 0x0c90)   f32[120]        Table of 120/(120-y)
+;; [0x0c90, 0x0d90)   u8[32*32]       RLE compressed 2bpp textures
+;; [0x0d90, 0x0db0)   u8[28]          color index (into Palette table @0x179c)
+;; [0x0db0, 0x0e28)   Wall[6]         constant walls
+;; [0x0e28, 0x179c)   Wall[11*11]     generated walls
+;; [0x179c, 0x379c)   Color[128][16]  Palette table (120 levels of darkness)
 ;; [0x4000, 0x4f000)  Color[320*240]  canvas
 (memory (export "mem") 5)
 
 ;; The default 6 walls.
-(data (i32.const 0x100a)
+(data (i32.const 0x0dba)  ;; 0xdb0 + 10
   ;; bottom wall
   (;
   "\00\00\00\00"  ;; 0.0
@@ -85,7 +87,7 @@
   "\18\00\01\00"  ;; scale:24, tex:0, pal:1
 )
 
-(data (i32.const 0x400)
+(data (i32.const 0x0c90)
   ;; brick texture 2bpp RLE compressed
   "\08\aa\04\00\ff\02\03\00\03\55\fe\d5\52\06\55\fe\d5\52\06\55\fe\d5\52\06"
   "\55\fe\d5\52\06\55\fe\d5\52\06\55\fe\d5\52\06\55\fe\d5\52\06\55\fe\d5\52"
@@ -101,26 +103,24 @@
   "\56\05\55\fd\02\00\56\05\55\fd\0a\80\56\05\55\fe\29\a0\06\55\fe\a5\68\06"
   "\55\fe\95\5a\3b\55\ff\5a\06\55\fe\95\68\06\55\fe\a5\a0\06\55\fd\29\80\56"
   "\05\55\ff\0a"
-)
 
-(data (i32.const 0xd00)
-  ;; 0xd00: left-right brick palette
+  ;; 0xc70: left-right brick palette
   "\00\04\08\0c"
-  ;; 0xd04: top-bottom brick palette
+  ;; 0xc74: top-bottom brick palette
   "\10\14\18\1c"
-  ;; 0xd08: ceiling palette
+  ;; 0xc78: ceiling palette
   "\20\20\24\24"
-  ;; 0xd0c: floor palette
+  ;; 0xc7c: floor palette
   "\28\2c\2c\2c"
-  ;; 0xd10: goal palette
+  ;; 0xc80: goal palette
   "\30\34\38\3c"
-  ;; 0xd14: left-right spot palette
+  ;; 0xc84: left-right spot palette
   "\04\00\08\0c"
-  ;; 0xd18: top-bottom spot palette
+  ;; 0xc88: top-bottom spot palette
   "\14\10\18\1c"
 )
 
-(data (i32.const 0x2000)
+(data (i32.const 0x179c)
   ;; brightest versions of all 16 colors
   "\f3\5f\5f\ff\9f\25\25\ff\51\0a\0a\ff\79\0e\0e\ff"
   "\c2\4c\4c\ff\7f\1d\1d\ff\51\0a\0a\ff\60\0b\0b\ff"
@@ -130,15 +130,21 @@
 
 (start $init)
 (func $init
-  ;; initialize distance table:
-  ;;   120 / (120 - y) for y in [0, 120)
   (local $y i32)
   (local $color i32)
   (local $channel i32)
   (local $factor f32)
 
+  (local $src i32)
+  (local $dst i32)
+  (local $count i32)
+  (local $d-src i32)
+  (local $byte i32)
+
   (loop $loop
-    (f32.store offset=0xe00
+    ;; initialize distance table:
+    ;;   120 / (120 - y) for y in [0, 120)
+    (f32.store offset=0x0ab0
       (i32.shl (local.get $y) (i32.const 2))
       (local.tee $factor
         (f32.div
@@ -164,11 +170,12 @@
               (f32.div
                 (f32.convert_i32_s
                   ;; Mask off the low 6 bits to get the original color.
-                  (i32.load8_u offset=0x2000
+                  (i32.load8_u offset=0x179c
                     (i32.and (local.get $color) (i32.const 63))))
                 (local.get $factor))))))
 
-      (i32.store8 offset=0x2040 (local.get $color) (local.get $channel))
+      (i32.store8 offset=0x17dc  ;; 0x179c + 0x40
+        (local.get $color) (local.get $channel))
 
       (br_if $color-loop
         (i32.and
@@ -180,7 +187,52 @@
         (local.tee $y (i32.add (local.get $y) (i32.const 1)))
         (i32.const 120))))
 
-  (call $decompress-textures))
+  ;; Decompress RLE-encoded 2bpp textures
+  ;; RLE is encoded as:
+  ;;  v**n        => (+n, v)
+  ;;  v1,v2,..,vn => (-n, v1, v2,..,vn)
+  ;;
+  ;; Where each cell is one byte.
+  (local.set $dst (i32.const 0x02b0))
+  (loop $src-loop
+    (local.set $count (i32.load8_s offset=0x0c90 (local.get $src)))
+
+    (local.set $d-src (i32.le_s (local.get $count) (i32.const 0)))
+    (if (local.get $d-src)
+      (then
+        ;; -$count singleton elements.
+        (local.set $count (i32.sub (i32.const 0) (local.get $count))))
+      (else
+        ;; Run of length $count.
+        (local.set $src (i32.add (local.get $src) (i32.const 1)))))
+
+    ;; Write the run.
+    (loop $dst-loop
+      (local.set $src (i32.add (local.get $src) (local.get $d-src)))
+      (local.set $byte (i32.load8_u offset=0x0c90 (local.get $src)))
+
+      ;; Each byte is 2bpp, unpack into 8bpp palette index.
+      (i32.store8
+        (local.get $dst)
+        (i32.and (local.get $byte) (i32.const 0x3)))
+      (i32.store8 offset=1
+        (local.get $dst)
+        (i32.and (i32.shr_u (local.get $byte) (i32.const 2)) (i32.const 0x3)))
+      (i32.store8 offset=2
+        (local.get $dst)
+        (i32.and (i32.shr_u (local.get $byte) (i32.const 4)) (i32.const 0x3)))
+      (i32.store8 offset=3
+        (local.get $dst)
+        (i32.and (i32.shr_u (local.get $byte) (i32.const 6)) (i32.const 0x3)))
+      (local.set $dst (i32.add (local.get $dst) (i32.const 4)))
+
+      (br_if $dst-loop
+        (local.tee $count (i32.sub (local.get $count) (i32.const 1)))))
+
+    (br_if $src-loop
+      (i32.lt_s
+        (local.tee $src (i32.add (local.get $src) (i32.const 1)))
+        (i32.const 0x100)))))
 
 ;; Generate maze using Kruskal's algorithm.
 ;; See http://weblog.jamisbuck.org/2011/1/3/maze-generation-kruskal-s-algorithm
@@ -198,13 +250,13 @@
   ;; wall.
   (local.set $cells (i32.const 0x0c_00_01_00))
 
-  (local.set $wall-addr (i32.const 0x100))
+  (local.set $wall-addr (i32.const 0x00a0))
   (loop $y-loop
 
     (local.set $x (i32.const 0))
     (loop $x-loop
       ;; Each cell is "owned" by itself at the start.
-      (i32.store8
+      (i32.store8 offset=0x0010
         (i32.and (local.get $cells) (i32.const 0xff)) (local.get $cells))
 
       ;; Add horizontal edge, connecting cell i and i + 1.
@@ -239,7 +291,7 @@
   (loop $wall-loop
     (local.set $wall-addr
       (i32.add
-        (i32.const 0x100)
+        (i32.const 0x00a0)
         (i32.shl
           (i32.trunc_f32_s
             (f32.mul (call $random) (f32.convert_i32_s (local.get $walls))))
@@ -247,8 +299,10 @@
 
     ;; repurpose $x as the left/up cell, and $y as the right/down cell of the
     ;; wall.
-    (local.set $x (i32.load8_u (i32.load8_u (local.get $wall-addr))))
-    (local.set $y (i32.load8_u (i32.load8_u offset=1 (local.get $wall-addr))))
+    (local.set $x
+      (i32.load8_u offset=0x0010 (i32.load8_u (local.get $wall-addr))))
+    (local.set $y
+      (i32.load8_u offset=0x0010 (i32.load8_u offset=1 (local.get $wall-addr))))
 
     ;; if each side of the wall is not part of the same set:
     (if (i32.ne (local.get $x) (local.get $y))
@@ -257,11 +311,11 @@
         (local.set $walls (i32.sub (local.get $walls) (i32.const 1)))
         (i32.store16
           (local.get $wall-addr)
-          (i32.load16_u offset=0x100
+          (i32.load16_u offset=0x00a0
             (i32.shl (local.get $walls) (i32.const 1))))
 
         ;; replace all cells that contain $y with $x.
-        (local.set $i (i32.const 0))
+        (local.set $i (i32.const 0x0010))
         (loop $remove-loop
           (if (i32.eq (i32.load8_u (local.get $i)) (local.get $y))
             (then (i32.store8 (local.get $i) (local.get $x))))
@@ -269,14 +323,14 @@
           (br_if $remove-loop
             (i32.lt_s
               (local.tee $i (i32.add (local.get $i) (i32.const 1)))
-              (i32.const 144))))))
+              (i32.const 0x00a0))))))
 
     ;; loop until there are exactly 11 * 11 walls.
     (br_if $wall-loop (i32.gt_s (local.get $walls) (i32.const 121))))
 
   ;; generate walls for use in-game.
-  (local.set $wall-addr (i32.const 0x100))
-  (local.set $dest-wall-addr (i32.const 0x1078))
+  (local.set $wall-addr (i32.const 0x00a0))
+  (local.set $dest-wall-addr (i32.const 0x0e28))
   (loop $wall-loop
     ;; Save the right/bottom cell of the wall as $i.
     (local.set $i (i32.load8_u offset=1 (local.get $wall-addr)))
@@ -327,61 +381,7 @@
     (br_if $wall-loop
       (i32.lt_s
         (local.tee $wall-addr (i32.add (local.get $wall-addr) (i32.const 2)))
-        (i32.const 0x1f2)))))   ;; 0x100 + 11 * 11 * 2
-
-;; Decompress RLE-encoded 2bpp textures
-;; RLE is encoded as:
-;;  v**n        => (+n, v)
-;;  v1,v2,..,vn => (-n, v1, v2,..,vn)
-;;
-;; Where each cell is one byte.
-(func $decompress-textures
-  (local $src i32)
-  (local $dst i32)
-  (local $count i32)
-  (local $d-src i32)
-  (local $byte i32)
-
-  (local.set $dst (i32.const 0x500))
-  (loop $src-loop
-    (local.set $count (i32.load8_s offset=0x400 (local.get $src)))
-
-    (local.set $d-src (i32.le_s (local.get $count) (i32.const 0)))
-    (if (local.get $d-src)
-      (then
-        ;; -$count singleton elements.
-        (local.set $count (i32.sub (i32.const 0) (local.get $count))))
-      (else
-        ;; Run of length $count.
-        (local.set $src (i32.add (local.get $src) (i32.const 1)))))
-
-    ;; Write the run.
-    (loop $dst-loop
-      (local.set $src (i32.add (local.get $src) (local.get $d-src)))
-      (local.set $byte (i32.load8_u offset=0x400 (local.get $src)))
-
-      ;; Each byte is 2bpp, unpack into 8bpp palette index.
-      (i32.store8
-        (local.get $dst)
-        (i32.and (local.get $byte) (i32.const 0x3)))
-      (i32.store8 offset=1
-        (local.get $dst)
-        (i32.and (i32.shr_u (local.get $byte) (i32.const 2)) (i32.const 0x3)))
-      (i32.store8 offset=2
-        (local.get $dst)
-        (i32.and (i32.shr_u (local.get $byte) (i32.const 4)) (i32.const 0x3)))
-      (i32.store8 offset=3
-        (local.get $dst)
-        (i32.and (i32.shr_u (local.get $byte) (i32.const 6)) (i32.const 0x3)))
-      (local.set $dst (i32.add (local.get $dst) (i32.const 4)))
-
-      (br_if $dst-loop
-        (local.tee $count (i32.sub (local.get $count) (i32.const 1)))))
-
-    (br_if $src-loop
-      (i32.lt_s
-        (local.tee $src (i32.add (local.get $src) (i32.const 1)))
-        (i32.const 0x100)))))
+        (i32.const 0x0192)))))   ;; 0x00a0 + 11 * 11 * 2
 
 ;; Shoot a ray against all walls in the scene, and return the minimum distance
 ;; (or inf) if no wall was hit.
@@ -401,7 +401,7 @@
   (local $t2 f32)
 
   (local.set $min-t1 (f32.const inf))
-  (local.set $wall (i32.const 0x1000))
+  (local.set $wall (i32.const 0x0db0))
   (loop $wall-loop
     ;; Ray/line segment intersection.
     ;; see https://rootllama.wordpress.com/2014/06/20/ray-line-segment-intersection-test-in-2d/
@@ -484,15 +484,15 @@
       (param $u f32) (param $v f32)
       (result i32)
   ;; Read color from color-distance table.
-  (i32.load offset=0x2000
+  (i32.load offset=0x179c
     (i32.add
       (i32.shl (local.get $dist) (i32.const 6))
       ;; Read palette entry from palette.
-      (i32.load8_u offset=0xd00
+      (i32.load8_u offset=0x0d90
         (i32.add
           (local.get $pal-addr)
           ;; Read from 32x32 texture.
-          (i32.load8_u offset=0x500
+          (i32.load8_u offset=0x02b0
             (i32.add
               (local.get $tex-addr)
               (i32.add
@@ -532,7 +532,7 @@
       (loop $loop
         ;; update distance
         (local.set $dist
-          (f32.load offset=0xe00 (i32.shl (local.get $dist-index) (i32.const 2))))
+          (f32.load offset=0x0ab0 (i32.shl (local.get $dist-index) (i32.const 2))))
         (local.set $dist-index (i32.add (local.get $dist-index) (i32.const 1)))
 
         ;; find UV using distance table
@@ -677,10 +677,10 @@
           (br $done))
 
         ;; MODE: $reset
-        (f32.store (i32.const 0xdf0) (global.get $zero)) ;; rotation speed
-        (f32.store (i32.const 0xdf4) (global.get $zero)) ;; speed
-        (call $gen-maze) ;; generate walls into 0x2000
-        (global.set $max-wall-addr (i32.const 0x19ec))
+        (f32.store (i32.const 0x0004) (global.get $zero)) ;; rotation speed
+        (f32.store (i32.const 0x0008) (global.get $zero)) ;; speed
+        (call $gen-maze)
+        (global.set $max-wall-addr (i32.const 0x179c))
         (global.set $mode (i32.const 2)) ;; game
         (call $timer (i32.const 1)) ;; start timer
         (br $done))
@@ -690,7 +690,7 @@
       (global.set $angle
         (f32.add
           (global.get $angle)
-          (call $move (i32.const 0xdfc) (i32.const 0xdf0))))
+          (call $move (i32.const 0x0000) (i32.const 0x0004))))
       ;; angle = fmod(angle, 2 * pi)
       (global.set $angle
         (f32.sub
@@ -703,7 +703,7 @@
             (f32.const 6.283185307179586))))
 
       ;; Move forward if up is pressed.
-      (local.set $speed (call $move (i32.const 0xdfe) (i32.const 0xdf4)))
+      (local.set $speed (call $move (i32.const 0x0002) (i32.const 0x0008)))
 
       ;; If the speed is negative, flip the movement vector
       (if (f32.lt (local.get $speed) (global.get $zero))
@@ -793,7 +793,7 @@
           (call $timer (i32.const 0)) ;; stop timer
           (global.set $mode (i32.const 3)) ;; winning
           (global.set $mode-timer (i32.const 120)) ;; reset position over time
-          (global.set $max-wall-addr (i32.const 0x1078))))
+          (global.set $max-wall-addr (i32.const 0x0e28))))
 
       (br $done))
 

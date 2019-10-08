@@ -70,7 +70,7 @@
         let canvas = document.querySelector('canvas');
         let context = canvas.getContext('2d');
         let imageData = context.createImageData(320, 240);
-        let u8 = new Uint8Array(instance.exports.mem.buffer, 0xdfc, 4);
+        let u8 = new Uint8Array(instance.exports.mem.buffer, 0, 4);
         let onkey = (down, event) => {
           switch (event.code) {
             case 'ArrowLeft': u8[0] = down; break;
