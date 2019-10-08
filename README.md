@@ -1,5 +1,12 @@
 # Raw WebAssembly Demos
 
+## Quine
+
+A little WebAssembly [quine][9]. Without a way to do output, I decided that a
+WebAssembly quine should export a memory object with a copy its bytes. [**148 bytes**]
+
+[Demo!][10]
+
 ## Doomfire
 
 An implementation of the Doom fire effect described in
@@ -45,3 +52,5 @@ up of 120-levels of brightness, which fade into black in the distance. [**2398 b
 [6]: https://binji.github.io/raw-wasm/raytrace
 [7]: https://binji.github.io/raw-wasm/snake
 [8]: https://binji.github.io/raw-wasm/maze
+[9]: https://en.wikipedia.org/wiki/Quine_(computing)
+[10]: https://binji.github.io/raw-wasm/quine
