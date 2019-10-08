@@ -7,13 +7,15 @@
 ;; The mode timer, in frames.
 (global $mode-timer (mut i32) (i32.const 90))
 ;; The maximum wall to render or collide against. Used to clear the maze.
-(global $max-wall-addr (mut i32) (i32.const 0x0e28))
+(global $max-wall-addr (mut i32) (i32.const 0x0ddc))
 
 ;; Position and direction vectors. Direction is updated from angle, which is
 ;; expressed in radians.
 (global $Px (mut f32) (f32.const 21))
 (global $Py (mut f32) (f32.const 21))
 (global $angle (mut f32) (f32.const 0.7853981633974483))
+(global $ray-x (mut f32) (f32.const 0))
+(global $ray-y (mut f32) (f32.const 0))
 
 ;; Common constants. Cheap way to reduce the binary size.
 (global $half-screen-height f32 (f32.const 120))
@@ -27,7 +29,7 @@
 
 ;; Color: u32        ; ABGR
 ;; Cell2: u8*2       ; left/up cell, right/down cell
-;; Wall: f32*4,u8*4  ; (x0,y0),(dx, dy), scale/texture/palette/dummy
+;; Wall: s8*4,u8*4  ; (x0,y0),(dx, dy), scale/texture/palette/dummy
 
 ;; [0x0000, 0x0004)   u8[4]           left/right/forward/back keys
 ;; [0x0004, 0x0008)   f32             rotation speed
@@ -39,53 +41,12 @@
 ;; [0x06b0, 0x0ab0)   u8[32*32]       8bpp spot texture
 ;; [0x0ab0, 0x0c90)   f32[120]        Table of 120/(120-y)
 ;; [0x0c90, 0x0d90)   u8[32*32]       RLE compressed 2bpp textures
-;; [0x0d90, 0x0db0)   u8[28]          color index (into Palette table @0x179c)
-;; [0x0db0, 0x0e28)   Wall[6]         constant walls
-;; [0x0e28, 0x179c)   Wall[11*11]     generated walls
-;; [0x179c, 0x379c)   Color[128][16]  Palette table (120 levels of darkness)
-;; [0x4000, 0x4f000)  Color[320*240]  canvas
+;; [0x0d90, 0x0dac)   u8[28]          color index (into Palette table @0x11b0)
+;; [0x0dac, 0x0ddc)   Wall[6]         constant walls
+;; [0x0ddc, 0x11a4)   Wall[11*11]     generated walls
+;; [0x11b0, 0x2fb0)   Color[120][16]  Palette table (120 levels of darkness)
+;; [0x3000, 0x4e000)  Color[320*240]  canvas
 (memory (export "mem") 5)
-
-;; The default 6 walls.
-(data (i32.const 0x0dba)  ;; 0xdb0 + 10
-  ;; bottom wall
-  (;
-  "\00\00\00\00"  ;; 0.0
-  "\00\00\00\00"  ;; 0.0
-  "\00\00";) "\c0\41"  ;; 24.0
-  "\00\00\00\00"  ;; 0.0
-  "\18\00\00\00"  ;; scale:24, tex:0, pal:0
-  ;; right wall (minus goal)
-  "\00\00\c0\41"  ;; 24.0
-  "\00\00\00\00"  ;; 0.0
-  "\00\00\00\00"  ;; 0.0
-  "\00\00\b0\41"  ;; 22.0
-  "\16\00\01\00"  ;; scale:22, tex:0, pal:1
-  ;; right goal
-  "\00\00\c0\41"  ;; 24.0
-  "\00\00\b0\41"  ;; 22.0
-  "\00\00\00\00"  ;; 0.0
-  "\00\00\00\40"  ;; 2.0
-  "\02\00\04\00"  ;; scale:2, tex:0, pal:4
-  ;; top goal
-  "\00\00\c0\41"  ;; 24.0
-  "\00\00\c0\41"  ;; 24.0
-  "\00\00\00\c0"  ;; -2.0
-  "\00\00\00\00"  ;; 0.0
-  "\02\00\04\00"  ;; scale:2, tex:0, pal:4
-  ;; top wall (minus goal)
-  "\00\00\b0\41"  ;; 22.0
-  "\00\00\c0\41"  ;; 24.0
-  "\00\00\b0\c1"  ;; -22.0
-  "\00\00\00\00"  ;; 0.0
-  "\16\00\00\00"  ;; scale:22, tex:0, pal:0
-  ;; left wall
-  "\00\00\00\00"  ;; 0.0
-  "\00\00\c0\41"  ;; 24.0
-  "\00\00\00\00"  ;; 0.0
-  "\00\00\c0\c1"  ;; -24.0
-  "\18\00\01\00"  ;; scale:24, tex:0, pal:1
-)
 
 (data (i32.const 0x0c90)
   ;; brick texture 2bpp RLE compressed
@@ -104,23 +65,44 @@
   "\55\fe\95\5a\3b\55\ff\5a\06\55\fe\95\68\06\55\fe\a5\a0\06\55\fd\29\80\56"
   "\05\55\ff\0a"
 
-  ;; 0xc70: left-right brick palette
+  ;; 0xd90
+  ;; left-right brick palette
   "\00\04\08\0c"
-  ;; 0xc74: top-bottom brick palette
+  ;; top-bottom brick palette
   "\10\14\18\1c"
-  ;; 0xc78: ceiling palette
+  ;; ceiling palette
   "\20\20\24\24"
-  ;; 0xc7c: floor palette
+  ;; floor palette
   "\28\2c\2c\2c"
-  ;; 0xc80: goal palette
+  ;; goal palette
   "\30\34\38\3c"
-  ;; 0xc84: left-right spot palette
+  ;; left-right spot palette
   "\04\00\08\0c"
-  ;; 0xc88: top-bottom spot palette
+  ;; top-bottom spot palette
   "\14\10\18\1c"
+
+  ;; 0xdac
+  ;; bottom wall
+  "\00\00\18\00"  ;; (0,0),(24,0)
+  "\18\00\00\00"  ;; scale:24, tex:0, pal:0
+  ;; right wall (minus goal)
+  "\18\00\00\16"  ;; (24,0),(0,22)
+  "\16\00\01\00"  ;; scale:22, tex:0, pal:1
+  ;; right goal
+  "\18\16\00\02"  ;; (24,22),(0,2)
+  "\02\00\04\00"  ;; scale:2, tex:0, pal:4
+  ;; top goal
+  "\18\18\fe\00"  ;; (24,24),(-2,0)
+  "\02\00\04\00"  ;; scale:2, tex:0, pal:4
+  ;; top wall (minus goal)
+  "\16\18\ea\00"  ;; (22,24),(-22,0)
+  "\16\00\00\00"  ;; scale:22, tex:0, pal:0
+  ;; left wall
+  "\00\18\00\e8"  ;; (0,24),(0,-24)
+  "\18\00\01\00"  ;; scale:24, tex:0, pal:1
 )
 
-(data (i32.const 0x179c)
+(data (i32.const 0x11b0)
   ;; brightest versions of all 16 colors
   "\f3\5f\5f\ff\9f\25\25\ff\51\0a\0a\ff\79\0e\0e\ff"
   "\c2\4c\4c\ff\7f\1d\1d\ff\51\0a\0a\ff\60\0b\0b\ff"
@@ -170,11 +152,11 @@
               (f32.div
                 (f32.convert_i32_s
                   ;; Mask off the low 6 bits to get the original color.
-                  (i32.load8_u offset=0x179c
+                  (i32.load8_u offset=0x11b0
                     (i32.and (local.get $color) (i32.const 63))))
                 (local.get $factor))))))
 
-      (i32.store8 offset=0x17dc  ;; 0x179c + 0x40
+      (i32.store8 offset=0x11f0  ;; 0x11b0 + 0x40
         (local.get $color) (local.get $channel))
 
       (br_if $color-loop
@@ -330,24 +312,19 @@
 
   ;; generate walls for use in-game.
   (local.set $wall-addr (i32.const 0x00a0))
-  (local.set $dest-wall-addr (i32.const 0x0e28))
+  (local.set $dest-wall-addr (i32.const 0x0ddc))
   (loop $wall-loop
     ;; Save the right/bottom cell of the wall as $i.
     (local.set $i (i32.load8_u offset=1 (local.get $wall-addr)))
 
     ;; Store the x,y coordinate of the wall, given the cell index.
     ;; Multiply by 2 so each cell is 2x2 units.
-    (f32.store
+    (i32.store8
       (local.get $dest-wall-addr)
-      (f32.convert_i32_s
-        (i32.shl (i32.rem_s (local.get $i) (i32.const 12)) (i32.const 1))))
-    (f32.store offset=4
+      (i32.shl (i32.rem_s (local.get $i) (i32.const 12)) (i32.const 1)))
+    (i32.store8 offset=1
       (local.get $dest-wall-addr)
-      (f32.convert_i32_s
-        (i32.shl (i32.div_s (local.get $i) (i32.const 12)) (i32.const 1))))
-
-    ;; Set dx/dy to zero by default.
-    (i64.store offset=8 (local.get $dest-wall-addr) (i64.const 0))
+      (i32.shl (i32.div_s (local.get $i) (i32.const 12)) (i32.const 1)))
 
     ;; Get the two cells of the wall. If the difference is 1, it must be
     ;; left/right.
@@ -356,27 +333,27 @@
           (i32.const 1))
       ;; left-right wall
       (then
-        ;; 2.0 is encoded as 0x40000000, so we can write it with just one byte.
-        ;; We can use an unaligned write to combine this with updating pal,
-        ;; tex, and scale too.
+        ;; Write dx=0, dy=2. We can use an unaligned write to combine this with
+        ;; updating pal, tex, and scale too.
         ;; This ends up writing:
-        ;;    \00\00\00\40  ;; f32:2.0
+        ;;    \00  ;; dx
+        ;;    \02  ;; dy
         ;;    \02\01\06\00  ;; scale:2, tex:1, pal:6
-        (i32.store offset=15 align=1
+        (i64.store offset=2 align=2
           (local.get $dest-wall-addr)
-          (i32.const 0x06_01_02_40)))
+          (i64.const 0x06_01_02_02_00)))
       ;; top-bottom wall
       (else
-        ;; Same as above, except we have to write 64-bits.
-        ;;    \00\00\00\40  ;; f32:2.0
-        ;;    \00\00\00\00  ;; f32:0.0
+        ;; Similar to above.
+        ;;    \02  ;; dx
+        ;;    \00  ;; dy
         ;;    \02\01\05\00  ;; scale:2, tex:1, pal:5
-        (i64.store offset=11 align=1
+        (i64.store offset=2 align=2
           (local.get $dest-wall-addr)
-          (i64.const 0x05_01_02_00000000_40))))
+          (i64.const 0x05_01_02_00_02))))
 
     (local.set $dest-wall-addr
-      (i32.add (local.get $dest-wall-addr) (i32.const 20)))
+      (i32.add (local.get $dest-wall-addr) (i32.const 8)))
 
     (br_if $wall-loop
       (i32.lt_s
@@ -386,7 +363,7 @@
 ;; Shoot a ray against all walls in the scene, and return the minimum distance
 ;; (or inf) if no wall was hit.
 ;; This function also sets $min-t2 and $min-wall.
-(func $ray-walls (param $ray-x f32) (param $ray-y f32) (result f32)
+(func $ray-walls (result f32)
   (local $wall i32)
   (local $min-wall i32)
   (local $min-t1 f32)
@@ -401,31 +378,39 @@
   (local $t2 f32)
 
   (local.set $min-t1 (f32.const inf))
-  (local.set $wall (i32.const 0x0db0))
+  (local.set $wall (i32.const 0x0dac))
   (loop $wall-loop
     ;; Ray/line segment intersection.
     ;; see https://rootllama.wordpress.com/2014/06/20/ray-line-segment-intersection-test-in-2d/
     ;; v1 = P - s
-    (local.set $v1x (f32.sub (global.get $Px) (f32.load (local.get $wall))))
-    (local.set $v1y (f32.sub (global.get $Py) (f32.load offset=4 (local.get $wall))))
+    (local.set $v1x
+      (f32.sub
+        (global.get $Px)
+        (f32.convert_i32_s (i32.load8_s (local.get $wall)))))
+    (local.set $v1y
+      (f32.sub
+        (global.get $Py)
+        (f32.convert_i32_s (i32.load8_s offset=1 (local.get $wall)))))
 
     ;; v2 = dP
-    (local.set $v2x (f32.load offset=8 (local.get $wall)))
-    (local.set $v2y (f32.load offset=12 (local.get $wall)))
+    (local.set $v2x
+      (f32.convert_i32_s (i32.load8_s offset=2 (local.get $wall))))
+    (local.set $v2y
+      (f32.convert_i32_s (i32.load8_s offset=3 (local.get $wall))))
 
     (local.set $inv-v2-dot-ray-perp
       (f32.div
         (f32.const 1)
         (f32.add
-          (f32.mul (local.get $v2x) (f32.neg (local.get $ray-y)))
-          (f32.mul (local.get $v2y) (local.get $ray-x)))))
+          (f32.mul (local.get $v2x) (f32.neg (global.get $ray-y)))
+          (f32.mul (local.get $v2y) (global.get $ray-x)))))
 
     ;; t2 is intersection "time" between s and e.
     (local.set $t2
       (f32.mul
         (f32.add
-          (f32.mul (local.get $v1x) (f32.neg (local.get $ray-y)))
-          (f32.mul (local.get $v1y) (local.get $ray-x)))
+          (f32.mul (local.get $v1x) (f32.neg (global.get $ray-y)))
+          (f32.mul (local.get $v1y) (global.get $ray-x)))
         (local.get $inv-v2-dot-ray-perp)))
 
     ;; t2 must be between [0, 1].
@@ -453,12 +438,12 @@
                   (f32.mul
                     (local.get $t2)
                     (f32.convert_i32_u
-                      (i32.load8_u offset=16 (local.get $wall)))))
+                      (i32.load8_u offset=4 (local.get $wall)))))
                 (local.set $min-wall (local.get $wall))))))))
 
     (br_if $wall-loop
       (i32.lt_s
-        (local.tee $wall (i32.add (local.get $wall) (i32.const 20)))
+        (local.tee $wall (i32.add (local.get $wall) (i32.const 8)))
         (global.get $max-wall-addr))))
 
   (global.set $min-t2 (local.get $min-t2))
@@ -484,7 +469,7 @@
       (param $u f32) (param $v f32)
       (result i32)
   ;; Read color from color-distance table.
-  (i32.load offset=0x179c
+  (i32.load offset=0x11b0
     (i32.add
       (i32.shl (local.get $dist) (i32.const 6))
       ;; Read palette entry from palette.
@@ -504,10 +489,8 @@
 ;; Draw a vertical strip of the scene, including ceiling, wall, and floor.
 ;;   $top-addr: the x coordinate of the column * 4
 ;;   $half-height: half the height of the wall, in pixels
-;;   $ray-{x,y}: the ray that hit this wall (used for ceiling/floor textures)
 (func $draw-strip
       (param $top-addr i32) (param $half-height f32)
-      (param $ray-x f32) (param $ray-y f32)
   (local $bot-addr i32)
   (local $dist-index i32)
   (local $iheight i32)
@@ -537,12 +520,12 @@
 
         ;; find UV using distance table
         (local.set $u
-          (f32.add (global.get $Px) (f32.mul (local.get $ray-x) (local.get $dist))))
+          (f32.add (global.get $Px) (f32.mul (global.get $ray-x) (local.get $dist))))
         (local.set $v
-          (f32.add (global.get $Py) (f32.mul (local.get $ray-y) (local.get $dist))))
+          (f32.add (global.get $Py) (f32.mul (global.get $ray-y) (local.get $dist))))
 
         ;; draw ceiling (increment after)
-        (i32.store offset=0x4000
+        (i32.store offset=0x3000
           (local.get $top-addr)
           (call $texture
             (i32.const 0) (i32.const 0x8) (local.get $dist-index)
@@ -551,7 +534,7 @@
 
         ;; draw-floor (decrement before)
         (local.set $bot-addr (i32.sub (local.get $bot-addr) (i32.const 1280)))
-        (i32.store offset=0x4000
+        (i32.store offset=0x3000
           (local.get $bot-addr)
           (call $texture
             (i32.const 0x400) (i32.const 0xc) (local.get $dist-index)
@@ -592,18 +575,18 @@
     (then
       (local.set $wall-tex
         (i32.shl
-          (i32.load8_u offset=17 (global.get $min-wall))
+          (i32.load8_u offset=5 (global.get $min-wall))
           (i32.const 10)))
       (local.set $wall-pal
         (i32.shl
-          (i32.load8_u offset=18 (global.get $min-wall))
+          (i32.load8_u offset=6 (global.get $min-wall))
           (i32.const 2)))
       (local.set $dist-index
         (i32.sub
           (i32.const 120)
           (i32.shr_u (local.get $iheight) (i32.const 1))))
       (loop $loop
-        (i32.store offset=0x4000 (local.get $top-addr)
+        (i32.store offset=0x3000 (local.get $top-addr)
           (call $texture
             (local.get $wall-tex) (local.get $wall-pal) (local.get $dist-index)
             (local.get $u) (local.get $v)))
@@ -640,22 +623,18 @@
   (local $dist f32)
   (local $speed f32)
 
-  (local $move-x f32)
-  (local $move-y f32)
-  (local $ray-x f32)
-  (local $ray-y f32)
   (local $normal-x f32)
   (local $normal-y f32)
   (local $wall-scale f32)
   (local $dot-product f32)
 
-  ;; Set both $move-x/$Dx and $move-y $Dy.
-  ;; $Dx/$Dy is used for the view direction, and $move-x/$move-y is used for
+  ;; Set both $ray-x/$Dx and $ray-y $Dy.
+  ;; $Dx/$Dy is used for the view direction, and $ray-x/$ray-y is used for
   ;; the movement vector.
-  (local.set $move-x
+  (global.set $ray-x
     (local.tee $Dx
       (call $sin (global.get $angle))))
-  (local.set $move-y
+  (global.set $ray-y
     (local.tee $Dy
       (call $sin (f32.add (global.get $angle) (f32.const 1.5707963267948966)))))
 
@@ -680,7 +659,7 @@
         (f32.store (i32.const 0x0004) (global.get $zero)) ;; rotation speed
         (f32.store (i32.const 0x0008) (global.get $zero)) ;; speed
         (call $gen-maze)
-        (global.set $max-wall-addr (i32.const 0x179c))
+        (global.set $max-wall-addr (i32.const 0x11a4))
         (global.set $mode (i32.const 2)) ;; game
         (call $timer (i32.const 1)) ;; start timer
         (br $done))
@@ -709,8 +688,8 @@
       (if (f32.lt (local.get $speed) (global.get $zero))
         (then
           (local.set $speed (f32.neg (local.get $speed)))
-          (local.set $move-x (f32.neg (local.get $move-x)))
-          (local.set $move-y (f32.neg (local.get $move-y)))))
+          (global.set $ray-x (f32.neg (global.get $ray-x)))
+          (global.set $ray-y (f32.neg (global.get $ray-y)))))
 
       ;; Move if the speed is non-zero.
       (if (f32.gt (local.get $speed) (global.get $zero))
@@ -720,21 +699,21 @@
           (local.set $dist
             (f32.min
               (f32.add
-                (call $ray-walls (local.get $move-x) (local.get $move-y))
+                (call $ray-walls)
                 (f32.const 0.001953125))  ;; Epsilon to prevent landing on the wall.
               (local.get $speed)))  ;; Current speed.
 
           (global.set $Px
             (f32.add
               (global.get $Px)
-              (f32.mul (local.get $move-x) (local.get $dist))))
+              (f32.mul (global.get $ray-x) (local.get $dist))))
           (global.set $Py
             (f32.add
               (global.get $Py)
-              (f32.mul (local.get $move-y) (local.get $dist))))
+              (f32.mul (global.get $ray-y) (local.get $dist))))
 
           (local.set $wall-scale
-            (f32.convert_i32_u (i32.load8_u offset=16 (global.get $min-wall))))
+            (f32.convert_i32_u (i32.load8_u offset=4 (global.get $min-wall))))
 
           ;; Store the normal of the nearest wall.
           ;; Wall is stored as (x,y),(dx,dy),scale.
@@ -742,11 +721,13 @@
           (local.set $normal-x
             (f32.neg
               (f32.div
-                (f32.load offset=12 (global.get $min-wall))
+                (f32.convert_i32_s
+                  (i32.load8_s offset=3 (global.get $min-wall)))
                 (local.get $wall-scale))))
           (local.set $normal-y
             (f32.div
-              (f32.load offset=8 (global.get $min-wall))
+              (f32.convert_i32_s
+                (i32.load8_s offset=2 (global.get $min-wall)))
               (local.get $wall-scale)))
 
           ;; Store the dot product of the normal and the vector to P, to see if
@@ -755,12 +736,16 @@
             (f32.add
               (f32.mul
                 (local.get $normal-x)
-                (f32.sub (global.get $Px) (f32.load (global.get $min-wall))))
+                (f32.sub
+                  (global.get $Px)
+                  (f32.convert_i32_s
+                    (i32.load8_s (global.get $min-wall)))))
               (f32.mul
                 (local.get $normal-y)
                 (f32.sub
                   (global.get $Py)
-                  (f32.load offset=4 (global.get $min-wall))))))
+                  (f32.convert_i32_s
+                    (i32.load8_s offset=1 (global.get $min-wall)))))))
 
           ;; If the normal is in the wrong direction (e.g. away from the player)
           ;; flip it.
@@ -793,7 +778,7 @@
           (call $timer (i32.const 0)) ;; stop timer
           (global.set $mode (i32.const 3)) ;; winning
           (global.set $mode-timer (i32.const 120)) ;; reset position over time
-          (global.set $max-wall-addr (i32.const 0x0e28))))
+          (global.set $max-wall-addr (i32.const 0x0ddc))))
 
       (br $done))
 
@@ -824,8 +809,7 @@
     (if (i32.eqz (global.get $mode-timer))
       (then
         (global.set $mode (i32.const 1)) ;; reset
-        (global.set $mode-timer (i32.const 15)))) ;; shorter wait
-    (br $done))
+        (global.set $mode-timer (i32.const 15))))) ;; shorter wait
 
   ;; DRAWING:
   ;; Loop for each column.
@@ -836,18 +820,15 @@
         (f32.const 160)))
 
     ;; Shoot a ray against a wall. Use rays projected onto screen plane.
-    (local.set $ray-x
+    (global.set $ray-x
       (f32.add (local.get $Dx) (f32.mul (local.get $xproj) (f32.neg (local.get $Dy)))))
-    (local.set $ray-y
+    (global.set $ray-y
       (f32.add (local.get $Dy) (f32.mul (local.get $xproj) (local.get $Dx))))
 
     ;; Draw ceiling, wall, floor
     (call $draw-strip
       (i32.shl (local.get $x) (i32.const 2))
-      (f32.div
-        (global.get $half-screen-height)
-        (call $ray-walls (local.get $ray-x) (local.get $ray-y)))
-      (local.get $ray-x) (local.get $ray-y))
+      (f32.div (global.get $half-screen-height) (call $ray-walls)))
 
     ;; loop on x
     (br_if $x-loop
