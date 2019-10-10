@@ -221,8 +221,8 @@
 (func $gen-maze
   (local $cells i32)
   (local $i i32)
-  (local $x i32)
-  (local $y i32)
+  (local $cell0 i32)
+  (local $cell1 i32)
   (local $wall-addr i32)
   (local $dest-wall-addr i32)
   (local $walls i32)
@@ -232,40 +232,34 @@
   ;; wall.
   (local.set $cells (i32.const 0x0c_00_01_00))
 
-  (local.set $wall-addr (i32.const 0x00a0))
-  (loop $y-loop
+  ;; start at 0x00a0 - 2 and pre-increment before storing
+  (local.set $wall-addr (i32.const 0x009e))
+  (loop $loop
+    ;; Each cell is "owned" by itself at the start.
+    (i32.store8 offset=0x0010
+      (i32.and (local.get $cells) (i32.const 0xff)) (local.get $cells))
 
-    (local.set $x (i32.const 0))
-    (loop $x-loop
-      ;; Each cell is "owned" by itself at the start.
-      (i32.store8 offset=0x0010
-        (i32.and (local.get $cells) (i32.const 0xff)) (local.get $cells))
+    ;; Add horizontal edge, connecting cell i and i + 1.
+    (if (i32.lt_s (i32.rem_s (local.get $i) (i32.const 12)) (i32.const 11))
+      (then
+        (i32.store16
+          (local.tee $wall-addr (i32.add (local.get $wall-addr) (i32.const 2)))
+          (local.get $cells))))
 
-      ;; Add horizontal edge, connecting cell i and i + 1.
-      (if (i32.lt_s (local.get $x) (i32.const 11))
-        (then
-          (i32.store16 (local.get $wall-addr) (local.get $cells))
-          (local.set $wall-addr (i32.add (local.get $wall-addr) (i32.const 2)))))
+    ;; add vertical edge, connecting cell i and i + 12.
+    (if (i32.lt_s (i32.div_s (local.get $i) (i32.const 12)) (i32.const 11))
+      (then
+        (i32.store16
+          (local.tee $wall-addr (i32.add (local.get $wall-addr) (i32.const 2)))
+          (i32.shr_u (local.get $cells) (i32.const 16)))))
 
-      ;; add vertical edge, connecting cell i and i + 12.
-      (if (i32.lt_s (local.get $y) (i32.const 11))
-        (then
-          (i32.store16
-            (local.get $wall-addr) (i32.shr_u (local.get $cells) (i32.const 16)))
-          (local.set $wall-addr (i32.add (local.get $wall-addr) (i32.const 2)))))
+    ;; increment cell indexes.
+    (local.set $cells (i32.add (local.get $cells) (i32.const 0x01_01_01_01)))
 
-      ;; increment cell indexes.
-      (local.set $cells (i32.add (local.get $cells) (i32.const 0x01_01_01_01)))
-
-      (br_if $x-loop
-        (i32.lt_s
-          (local.tee $x (i32.add (local.get $x) (i32.const 1)))
-          (i32.const 12))))
-
-    (br_if $y-loop
-      (i32.lt_s
-        (local.tee $y (i32.add (local.get $y) (i32.const 1)))
-        (i32.const 12))))
+  (br_if $loop
+    (i32.lt_s
+      (local.tee $i (i32.add (local.get $i) (i32.const 1)))
+      (i32.const 144))))  ;; 12 * 12
 
   (local.set $walls (i32.const 264))  ;; 12 * 11 * 2
 
@@ -279,33 +273,36 @@
             (f32.mul (call $random) (f32.convert_i32_s (local.get $walls))))
           (i32.const 1))))
 
-    ;; repurpose $x as the left/up cell, and $y as the right/down cell of the
-    ;; wall.
-    (local.set $x
-      (i32.load8_u offset=0x0010 (i32.load8_u (local.get $wall-addr))))
-    (local.set $y
-      (i32.load8_u offset=0x0010 (i32.load8_u offset=1 (local.get $wall-addr))))
-
     ;; if each side of the wall is not part of the same set:
-    (if (i32.ne (local.get $x) (local.get $y))
+    (if (i32.ne
+          ;; $cell0 is the left/up cell.
+          (local.tee $cell0
+            (i32.load8_u offset=0x0010 (i32.load8_u (local.get $wall-addr))))
+          ;; $cell1 is the right/down cell
+          (local.tee $cell1
+            (i32.load8_u offset=0x0010 (i32.load8_u offset=1 (local.get $wall-addr)))))
       (then
         ;; remove this wall by copying the last wall over it.
-        (local.set $walls (i32.sub (local.get $walls) (i32.const 1)))
         (i32.store16
           (local.get $wall-addr)
           (i32.load16_u offset=0x00a0
-            (i32.shl (local.get $walls) (i32.const 1))))
+            (i32.shl
+              (local.tee $walls (i32.sub (local.get $walls) (i32.const 1)))
+              (i32.const 1))))
 
-        ;; replace all cells that contain $y with $x.
-        (local.set $i (i32.const 0x0010))
+        ;; replace all cells that contain $cell1 with $cell0.
+        ;; loop over range [0x0090,0x0000), so use an offset of 0xf so the
+        ;; stored addresses are in the range (0x00a0,0x0010].
+        (local.set $i (i32.const 0x0090))
         (loop $remove-loop
-          (if (i32.eq (i32.load8_u (local.get $i)) (local.get $y))
-            (then (i32.store8 (local.get $i) (local.get $x))))
+          (if (i32.eq
+                (i32.load8_u offset=0xf (local.get $i))
+                (local.get $cell1))
+            (then
+              (i32.store8 offset=0xf (local.get $i) (local.get $cell0))))
 
           (br_if $remove-loop
-            (i32.lt_s
-              (local.tee $i (i32.add (local.get $i) (i32.const 1)))
-              (i32.const 0x00a0))))))
+            (local.tee $i (i32.sub (local.get $i) (i32.const 1)))))))
 
     ;; loop until there are exactly 11 * 11 walls.
     (br_if $wall-loop (i32.gt_s (local.get $walls) (i32.const 121))))
