@@ -483,38 +483,25 @@
                 ;; wrap u coordinate to [0, 32).
                 (call $scale-frac-i32 (local.get $u))))))))))
 
-(func $draw-top-bottom-pixel
-      (param $x-mid-addr i32) (param $y i32) (param $dist-index i32)
-      (param $u f32)
-      (param $top-tex i32) (param $top-pal i32) (param $top-v f32)
-      (param $bot-tex i32) (param $bot-pal i32) (param $bot-v f32)
-  ;; Draw ceiling or wall top.
-  (i32.store
-    (i32.sub
-      (local.get $x-mid-addr)
-      (local.tee $y (i32.mul (local.get $y) (i32.const 1280))))
-    (call $texture
-      (local.get $top-tex) (local.get $top-pal) (local.get $dist-index)
-      (local.get $u) (local.get $top-v)))
-
-  ;; Draw floor or wall bottom.
-  (i32.store offset=1280
-    (i32.add (local.get $x-mid-addr) (local.get $y))
-    (call $texture
-      (local.get $bot-tex) (local.get $bot-pal) (local.get $dist-index)
-      (local.get $u) (local.get $bot-v))))
-
 ;; Draw a vertical strip of the scene, including ceiling, wall, and floor.
 ;;   $top-addr: the x coordinate of the column * 4
 ;;   $half-height: half the height of the wall, in pixels
+;;   $top-tex: the index of the texture (either 0 or 1)
+;;   $top-pal: the offset of the palette from address 0xd90.
 (func $draw-strip
     (param $x-mid-addr i32) (param $half-height f32)
-    (param $wall-tex i32) (param $wall-pal i32)
+    (param $top-tex i32) (param $top-pal i32)
   (local $ihalf-height i32)
   (local $y i32)
+  (local $1280y i32)
+  (local $dist-index i32)
+  (local $bot-tex i32)
+  (local $bot-pal i32)
 
   (local $dist f32)
-  (local $v f32)
+  (local $u f32)
+  (local $top-v f32)
+  (local $bot-v f32)
   (local $dv f32)
   (local $dv-mul f32)
 
@@ -523,48 +510,60 @@
         (i32.const 120))
     (local.set $ihalf-height (i32.const 120)))
 
+  (local.set $dist-index (local.get $ihalf-height))
+  (local.set $u (global.get $min-t2))
   (local.set $dv (f32.div (global.get $one-half) (local.get $half-height)))
+  (local.set $bot-tex (local.get $top-tex))
+  (local.set $bot-pal (local.get $top-pal))
 
   (loop $loop
     (if (i32.lt_s (local.get $y) (local.get $ihalf-height))
       (then
-        ;; Drawing wall
-        (call $draw-top-bottom-pixel
-          (local.get $x-mid-addr)
-          (local.get $y)
-          (local.get $ihalf-height)
-          (global.get $min-t2)
-          (local.get $wall-tex)
-          (local.get $wall-pal)
+        ;; Draw wall.
+        (local.set $top-v
           (f32.sub
             (global.get $one-half)
             (local.tee $dv-mul
-              (f32.mul (f32.convert_i32_s (local.get $y)) (local.get $dv))))
-          (local.get $wall-tex)
-          (local.get $wall-pal)
+              (f32.mul (f32.convert_i32_s (local.get $y)) (local.get $dv)))))
+        (local.set $bot-v
           (f32.add (global.get $one-half) (local.get $dv-mul))))
       (else
         ;; Drawing ceiling/floor
         ;; Find UV using distance table
-        (call $draw-top-bottom-pixel
-          (local.get $x-mid-addr)
-          (local.get $y)
-          (local.get $y)
+        (local.set $u
           (f32.add
             (global.get $Px)
             (f32.mul
               (global.get $ray-x)
               (local.tee $dist
-                (f32.load offset=0x0ab0 (i32.shl (local.get $y) (i32.const 2))))))
-          (i32.const 0)
-          (i32.const 0x8)
-          (local.tee $v
+                (f32.load offset=0x0ab0 (i32.shl (local.get $y) (i32.const 2)))))))
+        (local.set $bot-v
+          (local.tee $top-v
             (f32.add
-              (global.get $Py)
-              (f32.mul (global.get $ray-y) (local.get $dist))))
-          (i32.const 1)
-          (i32.const 0xc)
-          (local.get $v))))
+                (global.get $Py)
+                (f32.mul (global.get $ray-y) (local.get $dist)))))
+        (local.set $dist-index (local.get $y))
+        (local.set $top-tex (i32.const 0))
+        (local.set $top-pal (i32.const 0x8))
+        (local.set $bot-tex (i32.const 1))
+        (local.set $bot-pal (i32.const 0xc))))
+
+    ;; Draw ceiling or wall top.
+    (i32.store
+      (i32.sub
+        (local.get $x-mid-addr)
+        (local.tee $1280y (i32.mul (local.get $y) (i32.const 1280))))
+      (call $texture
+        (local.get $top-tex) (local.get $top-pal) (local.get $dist-index)
+        (local.get $u) (local.get $top-v)))
+
+    ;; Draw floor or wall bottom.
+    (i32.store offset=1280
+      (i32.add (local.get $x-mid-addr) (local.get $1280y))
+      (call $texture
+        (local.get $bot-tex) (local.get $bot-pal) (local.get $dist-index)
+        (local.get $u) (local.get $bot-v)))
+
     (br_if $loop
       (i32.lt_s
         (local.tee $y (i32.add (local.get $y) (i32.const 1)))
