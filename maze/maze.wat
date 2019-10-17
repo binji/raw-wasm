@@ -196,13 +196,12 @@
 
 ;; Takes an f32, doubles it, then take the fractional part of that and scales
 ;; it to [0, 32). Used to index into a 32x32 texture.
-(func $scale-frac-i32 (param $x f32) (result i32)
-  (i32.trunc_f32_s
-    (f32.mul
-      (f32.sub
-        (local.tee $x (f32.add (local.get $x) (local.get $x)))
-        (f32.floor (local.get $x)))
-      (f32.convert_i32_s (i32.const 32)))))
+(func $scale-frac-i32 (param $x f32) (result f32)
+  (f32.mul
+    (f32.sub
+      (local.tee $x (f32.add (local.get $x) (local.get $x)))
+      (f32.floor (local.get $x)))
+    (f32.convert_i32_s (i32.const 32))))
 
 ;; Returns a color from a 32x32 8bpp texture, using a two-level palette.
 ;; The texture contains a palette index [0, 4).
@@ -227,9 +226,11 @@
               (i32.shl (local.get $tex) (i32.const 10))
               (i32.add
                 ;; wrap v coordinate to [0, 32), then multiply by 32.
-                (i32.shl (call $scale-frac-i32 (local.get $v)) (i32.const 5))
+                (i32.shl
+                  (i32.trunc_f32_s (call $scale-frac-i32 (local.get $v)))
+                  (i32.const 5))
                 ;; wrap u coordinate to [0, 32).
-                (call $scale-frac-i32 (local.get $u))))))))))
+                (i32.trunc_f32_s (call $scale-frac-i32 (local.get $u)))))))))))
 
 ;; Changes the rotation speed or movement speed fluidly given an input value.
 ;;   $input-addr: Address of 2 bytes of input (either left/right or up/down)
@@ -392,23 +393,20 @@
               ;; Write the run.
               (loop $dst-loop
                 ;; Each byte is 2bpp, unpack into 8bpp palette index.
-                (i32.store8
+                (i32.store
                   (local.tee $dst (i32.add (local.get $dst) (i32.const 4)))
                   (i32.and
-                    (local.tee $byte
-                      (i32.load8_u offset=0x0c90
-                        (local.tee $src
-                          (i32.add (local.get $src) (local.get $d-src)))))
-                    (i32.const 0x3)))
-                (i32.store8 offset=1
-                  (local.get $dst)
-                  (i32.and (i32.shr_u (local.get $byte) (i32.const 2)) (i32.const 0x3)))
-                (i32.store8 offset=2
-                  (local.get $dst)
-                  (i32.and (i32.shr_u (local.get $byte) (i32.const 4)) (i32.const 0x3)))
-                (i32.store8 offset=3
-                  (local.get $dst)
-                  (i32.and (i32.shr_u (local.get $byte) (i32.const 6)) (i32.const 0x3)))
+                    (i32.or
+                      (i32.or
+                        (i32.or
+                          (local.tee $byte
+                            (i32.load8_u offset=0x0c90
+                              (local.tee $src
+                                (i32.add (local.get $src) (local.get $d-src)))))
+                          (i32.shl (local.get $byte) (i32.const 6)))
+                        (i32.shl (local.get $byte) (i32.const 12)))
+                      (i32.shl (local.get $byte) (i32.const 18)))
+                    (i32.const 0x03030303)))
 
                 (br_if $dst-loop
                   (local.tee $count (i32.sub (local.get $count) (i32.const 1)))))
@@ -476,24 +474,22 @@
               ;; $cell0 is the left/up cell.
               (local.tee $cell0
                 (i32.load8_u offset=0x0010
-                  (i32.load8_u
+                  (i32.load8_u offset=0x00a0
                     ;; randomly choose a wall
                     (local.tee $wall-addr
-                      (i32.add
-                        (i32.const 0x00a0)
-                        (i32.shl
-                          (i32.trunc_f32_s
-                            (f32.mul
-                              (call $random)
-                              (f32.convert_i32_s (local.get $walls))))
-                          (i32.const 1)))))))
+                      (i32.shl
+                        (i32.trunc_f32_s
+                          (f32.mul
+                            (call $random)
+                            (f32.convert_i32_s (local.get $walls))))
+                        (i32.const 1))))))
               ;; $cell1 is the right/down cell
               (local.tee $cell1
                 (i32.load8_u offset=0x0010
-                  (i32.load8_u offset=1 (local.get $wall-addr)))))
+                  (i32.load8_u offset=0x00a1 (local.get $wall-addr)))))
             (then
               ;; remove this wall by copying the last wall over it.
-              (i32.store16
+              (i32.store16 offset=0x00a0
                 (local.get $wall-addr)
                 (i32.load16_u offset=0x00a0
                   (i32.shl
