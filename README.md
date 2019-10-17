@@ -40,7 +40,7 @@ keys, or tap on the left or right side of the screen to turn. [**1976 bytes**]
 
 A Wolfenstein-style 3d maze race. Each ray is tested against all walls,
 brute-force style. Walls, floors and ceilings are textured. Palettes are made
-up of 120-levels of brightness, which fade into black in the distance. [**2111 bytes**]
+up of 120-levels of brightness, which fade into black in the distance. [**2094 bytes**]
 
 [Demo!][8]
 

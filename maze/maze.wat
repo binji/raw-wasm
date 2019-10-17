@@ -649,28 +649,27 @@
                   (f32.convert_i32_s
                     (i32.load8_s offset=1 (global.get $min-wall)))))))
 
-          ;; If the normal is in the wrong direction (e.g. away from the player)
-          ;; flip it.
-          (if (f32.lt (local.get $dot-product) (global.get $zero))
-            (then
-              (local.set $dot-product (f32.neg (local.get $dot-product)))
-              (local.set $normal-x (f32.neg (local.get $normal-x)))
-              (local.set $normal-y (f32.neg (local.get $normal-y)))))
-
-          ;; Push the player away from the wall if they're too close.
+          ;; Push the player away from the wall if they're too close. Since the
+          ;; $dot-product is signed, we need to use the absolute value to find
+          ;; the actual distance.
           (if (f32.gt
-                (local.tee $dot-product
-                  (f32.sub (f32.const 0.25) (local.get $dot-product)))
+                (local.tee $dist
+                  (f32.sub (f32.const 0.25) (f32.abs (local.get $dot-product))))
                 (global.get $zero))
             (then
               (global.set $Px
                 (f32.add
                   (global.get $Px)
-                  (f32.mul (local.get $normal-x) (local.get $dot-product))))
+                  (f32.mul
+                    (local.get $normal-x)
+                    (local.tee $dist
+                      ;; Use the sign of the $dot-product on the positive value
+                      ;; $dist to push in the proper direction.
+                      (f32.copysign (local.get $dist) (local.get $dot-product))))))
               (global.set $Py
                 (f32.add
                   (global.get $Py)
-                  (f32.mul (local.get $normal-y) (local.get $dot-product))))))))
+                  (f32.mul (local.get $normal-y) (local.get $dist))))))))
 
       ;; If the player reaches the goal, generate a new maze, and reset their
       ;; position.
