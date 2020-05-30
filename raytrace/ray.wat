@@ -128,19 +128,25 @@
 
   (if (result f32)
     (f32.gt (local.get $d2) (f32.const 0))
-    (if (result f32)
-      (f32.gt
-        (local.tee $r
-          (f32.sub (local.get $b) (local.tee $d2 (f32.sqrt (local.get $d2)))))
-        (f32.const 1e-4))
-      (local.get $r)
+    (then
       (if (result f32)
         (f32.gt
-          (local.tee $r (f32.add (local.get $b) (local.get $d2)))
+          (local.tee $r
+            (f32.sub (local.get $b) (local.tee $d2 (f32.sqrt (local.get $d2)))))
           (f32.const 1e-4))
-        (local.get $r)
-        (f32.const inf)))
-    (f32.const inf)))
+        (then
+          (local.get $r))
+        (else
+          (if (result f32)
+            (f32.gt
+              (local.tee $r (f32.add (local.get $b) (local.get $d2)))
+              (f32.const 1e-4))
+            (then
+              (local.get $r))
+            (else
+              (f32.const inf))))))
+    (else
+      (f32.const inf))))
 
 ;; Intersect ray w/ all spheres, return address of closest hit (or -1 if none).
 (func $scene (result i32)

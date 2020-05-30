@@ -71,9 +71,10 @@
         (local.get $blobR)))
 
     ;; blob.dx = -blob.dx
-    (f32.store offset=4
-      (local.get $blob)
-      (f32.neg (local.get $dx))))
+    (then
+      (f32.store offset=4
+        (local.get $blob)
+        (f32.neg (local.get $dx)))))
 
   ;; blob.x = sum;
   (f32.store offset=0 (local.get $blob) (local.get $sum)))

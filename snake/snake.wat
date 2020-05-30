@@ -358,7 +358,8 @@
   ;; make snake longer, if necessary
   (if
     (i32.lt_u (global.get $len) (global.get $tolen))
-    (global.set $len (i32.add (global.get $len) (i32.const 1))))
+    (then
+      (global.set $len (i32.add (global.get $len) (i32.const 1)))))
 
   (local.set $i (call $drawsnake (i32.const 1) (i32.const 4)))
 
@@ -387,7 +388,7 @@
 
       ;; update snake length, and clamp
       (if (i32.lt_u (global.get $tolen) (i32.const 900))
-        (global.set $tolen (i32.add (global.get $tolen) (i32.const 10))))
+        (then (global.set $tolen (i32.add (global.get $tolen) (i32.const 10)))))
       ;; update score
       (call $score (i32.add (global.get $score) (i32.const 100)))))
 )
