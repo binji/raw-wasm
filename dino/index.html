@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<head>
+  <style>
+    body {
+      position: absolute;
+      display: flex;
+      flex-direction: column;
+      background-color: #555;
+      margin: 0;
+      width: 100%;
+      height: 100%;
+    }
+    canvas {
+      object-fit: contain;
+      width: 100%;
+      height: 100%;
+      image-rendering: pixelated;
+      image-rendering: crisp-edges;
+    }
+  </style>
+</head>
+<body>
+  <canvas width="300" height="75"></canvas>
+  <script>
+    let env = {
+    };
+
+    fetch('dino.wasm')
+      .then(response => response.arrayBuffer())
+      .then(bytes => WebAssembly.instantiate(bytes, {Math, env}))
+      .then(source => {
+        let instance = source.instance;
+        let canvasData = new Uint8Array(instance.exports.mem.buffer, 0x3000, 90000);
+        let canvas = document.querySelector('canvas');
+        let context = canvas.getContext('2d');
+        let imageData = context.createImageData(300, 75);
+        let u8 = new Uint8Array(instance.exports.mem.buffer, 0, 4);
+        let onkey = (down, event) => {
+          switch (event.code) {
+            case 'ArrowLeft': u8[0] = down; break;
+            case 'ArrowRight': u8[1] = down; break;
+            case 'ArrowUp': u8[2] = down; break;
+            case 'ArrowDown': u8[3] = down; break;
+          }
+        };
+        document.addEventListener('keydown', onkey.bind(null, 1), false);
+        document.addEventListener('keyup', onkey.bind(null, 0), false);
+
+        // TODO touch controls
+        /*
+        let touches = {};
+        let ontouch = (down, event) => {
+          for (let touch of event.changedTouches) {
+            if (down) {
+              if (touch.clientX < event.target.clientWidth * 0.5) {
+                index = 0; // left
+              } else {
+                index = 1; // right
+              }
+              u8[index] = 1;
+              touches[touch.identifier] = index;
+            } else {
+              u8[touches[touch.identifier]] = 0;
+              delete touches[touch.identifier];
+            }
+          }
+          // Move forward when touching left and right side of screen.
+          u8[2] = u8[0] & u8[1];
+          event.preventDefault();
+        };
+        canvas.addEventListener('touchstart', ontouch.bind(null, 1), false);
+        canvas.addEventListener('touchend', ontouch.bind(null, 0), false);
+        */
+
+        (function update() {
+          requestAnimationFrame(update);
+          instance.exports.run();
+          imageData.data.set(canvasData);
+          context.putImageData(imageData, 0, 0);
+        })();
+      });
+  </script>
+</body>
+
