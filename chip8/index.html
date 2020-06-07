@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<head>
+  <style>
+    body {
+      position: absolute;
+      display: flex;
+      flex-direction: column;
+      background-color: #555;
+      margin: 0;
+      width: 100%;
+      height: 100%;
+    }
+    canvas {
+      object-fit: contain;
+      width: 100%;
+      height: 100%;
+    }
+  </style>
+</head>
+<body>
+  <canvas width="64" height="32"></canvas>
+  <script>
+    fetch('chip8.wasm')
+      .then(response => response.arrayBuffer())
+      .then(bytes => WebAssembly.instantiate(bytes, {Math}))
+      .then(source => {
+        let instance = source.instance;
+        let canvasData = new Uint8Array(instance.exports.mem.buffer, 0x1000, 8192);
+        let canvas = document.querySelector('canvas');
+        let context = canvas.getContext('2d');
+        let imageData = context.createImageData(64, 32);
+        let u8 = new Uint8Array(instance.exports.mem.buffer, 0x50, 16);
+        let onkey = (down, event) => {
+          switch (event.code) {
+            case 'Digit1': u8[1] = down; break;
+            case 'Digit2': u8[2] = down; break;
+            case 'Digit3': u8[3] = down; break;
+            case 'Digit4': u8[12] = down; break;
+            case 'KeyQ': u8[4] = down; break;
+            case 'KeyW': u8[5] = down; break;
+            case 'KeyE': u8[6] = down; break;
+            case 'KeyR': u8[13] = down; break;
+            case 'KeyA': u8[7] = down; break;
+            case 'KeyS': u8[8] = down; break;
+            case 'KeyD': u8[9] = down; break;
+            case 'KeyF': u8[14] = down; break;
+            case 'KeyZ': u8[10] = down; break;
+            case 'KeyX': u8[0] = down; break;
+            case 'KeyC': u8[11] = down; break;
+            case 'KeyV': u8[15] = down; break;
+            case 'ArrowUp': u8[5] = down; break;
+            case 'ArrowLeft': u8[7] = down; break;
+            case 'ArrowDown': u8[8] = down; break;
+            case 'ArrowRight': u8[9] = down; break;
+          }
+        };
+        document.addEventListener('keydown', onkey.bind(null, 1), false);
+        document.addEventListener('keyup', onkey.bind(null, 0), false);
+
+        (function update() {
+          requestAnimationFrame(update);
+          instance.exports.run();
+          imageData.data.set(canvasData);
+          context.putImageData(imageData, 0, 0);
+        })();
+      });
+  </script>
+</body>
+
