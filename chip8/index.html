@@ -20,15 +20,26 @@
 <body>
   <canvas width="64" height="32"></canvas>
   <script>
+    let instance;
+    let mem;
     let env = {
-      pc: (x, o) => console.log(`pc = ${x.toString(16)} op = ${o.toString(16)}`)
+      pc: (x, o) => {
+        console.log(`pc = ${x.toString(16)} op = ${o.toString(16)}`);
+        let regs = new Uint8Array(mem.buffer, 0x60, 0x10);
+        let regStr = '';
+        regs.forEach((x, i) => {
+          regStr += `v${i.toString(16)}: ${x.toString(16)} `;
+        });
+        console.log(`  ${regStr}`);
+      }
     };
     fetch('chip8.wasm')
       .then(response => response.arrayBuffer())
       .then(bytes => WebAssembly.instantiate(bytes, {Math, env}))
       .then(source => {
         instance = source.instance;
-        let u8 = new Uint8Array(instance.exports.mem.buffer, 0x50, 16);
+        mem = instance.exports.mem;
+        let u8 = new Uint8Array(mem.buffer, 0x50, 16);
         let onkey = (down, event) => {
           switch (event.code) {
             case 'Digit1': u8[1] = down; break;
@@ -57,15 +68,16 @@
         document.addEventListener('keyup', onkey.bind(null, 0), false);
 
         // Fetch game.
-        return fetch('pong.ch8');
+        // return fetch('pong.ch8');
+        return fetch('octojam1title.ch8');
       })
       .then(response => response.arrayBuffer())
       .then(bytes => {
-        let rom = new Uint8Array(instance.exports.mem.buffer, 0x200, 0xe00);
+        let rom = new Uint8Array(mem.buffer, 0x200, 0xe00);
         rom.set(new Uint8Array(bytes));
 
         let canvas = document.querySelector('canvas');
-        let canvasData = new Uint8Array(instance.exports.mem.buffer, 0x1100, 8192);
+        let canvasData = new Uint8Array(mem.buffer, 0x1100, 8192);
         let context = canvas.getContext('2d');
         let imageData = context.createImageData(64, 32);
 

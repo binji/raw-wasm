@@ -74,6 +74,14 @@
   (local $draw-src i32)
   (local $draw-dst i32)
 
+  (if (global.get $delay)
+    (then
+      (global.set $delay (i32.sub (global.get $delay) (i32.const 1)))))
+
+  (if (global.get $sound)
+    (then
+      (global.set $sound (i32.sub (global.get $sound) (i32.const 1)))))
+
   ;; waiting for key?
   (if $gotkey (i32.gt_s (global.get $wait-vx) (i32.const 0))
     (then
@@ -134,7 +142,7 @@
       (local.set $n (i32.and (local.get $nn) (i32.const 0xf)))
       (local.set $nnn
         (i32.or
-          (i32.shl (local.get $b0) (i32.const 4))
+          (i32.shl (local.get $x) (i32.const 8))
           (local.get $nn)))
 
       (call $pc (global.get $pc)
@@ -414,7 +422,7 @@
     ;; $skip
     ;; (i32.const <skip>)
     (br $setpc
-      (i32.add (local.get $nextpc) (i32.shl (i32.const 1))))
+      (i32.add (i32.shl (i32.const 1)) (local.get $nextpc)))
 
     )
     ;; $set-vx
