@@ -39,7 +39,22 @@
   "\F0\80\F0\80\80" ;; f
 )
 
+(func $blit (param $addr i32) (param $src-byte i32) (param $vf i32) (result i32)
+  (local $dst-byte i32)
+
+  (i32.store8 offset=0x1000
+    (local.get $addr)
+    (i32.xor
+      (local.tee $dst-byte (i32.load8_u offset=0x1000 (local.get $addr)))
+      (local.get $src-byte)))
+
+  (local.tee $vf
+    (i32.or
+      (local.get $vf)
+      (i32.and (local.get $dst-byte) (local.get $src-byte)))))
+
 (func (export "run") (param $cycles i32)
+  (local $key i32)
   (local $b0 i32)
   (local $x i32)
   (local $vx i32)
@@ -52,6 +67,32 @@
   (local $copy-src i32)
   (local $copy-dst i32)
   (local $j i32)
+  (local $sprite-addr0 i32)
+  (local $sprite-addr1 i32)
+  (local $sprite-off-x i32)
+  (local $draw-src i32)
+  (local $draw-dst i32)
+
+  ;; waiting for key?
+  (if $gotkey (i32.gt_s (global.get $wait-vx) (i32.const 0))
+    (then
+      (loop $key
+        (if
+          (local.tee $key (i32.load8_u offset=0x50 (local.get $n)))
+          (then
+            ;; Store key in v[wait-vx]
+            (i32.store8 offset=0x50 (global.get $wait-vx) (local.get $key))
+
+            ;; Stop waiting for a key.
+            (global.set $wait-vx (i32.const -1))
+            (br $gotkey)))
+
+        (br_if $key
+          (i32.eq
+            (local.tee $n (i32.add (local.get $n) (i32.const 1)))
+            (i32.const 16))))
+      ;; no key pressed.
+      (return)))
 
   (loop $cycle
     (local.set $vf (i32.const 0))
@@ -223,10 +264,46 @@
         (local.get $nn)))
 
     )
-    ;; 0xDXYN  draw N-line sprite at (x, y)
+    ;; 0xDXYN  draw N-line sprite at (v[x], v[y])
+    (local.set $sprite-addr0
+      (i32.add
+        (i32.const 0xf8)  ;; 0x100 - 8  (i.e. one row)
+        (i32.add
+          (i32.shl (i32.and (local.get $vy) (i32.const 0x3f)) (i32.const 3))
+          (i32.shr_u (i32.and (local.get $vx) (i32.const 0x1f)) (i32.const 3)))))
+    (local.set $sprite-addr1
+      (i32.and
+        (i32.add
+          (local.get $sprite-addr0)
+          (i32.const 1))
+      (i32.const 0xf8)))
+    (local.set $sprite-off-x (i32.and (local.get $vx) (i32.const 7)))
+
     (loop $yloop
       ;; load sprite data.
       (local.set $b0 (i32.load8_u (i32.add (global.get $i) (local.get $j))))
+
+      ;; xor high bits
+      (local.set $vf
+        (call $blit
+          (local.tee $sprite-addr0
+            (i32.and
+              (i32.add (local.get $sprite-addr0) (i32.const 8))
+              (i32.const 0xff)))
+          (i32.shr_u (local.get $b0) (local.get $sprite-off-x))
+          (local.get $vf)))
+
+      ;; xor low bits
+      (local.set $vf
+        (call $blit
+          (local.tee $sprite-addr1
+            (i32.and
+              (i32.add (local.get $sprite-addr1) (i32.const 8))
+              (i32.const 0xff)))
+          (i32.shl
+            (local.get $b0)
+            (i32.sub (i32.const 8) (local.get $sprite-off-x)))
+          (local.get $vf)))
 
       (br_if $yloop
         (i32.lt_u
@@ -264,7 +341,9 @@
       )
       ;; 0xFX0A  v[x] = wait for key
       (global.set $wait-vx (local.get $vx) (i32.const 1))
-      (return)
+      ;; stop executing, but increment pc once.
+      (local.set $cycles (i32.const 1))
+      (br $nextpc)
 
       )
       ;; 0xFX15  delay = v[x]
@@ -336,7 +415,6 @@
     ;; (i32.const <new-vx>)
     (local.set $vx)
     (i32.store8 offset=0x60 (local.get $x) (local.get $vx))
-    (i32.store8 offset=0x6f (i32.const 0) (local.get $vf))
     ;; fallthrough.
 
     )
@@ -349,7 +427,32 @@
     ;; (local.get $nextpc)
     (global.set $pc)
 
+    ;; update vf
+    (i32.store8 offset=0x6f (i32.const 0) (local.get $vf))
+
     (br_if $cycle
-      (local.tee $cycles (i32.sub (local.get $cycles) (i32.const 1))))
-  )
+      (local.tee $cycles (i32.sub (local.get $cycles) (i32.const 1)))))
+
+  ;; draw screen
+  (loop $bytes
+    (local.set $b0 (i32.load8_u (local.get $draw-src)))
+
+    (loop $bits
+      (i32.store offset=0x1100
+        (local.get $draw-dst)
+        (if (result i32) (i32.and (local.get $b0) (i32.const 0x80))
+          (then (i32.const 0xff_ff_ff_ff))
+          (else (i32.const 0xff_00_00_00))))
+
+      (local.set $b0 (i32.shl (local.get $b0) (i32.const 1)))
+
+      (br_if $bits
+        (i32.and
+          (local.tee $draw-dst (i32.add (local.get $draw-dst) (i32.const 4)))
+          (i32.const 0x1f))))
+
+    (br_if $bytes
+      (i32.lt_u
+        (local.tee $draw-src (i32.add (local.get $draw-src) (i32.const 1)))
+        (i32.const 0x1100))))
 )
