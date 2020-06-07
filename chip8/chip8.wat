@@ -1,4 +1,5 @@
 (import "Math" "random" (func $random (result f32)))
+(import "env" "pc" (func $pc (param i32 i32)))
 
 ;; [0x0000, 0x0010)  Char[16]       Font data
 ;; [0x0050, 0x0060)  u8[16]         Key data
@@ -134,6 +135,11 @@
       (local.set $nnn
         (i32.or
           (i32.shl (local.get $b0) (i32.const 4))
+          (local.get $nn)))
+
+      (call $pc (global.get $pc)
+        (i32.or
+          (i32.shl (local.get $b0) (i32.const 8))
           (local.get $nn)))
 
       (br_table 0 2 1 3 4 5 6 7 8 9 10 11 12 13 14 15
@@ -435,7 +441,7 @@
 
   ;; draw screen
   (loop $bytes
-    (local.set $b0 (i32.load8_u (local.get $draw-src)))
+    (local.set $b0 (i32.load8_u offset=0x1000 (local.get $draw-src)))
 
     (loop $bits
       (i32.store offset=0x1100
@@ -454,5 +460,5 @@
     (br_if $bytes
       (i32.lt_u
         (local.tee $draw-src (i32.add (local.get $draw-src) (i32.const 1)))
-        (i32.const 0x1100))))
+        (i32.const 0x100))))
 )

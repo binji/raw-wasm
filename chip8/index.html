@@ -20,15 +20,14 @@
 <body>
   <canvas width="64" height="32"></canvas>
   <script>
+    let env = {
+      pc: (x, o) => console.log(`pc = ${x.toString(16)} op = ${o.toString(16)}`)
+    };
     fetch('chip8.wasm')
       .then(response => response.arrayBuffer())
-      .then(bytes => WebAssembly.instantiate(bytes, {Math}))
+      .then(bytes => WebAssembly.instantiate(bytes, {Math, env}))
       .then(source => {
-        let instance = source.instance;
-        let canvasData = new Uint8Array(instance.exports.mem.buffer, 0x1100, 8192);
-        let canvas = document.querySelector('canvas');
-        let context = canvas.getContext('2d');
-        let imageData = context.createImageData(64, 32);
+        instance = source.instance;
         let u8 = new Uint8Array(instance.exports.mem.buffer, 0x50, 16);
         let onkey = (down, event) => {
           switch (event.code) {
@@ -57,9 +56,22 @@
         document.addEventListener('keydown', onkey.bind(null, 1), false);
         document.addEventListener('keyup', onkey.bind(null, 0), false);
 
+        // Fetch game.
+        return fetch('pong.ch8');
+      })
+      .then(response => response.arrayBuffer())
+      .then(bytes => {
+        let rom = new Uint8Array(instance.exports.mem.buffer, 0x200, 0xe00);
+        rom.set(new Uint8Array(bytes));
+
+        let canvas = document.querySelector('canvas');
+        let canvasData = new Uint8Array(instance.exports.mem.buffer, 0x1100, 8192);
+        let context = canvas.getContext('2d');
+        let imageData = context.createImageData(64, 32);
+
         (function update() {
           requestAnimationFrame(update);
-          instance.exports.run();
+          instance.exports.run(7);
           imageData.data.set(canvasData);
           context.putImageData(imageData, 0, 0);
         })();
