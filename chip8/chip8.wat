@@ -7,7 +7,8 @@
 ;; [0x0093, 0x0093)  u8             delay timer
 ;; [0x0094, 0x0095)  u8             sound timer
 ;; [0x0200, 0x1000)  u8[0x800]      Chip8 ROM
-;; [0x1000, 0x3000)  Color[64*32]   canvas
+;; [0x1000, 0x1100)  u8[8*32]       1bpp screen data
+;; [0x1100, 0x3100)  Color[64*32]   canvas
 (memory (export "mem") 1)
 
 (global $pc (mut i32) (i32.const 0x200))
@@ -40,14 +41,17 @@
 
 (func (export "run") (param $cycles i32)
   (local $b0 i32)
-  (local $nn i32)
   (local $x i32)
-  (local $y i32)  ;; TODO: remove
   (local $vx i32)
   (local $vy i32)
   (local $vf i32)
+  (local $n i32)
+  (local $nn i32)
   (local $nnn i32)
   (local $nextpc i32)
+  (local $copy-src i32)
+  (local $copy-dst i32)
+  (local $j i32)
 
   (loop $cycle
     (local.set $vf (i32.const 0))
@@ -56,6 +60,7 @@
     (block $nextpc
     (block $set-vx (result i32)
     (block $skip (result i32)
+    (block $do-copy
     (block  ;; f
     (block  ;; e
     (block  ;; d
@@ -81,10 +86,10 @@
               (i32.const 0xf)))))
       (local.set $vy
         (i32.load8_u offset=0x60
-          (local.tee $y
-            (i32.shr_u
-              (local.tee $nn (i32.load8_u offset=1 (global.get $pc)))
-              (i32.const 4)))))
+          (i32.shr_u
+            (local.tee $nn (i32.load8_u offset=1 (global.get $pc)))
+            (i32.const 4))))
+      (local.set $n (i32.and (local.get $nn) (i32.const 0xf)))
       (local.set $nnn
         (i32.or
           (i32.shl (local.get $b0) (i32.const 4))
@@ -94,17 +99,19 @@
         (i32.shr_u (local.get $b0) (i32.const 4)))
 
     )
-
-    (if (i32.and (local.get $nn) (i32.const 0xf))
+    ;; 0x0???
+    (if (local.get $n)
       (then
-        ;; 0x00ee  return
+        ;; 0x00EE  return
         (local.set $nextpc (i32.load16_u (global.get $sp)))
         (global.set $sp (i32.add (global.get $sp) (i32.const 2)))
         (br $nextpc))
       (else
-        ;; 0x00e0  clear screen
-        ;; TODO
-        ))
+        ;; 0x00E0  clear screen
+        (local.set $copy-dst (i32.const 0x1000))
+        (local.set $copy-src (i32.const 0x3100)) ;; Uninit, so has zeroes.
+        (local.set $x (i32.const 0xff)) ;; do-copy always copies N+1 bytes.
+        (br $do-copy)))
 
     )
     ;; 0x2NNN  call NNN
@@ -148,8 +155,7 @@
       (block
       (block
       (block
-        (br_table 0 1 2 3 4 5 6 7 8
-          (i32.and (local.get $nn) (i32.const 0xf)))
+        (br_table 0 1 2 3 4 5 6 7 8 (local.get $n))
 
       )
       ;; 0x8XY0  v[x] = v[y]
@@ -189,7 +195,7 @@
       (br $set-vx (i32.sub (local.get $vy) (local.get $vx)))
 
       )
-      ;; 0x8XYe  v[x] = v[y] << 1, vf = shifted out bit
+      ;; 0x8XYE  v[x] = v[y] << 1, vf = shifted out bit
       (local.set $vf (i32.shr_u (local.get $vy) (i32.const 7)))
       (br $set-vx (i32.shl (local.get $vy) (i32.const 1)))
 
@@ -210,12 +216,22 @@
 
     )
     ;; 0xCXNN  v[x] = random() & NN
-    ;; TODO
-    (br $nextpc)
+    (br $set-vx
+      (i32.and
+        (i32.trunc_f32_u
+          (f32.mul (call $random) (f32.const 256)))
+        (local.get $nn)))
 
     )
     ;; 0xDXYN  draw N-line sprite at (x, y)
-    ;; TODO
+    (loop $yloop
+      ;; load sprite data.
+      (local.set $b0 (i32.load8_u (i32.add (global.get $i) (local.get $j))))
+
+      (br_if $yloop
+        (i32.lt_u
+          (local.tee $j (i32.add (local.get $j) (i32.const 1)))
+          (local.get $n))))
     (br $nextpc)
 
     )
@@ -260,19 +276,18 @@
       (if (i32.eq (local.get $nn) (i32.const 0x18))
         (then
           ;; 0xFX18  sound = v[x]
-          (global.set $sound (local.get $vx))
-        )
+          (global.set $sound (local.get $vx)))
         (else
           ;; 0xFX1E  I += v[x]
-          (global.set $i (i32.add (global.get $i) (local.get $vx)))
-        ))
+          (global.set $i (i32.add (global.get $i) (local.get $vx)))))
       (br $nextpc)
 
       )
       ;; 0xFX29  I = &font[v[x] & 0xf]
       (global.set $i
-        (i32.add (i32.const 16)
-                 (i32.and (local.get $vx) (i32.const 0xf))))
+        (i32.and
+          (i32.mul (local.get $vx) (i32.const 5))
+          (i32.const 0xf)))
       (br $nextpc)
 
       )
@@ -287,13 +302,28 @@
 
       )
       ;; 0xFX55  I[0:X] = v[0:X], I += X + 1
-      ;; TODO
-      (br $nextpc)
+      (local.set $copy-src (i32.const 0x60))
+      (local.set $copy-dst (global.get $i))
+      (br $do-copy)
 
       )
       ;; 0xFX65  v[0:X] = I[0:X], I += X + 1
-      ;; TODO
-      (br $nextpc)
+      (local.set $copy-src (global.get $i))
+      (local.set $copy-dst (i32.const 0x60))
+      ;; fallthrough.
+
+    )
+    ;; $do-copy
+    (local.set $j (i32.const 0))
+    (loop $copy
+      (i32.store8 (local.get $copy-dst) (i32.load8_u (local.get $copy-src)))
+      (br_if $copy
+        (i32.lt_u
+          (local.tee $j (i32.add (local.get $j) (i32.const 1)))
+          (local.get $x))))
+    ;; i += x + 1
+    (global.set $i (i32.add (global.get $i) (local.get $j)))
+    (br $nextpc)
 
     )
     ;; $skip
@@ -307,15 +337,19 @@
     (local.set $vx)
     (i32.store8 offset=0x60 (local.get $x) (local.get $vx))
     (i32.store8 offset=0x6f (i32.const 0) (local.get $vf))
-    ;; fallthrough
+    ;; fallthrough.
 
     )
     ;; $nextpc
     (local.get $nextpc)
+    ;; fallthrough.
 
     )
     ;; $setpc
     ;; (local.get $nextpc)
     (global.set $pc)
+
+    (br_if $cycle
+      (local.tee $cycles (i32.sub (local.get $cycles) (i32.const 1))))
   )
 )
