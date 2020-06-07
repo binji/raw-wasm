@@ -14,25 +14,49 @@
       object-fit: contain;
       width: 100%;
       height: 100%;
+      image-rendering: pixelated;
+      image-rendering: -moz-crisp-edges;
     }
   </style>
 </head>
 <body>
+  <button id="continue">continue</button>
   <canvas width="64" height="32"></canvas>
   <script>
+    let maxSteps = 20;
+    let step = maxSteps;
     let instance;
     let mem;
+    let hex = x => x.toString(16);
     let env = {
-      pc: (x, o) => {
-        console.log(`pc = ${x.toString(16)} op = ${o.toString(16)}`);
+      /*
+      info: (x, o, i) => {
+        let str = `pc: ${hex(x)} op: ${hex(o)}`;
         let regs = new Uint8Array(mem.buffer, 0x60, 0x10);
-        let regStr = '';
         regs.forEach((x, i) => {
-          regStr += `v${i.toString(16)}: ${x.toString(16)} `;
+          str += ` v${hex(i)}: ${hex(x)}`;
         });
-        console.log(`  ${regStr}`);
-      }
+        str += ` i:${hex(i)}`
+        console.log(str);
+
+        if ((o & 0xf000) == 0xd000) {
+          let sprBytes = new Uint8Array(mem.buffer, i, o & 0xf);
+          let sprStr = '';
+          for (let b of sprBytes) {
+            sprStr += `${hex(b)} `;
+          }
+          console.log(`  [${sprStr}]`);
+
+          step = 0;
+        }
+      },
+      */
+      info: (x, o, i) => {},
+      log: x => { console.log(`>> ${hex(x)}`); }
     };
+    document.querySelector('#continue').addEventListener('click', () => {
+      step = maxSteps;
+    });
     fetch('chip8.wasm')
       .then(response => response.arrayBuffer())
       .then(bytes => WebAssembly.instantiate(bytes, {Math, env}))
@@ -68,8 +92,26 @@
         document.addEventListener('keyup', onkey.bind(null, 0), false);
 
         // Fetch game.
+        // return fetch('1dcell.ch8');
+        return fetch('br8kout.ch8');
+        // return fetch('caveexplorer.ch8');
+        // return fetch('clock.ch8');
+        // return fetch('keypad.ch8');
+        // return fetch('maze.ch8');
+        // return fetch('mini-lights-out.ch8');
+        // return fetch('octojam1title.ch8');
+        // return fetch('octojam2title.ch8');
+        // return fetch('octojam3title.ch8');
+        // return fetch('octojam4title.ch8');
+        // return fetch('octojam5title.ch8');
+        // return fetch('octojam6title.ch8');
+        // return fetch('outlaw.ch8');
+        // return fetch('particle.ch8');
         // return fetch('pong.ch8');
-        return fetch('octojam1title.ch8');
+        // return fetch('RPS.ch8');
+        // return fetch('slipperyslope.ch8');
+        // return fetch('snake.ch8');
+        // return fetch('spacejam.ch8');
       })
       .then(response => response.arrayBuffer())
       .then(bytes => {
@@ -83,7 +125,9 @@
 
         (function update() {
           requestAnimationFrame(update);
-          instance.exports.run(7);
+          if (step) {
+            instance.exports.run(step);
+          }
           imageData.data.set(canvasData);
           context.putImageData(imageData, 0, 0);
         })();
