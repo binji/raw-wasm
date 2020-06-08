@@ -41,7 +41,7 @@
   "\F0\80\F0\80\80" ;; f
 )
 
-(func $blit (param $addr i32) (param $src-byte i32) (param $vf i32) (result i32)
+(func $blit (param $addr i32) (param $src-byte i32)
   (local $dst-byte i32)
 
   (i32.store8 offset=0x1000
@@ -50,14 +50,13 @@
       (local.tee $dst-byte (i32.load8_u offset=0x1000 (local.get $addr)))
       (local.get $src-byte)))
 
-  (local.tee $vf
+  (i32.store8 offset=0x6f (i32.const 0)
     (i32.or
-      (local.get $vf)
+      (i32.load8_u offset=0x6f (i32.const 0))
       (i32.eqz (i32.eqz
         (i32.and (local.get $dst-byte) (local.get $src-byte)))))))
 
 (func (export "run") (param $cycles i32)
-  (local $key i32)
   (local $b0 i32)
   (local $x i32)
   (local $vx i32)
@@ -85,21 +84,21 @@
       (global.set $sound (i32.sub (global.get $sound) (i32.const 1)))))
 
   ;; waiting for key?
-  (if $gotkey (i32.gt_s (global.get $wait-vx) (i32.const 0))
+  (if $gotkey (i32.ge_s (global.get $wait-vx) (i32.const 0))
     (then
       (loop $key
         (if
-          (local.tee $key (i32.load8_u offset=0x50 (local.get $n)))
+          (i32.load8_u offset=0x50 (local.get $n))
           (then
             ;; Store key in v[wait-vx]
-            (i32.store8 offset=0x50 (global.get $wait-vx) (local.get $key))
+            (i32.store8 offset=0x60 (global.get $wait-vx) (local.get $n))
 
             ;; Stop waiting for a key.
             (global.set $wait-vx (i32.const -1))
             (br $gotkey)))
 
         (br_if $key
-          (i32.eq
+          (i32.lt_u
             (local.tee $n (i32.add (local.get $n) (i32.const 1)))
             (i32.const 16))))
       ;; no key pressed.
@@ -301,32 +300,27 @@
       (local.set $b0 (i32.load8_u (i32.add (global.get $i) (local.get $j))))
 
       ;; xor high bits
-      (local.set $vf
-        (call $blit
-          (local.tee $sprite-addr0
-            (i32.and
-              (i32.add (local.get $sprite-addr0) (i32.const 8))
-              (i32.const 0xff)))
-          (i32.shr_u (local.get $b0) (local.get $sprite-off-x))
-          (local.get $vf)))
+      (call $blit
+        (local.tee $sprite-addr0
+          (i32.and
+            (i32.add (local.get $sprite-addr0) (i32.const 8))
+            (i32.const 0xff)))
+        (i32.shr_u (local.get $b0) (local.get $sprite-off-x)))
 
       ;; xor low bits
-      (local.set $vf
-        (call $blit
-          (local.tee $sprite-addr1
-            (i32.and
-              (i32.add (local.get $sprite-addr1) (i32.const 8))
-              (i32.const 0xff)))
-          (i32.shl
-            (local.get $b0)
-            (i32.sub (i32.const 8) (local.get $sprite-off-x)))
-          (local.get $vf)))
+      (call $blit
+        (local.tee $sprite-addr1
+          (i32.and
+            (i32.add (local.get $sprite-addr1) (i32.const 8))
+            (i32.const 0xff)))
+        (i32.shl
+          (local.get $b0)
+          (i32.sub (i32.const 8) (local.get $sprite-off-x))))
 
       (br_if $yloop
         (i32.lt_u
           (local.tee $j (i32.add (local.get $j) (i32.const 1)))
           (local.get $n))))
-    (i32.store8 offset=0x6f (i32.const 0) (local.get $vf))
     (br $nextpc)
 
     )
@@ -358,7 +352,8 @@
 
       )
       ;; 0xFX0A  v[x] = wait for key
-      (global.set $wait-vx (local.get $vx))
+      (global.set $wait-vx (local.get $x))
+
       ;; stop executing, but increment pc once.
       (local.set $cycles (i32.const 1))
       (br $nextpc)
