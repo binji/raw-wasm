@@ -234,7 +234,7 @@
       )
       ;; 0x8XY4  v[x] += v[y], vf = carry
       (local.set $vx (i32.add (local.get $vx) (local.get $vy)))
-      (local.set $vf (i32.shl (local.get $vx) (i32.const 8)))
+      (local.set $vf (i32.shr_u (local.get $vx) (i32.const 8)))
       (br $set-vx-vf (local.get $vx))
 
       )

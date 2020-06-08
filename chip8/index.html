@@ -20,43 +20,134 @@
   </style>
 </head>
 <body>
-  <button id="continue">continue</button>
   <canvas width="64" height="32"></canvas>
   <script>
+    let trace = true;
     let maxSteps = 20;
     let step = maxSteps;
     let instance;
     let mem;
     let hex = x => x.toString(16);
-    let env = {
-      /*
-      info: (x, o, i) => {
-        let str = `pc: ${hex(x)} op: ${hex(o)}`;
-        let regs = new Uint8Array(mem.buffer, 0x60, 0x10);
-        regs.forEach((x, i) => {
-          str += ` v${hex(i)}: ${hex(x)}`;
-        });
-        str += ` i:${hex(i)}`
-        console.log(str);
+    let hex2 = x => hex(x).padStart(2, '0');
+    let hex3 = x => hex(x).padStart(3, '0');
+    let hex4 = x => hex(x).padStart(4, '0');
 
-        if ((o & 0xf000) == 0xd000) {
-          let sprBytes = new Uint8Array(mem.buffer, i, o & 0xf);
-          let sprStr = '';
-          for (let b of sprBytes) {
-            sprStr += `${hex(b)} `;
+    let disasm = o => {
+      let x = hex((o >> 8) & 0xf);
+      let y = hex((o >> 4) & 0xf);
+      let n = hex(o & 0xf);
+      let nn = hex2(o & 0xff);
+      let nnn = hex3(o & 0xfff);
+
+      switch (o >> 12) {
+        case 0:
+          switch (o & 0xff) {
+            case 0xe0: return 'clear';
+            case 0xee: return 'return';
           }
-          console.log(`  [${sprStr}]`);
+          break;
 
-          step = 0;
+        case 1:
+          return `pc = ${nnn}`;
+
+        case 2:
+          return `call ${nnn}`;
+
+        case 3:
+          return `skip if v${x} == ${nn}`;
+
+        case 4:
+          return `skip if v${x} != ${nn}`;
+
+        case 5:
+          return `skip if v${x} == v${x}`;
+
+        case 6:
+          return `v${x} = ${nn}`;
+
+        case 7:
+          return `v${x} += ${nn}`;
+
+        case 8:
+          switch (o & 0xf) {
+            case 0:   return `v${x} = v${y}`;
+            case 1:   return `v${x} |= v${y}`;
+            case 2:   return `v${x} &= v${y}`;
+            case 3:   return `v${x} ^= v${y}`;
+            case 4:   return `v${x} += v${y}`;
+            case 5:   return `v${x} -= v${y}`;
+            case 6:   return `v${x} = v${y} >> 1`;
+            case 7:   return `v${x} = v${y} - v${x}`;
+            case 0xe: return `v${x} = v${y} << 1`;
+          }
+          break;
+
+        case 9:
+          return `skip if v${x} != v${x}`;
+
+        case 0xa:
+          return `i = ${nnn}`;
+
+        case 0xb:
+          return `pc = ${nnn} + v0`;
+
+        case 0xc:
+          return `v${x} = random & ${nn}`;
+
+        case 0xd:
+          return `draw v${x},v${y}, ${n}`;
+
+        case 0xe:
+          switch (o & 0xff) {
+            case 0x9e: return `skip if v${x} key is pressed`;
+            case 0xa1: return `skip if v${x} key is not pressed`;
+          }
+          break;
+
+        case 0xf:
+          switch (o & 0xff) {
+            case 0x07: return `v${x} = delay`;
+            case 0x0a: return `v${x} = wait for key`;
+            case 0x15: return `delay = v${x}`;
+            case 0x18: return `sound = v${x}`;
+            case 0x1e: return `i += v${x}`;
+            case 0x29: return `i = &font[${x} & 0xf]`;
+            case 0x33: return `i[0:2] = bcd(v${x})`;
+            case 0x55: return `save v0..${x}`;
+            case 0x65: return `load v0..${x}`;
+          }
+      }
+      return `<unknown ${hex4(o)}>`;
+    };
+
+    let env = {
+      info: (x, o, i) => {
+        if (trace) {
+          let str = `pc: ${hex3(x)} op: ${hex4(o)} ${disasm(o).padEnd(16)}`;
+          let regs = new Uint8Array(mem.buffer, 0x60, 0x10);
+          regs.forEach((x, i) => {
+            str += ` ${hex2(x)}`;
+          });
+          str += ` i:${hex3(i)}`
+          console.log(str);
+
+          /*
+          if ((o & 0xf000) == 0xd000) {
+            let sprBytes = new Uint8Array(mem.buffer, i, o & 0xf);
+            let sprStr = '';
+            for (let b of sprBytes) {
+              sprStr += `${b} `;
+            }
+            console.log(`  [${sprStr}]`);
+          }
+          */
         }
       },
-      */
+      /*
       info: (x, o, i) => {},
-      log: x => { console.log(`>> ${hex(x)}`); }
+      */
+      log: x => { console.log(`>> ${x}`); }
     };
-    document.querySelector('#continue').addEventListener('click', () => {
-      step = maxSteps;
-    });
     fetch('chip8.wasm')
       .then(response => response.arrayBuffer())
       .then(bytes => WebAssembly.instantiate(bytes, {Math, env}))
@@ -112,6 +203,7 @@
         // return fetch('slipperyslope.ch8');
         // return fetch('snake.ch8');
         // return fetch('spacejam.ch8');
+        // return fetch('tank.ch8');
       })
       .then(response => response.arrayBuffer())
       .then(bytes => {
