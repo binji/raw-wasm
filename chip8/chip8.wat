@@ -9,7 +9,7 @@
 ;; [0x0093, 0x0093)  u8             delay timer
 ;; [0x0094, 0x0095)  u8             sound timer
 ;; [0x0200, 0x1000)  u8[0x800]      Chip8 ROM
-;; [0x1000, 0x1100)  u8[8*32]       1bpp screen data
+;; [0x1000, 0x1100)  u8[8*32]       1bpp screen data (stored in reverse)
 ;; [0x1100, 0x3100)  Color[64*32]   canvas
 (memory (export "mem") 1)
 
@@ -41,21 +41,6 @@
   "\F0\80\F0\80\80" ;; f
 )
 
-(func $blit (param $addr i32) (param $src-byte i32)
-  (local $dst-byte i32)
-
-  (i32.store8 offset=0x1000
-    (local.get $addr)
-    (i32.xor
-      (local.tee $dst-byte (i32.load8_u offset=0x1000 (local.get $addr)))
-      (local.get $src-byte)))
-
-  (i32.store8 offset=0x6f (i32.const 0)
-    (i32.or
-      (i32.load8_u offset=0x6f (i32.const 0))
-      (i32.eqz (i32.eqz
-        (i32.and (local.get $dst-byte) (local.get $src-byte)))))))
-
 (func (export "run") (param $cycles i32)
   (local $b0 i32)
   (local $x i32)
@@ -69,11 +54,12 @@
   (local $copy-src i32)
   (local $copy-dst i32)
   (local $j i32)
-  (local $sprite-addr0 i32)
-  (local $sprite-addr1 i32)
-  (local $sprite-off-x i32)
+  (local $sprite-addr i32)
   (local $draw-src i32)
   (local $draw-dst i32)
+
+  (local $sprite-row i64)
+  (local $orig-row i64)
 
   (if (global.get $delay)
     (then
@@ -282,45 +268,83 @@
 
     )
     ;; 0xDXYN  draw N-line sprite at (v[x], v[y])
-    (local.set $sprite-addr0
-      (i32.sub
-        (i32.add
-          (i32.shl (i32.and (local.get $vy) (i32.const 0x1f)) (i32.const 3))
-          (i32.shr_u (i32.and (local.get $vx) (i32.const 0x3f)) (i32.const 3)))
-        (i32.const 0x8)))
-    (local.set $sprite-addr1
-      (i32.add
-        (local.get $sprite-addr0)
-        (i32.const 1)))
-    (local.set $sprite-off-x (i32.and (local.get $vx) (i32.const 7)))
-
     (local.set $j (i32.const 0))
     (loop $yloop
-      ;; load sprite data.
-      (local.set $b0 (i32.load8_u (i32.add (global.get $i) (local.get $j))))
-
-      ;; xor high bits
-      (call $blit
-        (local.tee $sprite-addr0
-          (i32.and
-            (i32.add (local.get $sprite-addr0) (i32.const 8))
-            (i32.const 0xff)))
-        (i32.shr_u (local.get $b0) (local.get $sprite-off-x)))
-
-      ;; xor low bits
-      (call $blit
-        (local.tee $sprite-addr1
-          (i32.and
-            (i32.add (local.get $sprite-addr1) (i32.const 8))
-            (i32.const 0xff)))
+      ;; Calculate the destination address. The data is stored in reverse, so
+      ;; it is easier to access using a 64-bit load/store in little-endian. The
+      ;; following formula calculates: (31 - ((vy + j) & 31)) << 3
+      ;; where vy is the starting sprite line, and j is the loop index for each
+      ;; sprite row.
+      (local.set $sprite-addr
         (i32.shl
-          (local.get $b0)
-          (i32.sub (i32.const 8) (local.get $sprite-off-x))))
+          (i32.sub
+            (i32.const 0x1f)
+            (i32.and
+              (i32.add (local.get $vy) (local.get $j))
+              (i32.const 0x1f)))
+          (i32.const 3)))
+
+      ;; Load the sprite data. It is loaded into a 64-bit local, and rotated to
+      ;; the right to account for the x-coordinate (vx). Since the sprite data
+      ;; is stored with high bits to the right of the screen, but little-endian
+      ;; stores low bytes first, we have to store the data in reverse to make
+      ;; simplify the code:
+      ;;
+      ;; For example, given the sprite data 0x85 (i.e. 1000 0101), the
+      ;; following data will be loaded (where _ is substituted for 0 for
+      ;; clarity):
+      ;;
+      ;; 63 ...                                                         0
+      ;; ________________________________________________________1____1_1
+      ;;
+      ;; If the vx value is 20, this is rotated (by 20 + 8 = 28 bits) to:
+      ;;
+      ;; 63                 43   38 36                                  0
+      ;; ____________________1____1_1____________________________________
+      ;;
+      ;; When this is written to memory, the low bytes are written first which
+      ;; reverses the order of bytes shown here, to this:
+      ;;
+      ;; |byte 0 | byte 1| byte 2| byte 3| byte 4| byte 5| byte 6| byte 7
+      ;;   0x00     0x00   0x00    0x00    0x50    0x08    0x00    0x00
+      ;; _________________________________1_1________1___________________
+      ;;
+      ;; When the bytes are copied out to the canvas, they are read from right
+      ;; to left, with each bit being shifted off the left side. Doing so will
+      ;; display in the correct order.
+
+      (local.set $sprite-row
+        (i64.rotr
+          (i64.extend_i32_u
+            (i32.load8_u (i32.add (global.get $i) (local.get $j))))
+          (i64.add
+            (i64.extend_i32_u (local.get $vx))
+            (i64.const 8))))
+
+      ;; draw sprite
+      (i64.store offset=0x1000
+        (local.get $sprite-addr)
+        (i64.xor
+          (local.tee $orig-row
+            (i64.load offset=0x1000 (local.get $sprite-addr)))
+          (local.get $sprite-row)))
+
+      ;; update vf
+      (local.set $vf
+        (i32.or
+          (local.get $vf)
+          (i64.ne
+            (i64.and
+              (local.get $orig-row)
+              (local.get $sprite-row))
+            (i64.const 0))))
 
       (br_if $yloop
         (i32.lt_u
           (local.tee $j (i32.add (local.get $j) (i32.const 1)))
           (local.get $n))))
+
+    (i32.store8 offset=0x6f (i32.const 0) (local.get $vf))
     (br $nextpc)
 
     )
@@ -377,7 +401,7 @@
       )
       ;; 0xFX29  I = &font[v[x] & 0xf]
       (global.set $i
-        (i32.mul 
+        (i32.mul
           (i32.and (local.get $vx) (i32.const 0xf))
         (i32.const 5)))
       (br $nextpc)
@@ -463,8 +487,9 @@
       (local.tee $cycles (i32.sub (local.get $cycles) (i32.const 1)))))
 
   ;; draw screen
+  (local.set $draw-src (i32.const 0x100))
   (loop $bytes
-    (local.set $b0 (i32.load8_u offset=0x1000 (local.get $draw-src)))
+    (local.set $b0 (i32.load8_u offset=0xfff (local.get $draw-src)))
 
     (loop $bits
       (i32.store offset=0x1100
@@ -481,7 +506,5 @@
           (i32.const 0x1f))))
 
     (br_if $bytes
-      (i32.lt_u
-        (local.tee $draw-src (i32.add (local.get $draw-src) (i32.const 1)))
-        (i32.const 0x100))))
+      (local.tee $draw-src (i32.sub (local.get $draw-src) (i32.const 1)))))
 )

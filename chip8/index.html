@@ -22,7 +22,7 @@
 <body>
   <canvas width="64" height="32"></canvas>
   <script>
-    let trace = true;
+    let trace = false;
     let maxSteps = 20;
     let step = maxSteps;
     let instance;
@@ -46,28 +46,13 @@
             case 0xee: return 'return';
           }
           break;
-
-        case 1:
-          return `pc = ${nnn}`;
-
-        case 2:
-          return `call ${nnn}`;
-
-        case 3:
-          return `skip if v${x} == ${nn}`;
-
-        case 4:
-          return `skip if v${x} != ${nn}`;
-
-        case 5:
-          return `skip if v${x} == v${x}`;
-
-        case 6:
-          return `v${x} = ${nn}`;
-
-        case 7:
-          return `v${x} += ${nn}`;
-
+        case 1: return `pc = ${nnn}`;
+        case 2: return `call ${nnn}`;
+        case 3: return `skip if v${x} == ${nn}`;
+        case 4: return `skip if v${x} != ${nn}`;
+        case 5: return `skip if v${x} == v${x}`;
+        case 6: return `v${x} = ${nn}`;
+        case 7: return `v${x} += ${nn}`;
         case 8:
           switch (o & 0xf) {
             case 0:   return `v${x} = v${y}`;
@@ -81,29 +66,17 @@
             case 0xe: return `v${x} = v${y} << 1`;
           }
           break;
-
-        case 9:
-          return `skip if v${x} != v${x}`;
-
-        case 0xa:
-          return `i = ${nnn}`;
-
-        case 0xb:
-          return `pc = ${nnn} + v0`;
-
-        case 0xc:
-          return `v${x} = random & ${nn}`;
-
-        case 0xd:
-          return `draw v${x},v${y}, ${n}`;
-
+        case 9: return `skip if v${x} != v${x}`;
+        case 0xa: return `i = ${nnn}`;
+        case 0xb: return `pc = ${nnn} + v0`;
+        case 0xc: return `v${x} = random & ${nn}`;
+        case 0xd: return `draw v${x},v${y}, ${n}`;
         case 0xe:
           switch (o & 0xff) {
             case 0x9e: return `skip if v${x} key is pressed`;
             case 0xa1: return `skip if v${x} key is not pressed`;
           }
           break;
-
         case 0xf:
           switch (o & 0xff) {
             case 0x07: return `v${x} = delay`;
@@ -130,24 +103,11 @@
           });
           str += ` i:${hex3(i)}`
           console.log(str);
-
-          /*
-          if ((o & 0xf000) == 0xd000) {
-            let sprBytes = new Uint8Array(mem.buffer, i, o & 0xf);
-            let sprStr = '';
-            for (let b of sprBytes) {
-              sprStr += `${b} `;
-            }
-            console.log(`  [${sprStr}]`);
-          }
-          */
         }
       },
-      /*
-      info: (x, o, i) => {},
-      */
       log: x => { console.log(`>> ${x}`); }
     };
+
     fetch('chip8.wasm')
       .then(response => response.arrayBuffer())
       .then(bytes => WebAssembly.instantiate(bytes, {Math, env}))
@@ -183,27 +143,27 @@
         document.addEventListener('keyup', onkey.bind(null, 0), false);
 
         // Fetch game.
-        // return fetch('1dcell.ch8');
-        return fetch('br8kout.ch8');
-        // return fetch('caveexplorer.ch8');
-        // return fetch('clock.ch8');
-        // return fetch('keypad.ch8');
-        // return fetch('maze.ch8');
-        // return fetch('mini-lights-out.ch8');
-        // return fetch('octojam1title.ch8');
-        // return fetch('octojam2title.ch8');
-        // return fetch('octojam3title.ch8');
-        // return fetch('octojam4title.ch8');
-        // return fetch('octojam5title.ch8');
-        // return fetch('octojam6title.ch8');
-        // return fetch('outlaw.ch8');
-        // return fetch('particle.ch8');
-        // return fetch('pong.ch8');
-        // return fetch('RPS.ch8');
-        // return fetch('slipperyslope.ch8');
-        // return fetch('snake.ch8');
-        // return fetch('spacejam.ch8');
-        // return fetch('tank.ch8');
+        // return fetch('roms/1dcell.ch8');
+        return fetch('roms/br8kout.ch8');
+        // return fetch('roms/caveexplorer.ch8');
+        // return fetch('roms/clock.ch8');
+        // return fetch('roms/keypad.ch8');
+        // return fetch('roms/maze.ch8');
+        // return fetch('roms/mini-lights-out.ch8');
+        // return fetch('roms/octojam1title.ch8');
+        // return fetch('roms/octojam2title.ch8');
+        // return fetch('roms/octojam3title.ch8');
+        // return fetch('roms/octojam4title.ch8');
+        // return fetch('roms/octojam5title.ch8');
+        // return fetch('roms/octojam6title.ch8');
+        // return fetch('roms/outlaw.ch8');
+        // return fetch('roms/particle.ch8');
+        // return fetch('roms/pong.ch8');
+        // return fetch('roms/RPS.ch8');
+        // return fetch('roms/slipperyslope.ch8');
+        // return fetch('roms/snake.ch8');
+        // return fetch('roms/spacejam.ch8');
+        // return fetch('roms/tank.ch8');
       })
       .then(response => response.arrayBuffer())
       .then(bytes => {
