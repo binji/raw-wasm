@@ -268,6 +268,7 @@
 
     )
     ;; 0xDXYN  draw N-line sprite at (v[x], v[y])
+    (local.set $vf (i32.const 0))
     (local.set $j (i32.const 0))
     (loop $yloop
       ;; Calculate the destination address. The data is stored in reverse, so
@@ -395,7 +396,10 @@
           (global.set $sound (local.get $vx)))
         (else
           ;; 0xFX1E  I += v[x]
-          (global.set $i (i32.add (global.get $i) (local.get $vx)))))
+          (global.set $i
+            (i32.and
+              (i32.add (global.get $i) (local.get $vx))
+              (i32.const 0xffff)))))
       (br $nextpc)
 
       )
@@ -432,9 +436,11 @@
     ;; $do-copy-update-i
     ;; i += x + 1
     (global.set $i
-      (i32.add
-        (i32.add (global.get $i) (local.get $x))
-        (i32.const 1)))
+      (i32.and
+        (i32.add
+          (i32.add (global.get $i) (local.get $x))
+          (i32.const 1))
+        (i32.const 0xffff)))
     ;; fallthrough.
 
     )
