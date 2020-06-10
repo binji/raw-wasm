@@ -20,17 +20,32 @@
   </style>
 </head>
 <body>
+  <button id="continue">continue</button>
+  <button id="load">load</button>
+  <input type="file" id="openfile" hidden>
   <canvas width="64" height="32"></canvas>
   <script>
+    let $ = document.querySelector.bind(document);
     let trace = false;
     let maxSteps = 20;
     let step = maxSteps;
-    let instance;
     let mem;
+    let keyDownFn;
+    let keyUpFn;
+
     let hex = x => x.toString(16);
     let hex2 = x => hex(x).padStart(2, '0');
     let hex3 = x => hex(x).padStart(3, '0');
     let hex4 = x => hex(x).padStart(4, '0');
+
+    function readFile(file) {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onerror = event => reject(event.error);
+        reader.onloadend = event => resolve(event.target.result);
+        reader.readAsArrayBuffer(file);
+      });
+    }
 
     let disasm = o => {
       let x = hex((o >> 8) & 0xf);
@@ -50,7 +65,7 @@
         case 2: return `call ${nnn}`;
         case 3: return `skip if v${x} == ${nn}`;
         case 4: return `skip if v${x} != ${nn}`;
-        case 5: return `skip if v${x} == v${x}`;
+        case 5: return `skip if v${x} == v${y}`;
         case 6: return `v${x} = ${nn}`;
         case 7: return `v${x} += ${nn}`;
         case 8:
@@ -73,8 +88,8 @@
         case 0xd: return `draw v${x},v${y}, ${n}`;
         case 0xe:
           switch (o & 0xff) {
-            case 0x9e: return `skip if v${x} key is pressed`;
-            case 0xa1: return `skip if v${x} key is not pressed`;
+            case 0x9e: return `skip if v${x} +key`;
+            case 0xa1: return `skip if v${x} -key`;
           }
           break;
         case 0xf:
@@ -104,86 +119,80 @@
           str += ` i:${hex3(i)}`
           console.log(str);
         }
+        if ((o & 0xf000) == 0xd000) {
+//          step = 0;
+        }
       },
       log: x => { console.log(`>> ${x}`); }
     };
 
-    fetch('chip8.wasm')
-      .then(response => response.arrayBuffer())
-      .then(bytes => WebAssembly.instantiate(bytes, {Math, env}))
-      .then(source => {
-        instance = source.instance;
-        mem = instance.exports.mem;
-        let u8 = new Uint8Array(mem.buffer, 0x50, 16);
-        let onkey = (down, event) => {
-          switch (event.code) {
-            case 'Digit1': u8[1] = down; break;
-            case 'Digit2': u8[2] = down; break;
-            case 'Digit3': u8[3] = down; break;
-            case 'Digit4': u8[12] = down; break;
-            case 'KeyQ': u8[4] = down; break;
-            case 'KeyW': u8[5] = down; break;
-            case 'KeyE': u8[6] = down; break;
-            case 'KeyR': u8[13] = down; break;
-            case 'KeyA': u8[7] = down; break;
-            case 'KeyS': u8[8] = down; break;
-            case 'KeyD': u8[9] = down; break;
-            case 'KeyF': u8[14] = down; break;
-            case 'KeyZ': u8[10] = down; break;
-            case 'KeyX': u8[0] = down; break;
-            case 'KeyC': u8[11] = down; break;
-            case 'KeyV': u8[15] = down; break;
-            case 'ArrowUp': u8[5] = down; break;
-            case 'ArrowLeft': u8[7] = down; break;
-            case 'ArrowDown': u8[8] = down; break;
-            case 'ArrowRight': u8[9] = down; break;
-          }
-        };
-        document.addEventListener('keydown', onkey.bind(null, 1), false);
-        document.addEventListener('keyup', onkey.bind(null, 0), false);
+    $('#continue').addEventListener('click', () => { step = maxSteps; });
+    $('#load').addEventListener('click', () => { $('#openfile').click(); });
 
-        // Fetch game.
-        // return fetch('roms/1dcell.ch8');
-        return fetch('roms/br8kout.ch8');
-        // return fetch('roms/caveexplorer.ch8');
-        // return fetch('roms/clock.ch8');
-        // return fetch('roms/keypad.ch8');
-        // return fetch('roms/maze.ch8');
-        // return fetch('roms/mini-lights-out.ch8');
-        // return fetch('roms/octojam1title.ch8');
-        // return fetch('roms/octojam2title.ch8');
-        // return fetch('roms/octojam3title.ch8');
-        // return fetch('roms/octojam4title.ch8');
-        // return fetch('roms/octojam5title.ch8');
-        // return fetch('roms/octojam6title.ch8');
-        // return fetch('roms/outlaw.ch8');
-        // return fetch('roms/particle.ch8');
-        // return fetch('roms/pong.ch8');
-        // return fetch('roms/RPS.ch8');
-        // return fetch('roms/slipperyslope.ch8');
-        // return fetch('roms/snake.ch8');
-        // return fetch('roms/spacejam.ch8');
-        // return fetch('roms/tank.ch8');
-      })
-      .then(response => response.arrayBuffer())
-      .then(bytes => {
-        let rom = new Uint8Array(mem.buffer, 0x200, 0xe00);
-        rom.set(new Uint8Array(bytes));
+    let module;
+    (async function() {
+      let response = await fetch('chip8.wasm');
+      let bytes = await response.arrayBuffer();
+      module = await WebAssembly.compile(bytes);
+    })();
 
-        let canvas = document.querySelector('canvas');
-        let canvasData = new Uint8Array(mem.buffer, 0x1100, 8192);
-        let context = canvas.getContext('2d');
-        let imageData = context.createImageData(64, 32);
+    $('#openfile').addEventListener('change', async event => {
+      let file = event.target.files[0];
+      if (!file) return;
 
-        (function update() {
-          requestAnimationFrame(update);
-          if (step) {
-            instance.exports.run(step);
-          }
-          imageData.data.set(canvasData);
-          context.putImageData(imageData, 0, 0);
-        })();
-      });
+      let instance = await WebAssembly.instantiate(module, {Math, env});
+      mem = instance.exports.mem;
+
+      let u8 = new Uint8Array(mem.buffer, 0x50, 16);
+      let onkey = (down, event) => {
+        switch (event.code) {
+          case 'Digit1': u8[1] = down; break;
+          case 'Digit2': u8[2] = down; break;
+          case 'Digit3': u8[3] = down; break;
+          case 'Digit4': u8[12] = down; break;
+          case 'KeyQ': u8[4] = down; break;
+          case 'KeyW': u8[5] = down; break;
+          case 'KeyE': u8[6] = down; break;
+          case 'KeyR': u8[13] = down; break;
+          case 'KeyA': u8[7] = down; break;
+          case 'KeyS': u8[8] = down; break;
+          case 'KeyD': u8[9] = down; break;
+          case 'KeyF': u8[14] = down; break;
+          case 'KeyZ': u8[10] = down; break;
+          case 'KeyX': u8[0] = down; break;
+          case 'KeyC': u8[11] = down; break;
+          case 'KeyV': u8[15] = down; break;
+          case 'ArrowUp': u8[5] = down; break;
+          case 'ArrowLeft': u8[7] = down; break;
+          case 'ArrowDown': u8[8] = down; break;
+          case 'ArrowRight': u8[9] = down; break;
+        }
+      };
+      if (keyDownFn) { window.removeEventListener('keydown', keyDownFn); }
+      if (keyUpFn) { window.removeEventListener('keyup', keyUpFn); }
+      keyDownFn = onkey.bind(null, 1);
+      keyUpFn = onkey.bind(null, 0);
+      window.addEventListener('keydown', keyDownFn, false);
+      window.addEventListener('keyup', keyUpFn, false);
+
+      let romBytes = await readFile(file);
+      let rom = new Uint8Array(mem.buffer, 0x200, 0xe00);
+      rom.set(new Uint8Array(romBytes));
+
+      let canvas = document.querySelector('canvas');
+      let canvasData = new Uint8Array(mem.buffer, 0x1100, 8192);
+      let context = canvas.getContext('2d');
+      let imageData = context.createImageData(64, 32);
+
+      (function update() {
+        requestAnimationFrame(update);
+        if (step) {
+          instance.exports.run(step);
+        }
+        imageData.data.set(canvasData);
+        context.putImageData(imageData, 0, 0);
+      })();
+    });
   </script>
 </body>
 
