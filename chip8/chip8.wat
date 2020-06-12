@@ -1,6 +1,4 @@
 (import "Math" "random" (func $random (result f32)))
-(import "env" "info" (func $info (param i32 i32 i32)))
-(import "env" "log" (func $log (param i32)))
 
 ;; [0x0000, 0x0010)  Char[16]       Font data
 ;; [0x0050, 0x0060)  u8[16]         Key data
@@ -131,13 +129,6 @@
         (i32.or
           (i32.shl (local.get $x) (i32.const 8))
           (local.get $nn)))
-
-      (call $info
-        (global.get $pc)
-        (i32.or
-          (i32.shl (local.get $b0) (i32.const 8))
-          (local.get $nn))
-        (global.get $i))
 
       (br_table 0 2 1 3 4 5 6 7 8 9 10 11 12 13 14 15
         (i32.shr_u (local.get $b0) (i32.const 4)))
