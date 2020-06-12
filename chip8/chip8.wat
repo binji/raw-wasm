@@ -1,10 +1,10 @@
 (import "Math" "random" (func $random (result f32)))
 
 ;; [0x0000, 0x0010)  Char[16]       Font data
-;; [0x0050, 0x0060)  u8[16]         Key data
+;; [0x0050, 0x0052)  u8[16]         Key data
 ;; [0x0060, 0x0070)  u8[16]         v0..vf registers
 ;; [0x0070, 0x0090)  u16[16]        Call stack
-;; [0x0093, 0x0093)  u8             delay timer
+;; [0x0093, 0x0094)  u8             delay timer
 ;; [0x0094, 0x0095)  u8             sound timer
 ;; [0x0200, 0x1000)  u8[0x800]      Chip8 ROM
 ;; [0x1000, 0x1100)  u8[8*32]       1bpp screen data (stored in reverse)
@@ -16,7 +16,6 @@
 (global $i (mut i32) (i32.const 0))
 (global $delay (mut i32) (i32.const 0))
 (global $sound (mut i32) (i32.const 0))
-(global $wait-vx (mut i32) (i32.const -1))
 
 ;; Font (taken from Octo's VIP font, see
 ;; https://github.com/JohnEarnest/Octo/blob/gh-pages/js/emulator.js)
@@ -40,6 +39,7 @@
 )
 
 (func (export "run") (param $cycles i32)
+  (local $keys i32)
   (local $b0 i32)
   (local $x i32)
   (local $vx i32)
@@ -67,27 +67,7 @@
     (then
       (global.set $sound (i32.sub (global.get $sound) (i32.const 1)))))
 
-  ;; waiting for key?
-  (if $gotkey (i32.ge_s (global.get $wait-vx) (i32.const 0))
-    (then
-      (loop $key
-        (if
-          (i32.load8_u offset=0x50 (local.get $n))
-          (then
-            ;; Store key in v[wait-vx]
-            (i32.store8 offset=0x60 (global.get $wait-vx) (local.get $n))
-
-            ;; Stop waiting for a key.
-            (global.set $wait-vx (i32.const -1))
-            (br $gotkey)))
-
-        (br_if $key
-          (i32.lt_u
-            (local.tee $n (i32.add (local.get $n) (i32.const 1)))
-            (i32.const 16))))
-      ;; no key pressed.
-      (return)))
-
+  (block $exit-loop
   (loop $cycle
     (block $setpc (result i32)
     (block $nextpc
@@ -344,7 +324,11 @@
     ;; 0xEXA1  skip if v[x] key is not pressed
     (br $skip
       (i32.xor
-        (i32.load8_u offset=0x50 (local.get $vx))
+        (i32.and
+          (i32.shr_u
+            (i32.load16_u offset=0x50 (i32.const 0))
+            (local.get $vx))
+          (i32.const 1))
         (i32.eq (local.get $nn) (i32.const 0xa1))))
 
     )
@@ -368,11 +352,13 @@
 
       )
       ;; 0xFX0A  v[x] = wait for key
-      (global.set $wait-vx (local.get $x))
-
-      ;; stop executing, but increment pc once.
-      (local.set $cycles (i32.const 1))
-      (br $nextpc)
+      (if
+        (local.tee $keys (i32.load16_u offset=0x50 (i32.const 0)))
+        (then
+          ;; Store key, choosing lowest numbered first.
+          (br $set-vx (i32.ctz (local.get $keys)))))
+        ;; no key pressed.
+      (br $exit-loop)
 
       )
       ;; 0xFX15  delay = v[x]
@@ -482,6 +468,9 @@
 
     (br_if $cycle
       (local.tee $cycles (i32.sub (local.get $cycles) (i32.const 1)))))
+
+  ;; $exit-loop
+  )
 
   ;; draw screen
   (local.set $draw-src (i32.const 0x100))

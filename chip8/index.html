@@ -54,29 +54,37 @@
       let instance = await WebAssembly.instantiate(module, {Math});
       let mem = instance.exports.mem;
 
-      let u8 = new Uint8Array(mem.buffer, 0x50, 16);
+      let u16 = new Uint16Array(mem.buffer, 0x50, 1);
+      let setkey = (index, down) => {
+        if (down) {
+          u16[0] |= (1 << index);
+        } else {
+          u16[0] &= ~(1 << index);
+        }
+      };
+
       let onkey = (down, event) => {
         switch (event.code) {
-          case 'Digit1': u8[1] = down; break;
-          case 'Digit2': u8[2] = down; break;
-          case 'Digit3': u8[3] = down; break;
-          case 'Digit4': u8[12] = down; break;
-          case 'KeyQ': u8[4] = down; break;
-          case 'KeyW': u8[5] = down; break;
-          case 'KeyE': u8[6] = down; break;
-          case 'KeyR': u8[13] = down; break;
-          case 'KeyA': u8[7] = down; break;
-          case 'KeyS': u8[8] = down; break;
-          case 'KeyD': u8[9] = down; break;
-          case 'KeyF': u8[14] = down; break;
-          case 'KeyZ': u8[10] = down; break;
-          case 'KeyX': u8[0] = down; break;
-          case 'KeyC': u8[11] = down; break;
-          case 'KeyV': u8[15] = down; break;
-          case 'ArrowUp': u8[5] = down; break;
-          case 'ArrowLeft': u8[7] = down; break;
-          case 'ArrowDown': u8[8] = down; break;
-          case 'ArrowRight': u8[9] = down; break;
+          case 'Digit1': setkey(1, down); break;
+          case 'Digit2': setkey(2, down); break;
+          case 'Digit3': setkey(3, down); break;
+          case 'Digit4': setkey(12, down); break;
+          case 'KeyQ': setkey(4, down); break;
+          case 'KeyW': setkey(5, down); break;
+          case 'KeyE': setkey(6, down); break;
+          case 'KeyR': setkey(13, down); break;
+          case 'KeyA': setkey(7, down); break;
+          case 'KeyS': setkey(8, down); break;
+          case 'KeyD': setkey(9, down); break;
+          case 'KeyF': setkey(14, down); break;
+          case 'KeyZ': setkey(10, down); break;
+          case 'KeyX': setkey(0, down); break;
+          case 'KeyC': setkey(11, down); break;
+          case 'KeyV': setkey(15, down); break;
+          case 'ArrowUp': setkey(5, down); break;
+          case 'ArrowLeft': setkey(7, down); break;
+          case 'ArrowDown': setkey(8, down); break;
+          case 'ArrowRight': setkey(9, down); break;
         }
       };
       if (keyDownFn) { window.removeEventListener('keydown', keyDownFn); }
