@@ -29,6 +29,8 @@ set. You need to download a game to play first; try some of the public domain
 ones at [dmatlack/chip8][12] and the [CHIP-8 archive][13].
 [**1123 bytes**]
 
+[Demo!][14]
+
 ## Raytrace
 
 A simple raytracer, using techniques from [tinyraytracer][5], in hand-written
@@ -64,3 +66,4 @@ up of 120-levels of brightness, which fade into black in the distance. [**2047 b
 [11]: https://en.wikipedia.org/wiki/CHIP-8
 [12]: https://github.com/dmatlack/chip8/tree/master/roms
 [13]: https://johnearnest.github.io/chip8Archive/?sort=platform
+[14]: https://binji.github.io/raw-wasm/chip8
