@@ -12,7 +12,7 @@
 (memory (export "mem") 1)
 
 (global $pc (mut i32) (i32.const 0x200))
-(global $sp (mut i32) (i32.const 0x90))
+(global $sp (mut i32) (i32.const 0x8e))
 (global $i (mut i32) (i32.const 0))
 (global $delay (mut i32) (i32.const 0))
 (global $sound (mut i32) (i32.const 0))
@@ -118,9 +118,8 @@
     (if (local.get $n)
       (then
         ;; 0x00EE  return
-        (local.set $nextpc (i32.load16_u (global.get $sp)))
         (global.set $sp (i32.add (global.get $sp) (i32.const 2)))
-        (br $nextpc))
+        (br $setpc (i32.load16_u (global.get $sp))))
       (else
         ;; 0x00E0  clear screen
         (local.set $copy-src (i32.const 0x3100)) ;; Uninit, so has zeroes.
@@ -130,8 +129,8 @@
 
     )
     ;; 0x2NNN  call NNN
-    (global.set $sp (i32.sub (global.get $sp) (i32.const 2)))
     (i32.store16 (global.get $sp) (local.get $nextpc))
+    (global.set $sp (i32.sub (global.get $sp) (i32.const 2)))
     ;; fallthrough.
 
     )
@@ -190,8 +189,10 @@
 
       )
       ;; 0x8XY4  v[x] += v[y], vf = carry
-      (local.set $vx (i32.add (local.get $vx) (local.get $vy)))
-      (local.set $vf (i32.shr_u (local.get $vx) (i32.const 8)))
+      (local.set $vf
+        (i32.shr_u
+          (local.tee $vx (i32.add (local.get $vx) (local.get $vy)))
+          (i32.const 8)))
       (br $set-vx-vf (local.get $vx))
 
       )
@@ -242,20 +243,6 @@
     (local.set $vf (i32.const 0))
     (local.set $j (i32.const 0))
     (loop $yloop
-      ;; Calculate the destination address. The data is stored in reverse, so
-      ;; it is easier to access using a 64-bit load/store in little-endian. The
-      ;; following formula calculates: (31 - ((vy + j) & 31)) << 3
-      ;; where vy is the starting sprite line, and j is the loop index for each
-      ;; sprite row.
-      (local.set $sprite-addr
-        (i32.shl
-          (i32.sub
-            (i32.const 0x1f)
-            (i32.and
-              (i32.add (local.get $vy) (local.get $j))
-              (i32.const 0x1f)))
-          (i32.const 3)))
-
       ;; Load the sprite data. It is loaded into a 64-bit local, and rotated to
       ;; the right to account for the x-coordinate (vx). Since the sprite data
       ;; is stored with high bits to the right of the screen, but little-endian
@@ -285,31 +272,43 @@
       ;; to left, with each bit being shifted off the left side. Doing so will
       ;; display in the correct order.
 
-      (local.set $sprite-row
-        (i64.rotr
-          (i64.extend_i32_u
-            (i32.load8_u (i32.add (global.get $i) (local.get $j))))
-          (i64.add
-            (i64.extend_i32_u (local.get $vx))
-            (i64.const 8))))
-
       ;; draw sprite
       (i64.store offset=0x1000
-        (local.get $sprite-addr)
+
+        ;; Calculate the destination address. The data is stored in reverse, so
+        ;; it is easier to access using a 64-bit load/store in little-endian.
+        ;; The following formula calculates: (31 - ((vy + j) & 31)) << 3 where
+        ;; vy is the starting sprite line, and j is the loop index for each
+        ;; sprite row.
+        (local.tee $sprite-addr
+          (i32.shl
+            (i32.sub
+              (i32.const 0x1f)
+              (i32.and
+                (i32.add (local.get $vy) (local.get $j))
+                (i32.const 0x1f)))
+            (i32.const 3)))
+
         (i64.xor
           (local.tee $orig-row
             (i64.load offset=0x1000 (local.get $sprite-addr)))
-          (local.get $sprite-row)))
+          (local.tee $sprite-row
+            (i64.rotr
+              (i64.extend_i32_u
+                (i32.load8_u (i32.add (global.get $i) (local.get $j))))
+              (i64.add
+                (i64.extend_i32_u (local.get $vx))
+                (i64.const 8))))))
 
       ;; update vf
       (local.set $vf
         (i32.or
           (local.get $vf)
-          (i64.ne
-            (i64.and
-              (local.get $orig-row)
-              (local.get $sprite-row))
-            (i64.const 0))))
+          (i32.eqz
+            (i64.eqz
+              (i64.and
+                (local.get $orig-row)
+                (local.get $sprite-row))))))
 
       (br_if $yloop
         (i32.lt_u
@@ -352,11 +351,10 @@
 
       )
       ;; 0xFX0A  v[x] = wait for key
-      (if
+      ;; Store key, choosing lowest numbered first.
+      (br_if $set-vx
         (local.tee $keys (i32.load16_u offset=0x50 (i32.const 0)))
-        (then
-          ;; Store key, choosing lowest numbered first.
-          (br $set-vx (i32.ctz (local.get $keys)))))
+        (i32.ctz (local.get $keys)))
         ;; no key pressed.
       (br $exit-loop)
 
@@ -390,7 +388,7 @@
       )
       ;; 0xFX33  I[0:2] = BCD(v[x])
       (i32.store8 (global.get $i)
-        (i32.rem_u (i32.div_u (local.get $vx) (i32.const 100)) (i32.const 10)))
+        (i32.div_u (local.get $vx) (i32.const 100)))
       (i32.store8 offset=1 (global.get $i)
         (i32.rem_u (i32.div_u (local.get $vx) (i32.const 10)) (i32.const 10)))
       (i32.store8 offset=2 (global.get $i)
