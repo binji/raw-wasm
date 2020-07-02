@@ -1,6 +1,6 @@
 (import "Math" "random" (func $random (result f32)))
 
-;; [0x0000, 0x0010)  Char[16]       Font data
+;; [0x0000, 0x0050)  Char[16]       Font data
 ;; [0x0050, 0x0052)  u8[16]         Key data
 ;; [0x0060, 0x0070)  u8[16]         v0..vf registers
 ;; [0x0070, 0x0090)  u16[16]        Call stack
@@ -215,7 +215,6 @@
       (local.set $vf (i32.shr_u (local.get $vy) (i32.const 7)))
       (br $set-vx-vf (i32.shl (local.get $vy) (i32.const 1)))
 
-
     )
     ;; 0x9XY0  skip if v[x] != v[y]
     (br $skip (i32.ne (local.get $vx) (local.get $vy)))
@@ -353,8 +352,8 @@
       ;; 0xFX0A  v[x] = wait for key
       ;; Store key, choosing lowest numbered first.
       (br_if $set-vx
-        (local.tee $keys (i32.load16_u offset=0x50 (i32.const 0)))
-        (i32.ctz (local.get $keys)))
+        (i32.ctz (local.get $keys))
+        (local.tee $keys (i32.load16_u offset=0x50 (i32.const 0))))
         ;; no key pressed.
       (br $exit-loop)
 
@@ -442,10 +441,10 @@
     ;; $set-vx-vf
     ;; (i32.const <new-vx>)
     (local.set $vx)
-    (i32.store8 offset=0x60 (local.get $x) (local.get $vx))
     ;; update vf
     (i32.store8 offset=0x6f (i32.const 0) (local.get $vf))
-    (br $nextpc)
+    (local.get $vx)
+    ;; fallthrough
 
     )
     ;; $set-vx
@@ -478,11 +477,12 @@
     (loop $bits
       (i32.store offset=0x1100
         (local.get $draw-dst)
-        (if (result i32) (i32.and (local.get $b0) (i32.const 0x80))
-          (then (i32.const 0xff_ff_ff_ff))
-          (else (i32.const 0xff_00_00_00))))
-
-      (local.set $b0 (i32.shl (local.get $b0) (i32.const 1)))
+        (select
+          (i32.const 0xff_ff_ff_ff)
+          (i32.const 0xff_00_00_00)
+          (i32.and
+            (local.tee $b0 (i32.shl (local.get $b0) (i32.const 1)))
+            (i32.const 0x100))))
 
       (br_if $bits
         (i32.and
