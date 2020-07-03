@@ -5,7 +5,6 @@
 ;; [0x0060, 0x0070)  u8[16]         v0..vf registers
 ;; [0x0070, 0x0090)  u16[16]        Call stack
 ;; [0x0093, 0x0094)  u8             delay timer
-;; [0x0094, 0x0095)  u8             sound timer
 ;; [0x0200, 0x1000)  u8[0x800]      Chip8 ROM
 ;; [0x1000, 0x1100)  u8[8*32]       1bpp screen data (stored in reverse)
 ;; [0x1100, 0x3100)  Color[64*32]   canvas
@@ -15,7 +14,6 @@
 (global $sp (mut i32) (i32.const 0x8e))
 (global $i (mut i32) (i32.const 0))
 (global $delay (mut i32) (i32.const 0))
-(global $sound (mut i32) (i32.const 0))
 
 ;; Font (taken from Octo's VIP font, see
 ;; https://github.com/JohnEarnest/Octo/blob/gh-pages/js/emulator.js)
@@ -62,10 +60,6 @@
   (if (global.get $delay)
     (then
       (global.set $delay (i32.sub (global.get $delay) (i32.const 1)))))
-
-  (if (global.get $sound)
-    (then
-      (global.set $sound (i32.sub (global.get $sound) (i32.const 1)))))
 
   (block $exit-loop
   (loop $cycle
@@ -364,11 +358,8 @@
 
       )
       ;; 0xFX18 or 0xFX1E
-      (if (i32.eq (local.get $nn) (i32.const 0x18))
+      (if (i32.eq (local.get $nn) (i32.const 0x1e))
         (then
-          ;; 0xFX18  sound = v[x]
-          (global.set $sound (local.get $vx)))
-        (else
           ;; 0xFX1E  I += v[x]
           (global.set $i
             (i32.and
