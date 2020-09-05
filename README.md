@@ -25,9 +25,9 @@ just updates every pixel. [**452 bytes**]
 ## Chip-8
 
 A [CHIP-8 interpreter][11], with support for the original chip-8 instruction
-set. You need to download a game to play first; try some of the public domain
-ones at [dmatlack/chip8][12] and the [CHIP-8 archive][13].
-[**1123 bytes**]
+set. It starts up with a simple demo I wrote (thanks, [Octo][15]!). You can
+also try some of the public domain games and demos at [dmatlack/chip8][12] and
+the [CHIP-8 archive][13]. [**1040 bytes**]
 
 [Demo!][14]
 
@@ -67,3 +67,4 @@ up of 120-levels of brightness, which fade into black in the distance. [**2047 b
 [12]: https://github.com/dmatlack/chip8/tree/master/roms
 [13]: https://johnearnest.github.io/chip8Archive/?sort=platform
 [14]: https://binji.github.io/raw-wasm/chip8
+[15]: http://johnearnest.github.io/Octo
