@@ -94,7 +94,7 @@
       let instance = await WebAssembly.instantiate(module, {Math});
       let mem = instance.exports.mem;
 
-      let u16 = new Uint16Array(mem.buffer, 0x50, 1);
+      let u16 = new Uint16Array(mem.buffer, 0x10, 1);
       let setkey = (index, down) => {
         if (down) {
           u16[0] |= (1 << index);
@@ -138,7 +138,7 @@
       rom.set(new Uint8Array(romBytes));
 
       let canvas = document.querySelector('canvas');
-      let canvasData = new Uint8Array(mem.buffer, 0x1100, 8192);
+      let canvasData = new Uint8Array(mem.buffer, 0x1000, 8192);
       let context = canvas.getContext('2d');
       let imageData = context.createImageData(64, 32);
 

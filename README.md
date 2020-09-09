@@ -27,7 +27,7 @@ just updates every pixel. [**452 bytes**]
 A [CHIP-8 interpreter][11], with support for the original chip-8 instruction
 set. It starts up with a simple demo I wrote (thanks, [Octo][15]!). You can
 also try some of the public domain games and demos at [dmatlack/chip8][12] and
-the [CHIP-8 archive][13]. [**1040 bytes**]
+the [CHIP-8 archive][13]. [**1020 bytes**]
 
 [Demo!][14]
 

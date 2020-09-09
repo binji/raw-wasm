@@ -1,23 +1,22 @@
 (import "Math" "random" (func $random (result f32)))
 
-;; [0x0000, 0x0050)  Char[16]       Font data
-;; [0x0050, 0x0052)  u8[16]         Key data
-;; [0x0060, 0x0070)  u8[16]         v0..vf registers
-;; [0x0070, 0x0090)  u16[16]        Call stack
-;; [0x0093, 0x0094)  u8             delay timer
+;; [0x0000, 0x0010)  u8[16]         v0..vf registers
+;; [0x0010, 0x0012)  u8[16]         Key data
+;; [0x0020, 0x0120)  u8[8*32]       1bpp screen data (stored in reverse)
+;; [0x0120, 0x0170)  Char[16]       Font data
+;; [0x0170, 0x0190)  u16[16]        Call stack
 ;; [0x0200, 0x1000)  u8[0x800]      Chip8 ROM
-;; [0x1000, 0x1100)  u8[8*32]       1bpp screen data (stored in reverse)
-;; [0x1100, 0x3100)  Color[64*32]   canvas
+;; [0x1000, 0x3000)  Color[64*32]   canvas
 (memory (export "mem") 1)
 
 (global $pc (mut i32) (i32.const 0x200))
-(global $sp (mut i32) (i32.const 0x8e))
+(global $sp (mut i32) (i32.const 0x18e))
 (global $i (mut i32) (i32.const 0))
 (global $delay (mut i32) (i32.const 0))
 
 ;; Font (taken from Octo's VIP font, see
 ;; https://github.com/JohnEarnest/Octo/blob/gh-pages/js/emulator.js)
-(data (i32.const 0)
+(data (i32.const 0x120)
   "\F0\90\90\90\F0" ;; 0
   "\60\20\20\20\70" ;; 1
   "\F0\10\F0\80\F0" ;; 2
@@ -66,35 +65,31 @@
     (block $setpc (result i32)
     (block $nextpc
     (block $set-vx (result i32)
-    (block $set-vx-vf (result i32)
+    (block $set-vf-vx (result i32)
     (block $skip (result i32)
     (block $do-copy
     (block $do-copy-update-i
-    (block  ;; f
-    (block  ;; e
-    (block  ;; d
-    (block  ;; c
-    (block  ;; b
-    (block  ;; a
-    (block  ;; 9
-    (block  ;; 8
-    (block  ;; 7
-    (block  ;; 6
-    (block  ;; 5
-    (block  ;; 4
-    (block  ;; 3
-    (block  ;; 1
-    (block  ;; 2
-    (block  ;; 0
+    (block (block (block (block (block (block (block (block
+    (block (block (block (block (block (block (block (block
       (local.set $nextpc (i32.add (global.get $pc) (i32.const 2)))
+      ;; Each opcode is laid out as a 16-bit big-endian value. This code unpack
+      ;; the various components so they can be easily used by the instructions
+      ;; below. Note that `vx` and `vy` are the 8-bit values of the x and y
+      ;; registers as encoded in the opcode.
+
+      ;; fedcba9876543210
+      ;; ================
+      ;; ---b0---***nn***
+      ;;     --x-**y*++n+
+      ;;     ****nnn*****
       (local.set $vx
-        (i32.load8_u offset=0x60
+        (i32.load8_u
           (local.tee $x
             (i32.and
               (local.tee $b0 (i32.load8_u (global.get $pc)))
               (i32.const 0xf)))))
       (local.set $vy
-        (i32.load8_u offset=0x60
+        (i32.load8_u
           (i32.shr_u
             (local.tee $nn (i32.load8_u offset=1 (global.get $pc)))
             (i32.const 4))))
@@ -116,9 +111,9 @@
         (br $setpc (i32.load16_u (global.get $sp))))
       (else
         ;; 0x00E0  clear screen
-        (local.set $copy-src (i32.const 0x3100)) ;; Uninit, so has zeroes.
-        (local.set $copy-dst (i32.const 0x1000))
-        (local.set $x (i32.const 0xff)) ;; do-copy always copies N+1 bytes.
+        (local.set $copy-src (i32.const 0x3000)) ;; Uninit, so has zeroes.
+        (local.set $copy-dst (i32.const 0x20))
+        (local.set $x (i32.const 0x100))
         (br $do-copy)))
 
     )
@@ -154,15 +149,7 @@
     )
     ;; 0x8???
 
-      (block
-      (block
-      (block
-      (block
-      (block
-      (block
-      (block
-      (block
-      (block
+      (block (block (block (block (block (block (block (block (block
         (br_table 0 1 2 3 4 5 6 7 8 (local.get $n))
 
       )
@@ -183,31 +170,30 @@
 
       )
       ;; 0x8XY4  v[x] += v[y], vf = carry
-      (local.set $vf
+      (br $set-vf-vx
         (i32.shr_u
           (local.tee $vx (i32.add (local.get $vx) (local.get $vy)))
           (i32.const 8)))
-      (br $set-vx-vf (local.get $vx))
 
       )
       ;; 0x8XY5  v[x] -= v[y], vf = borrow
-      (local.set $vf (i32.ge_u (local.get $vx) (local.get $vy)))
-      (br $set-vx-vf (i32.sub (local.get $vx) (local.get $vy)))
+      (local.set $vx (i32.sub (local.get $vx) (local.get $vy)))
+      (br $set-vf-vx (i32.ge_s (local.get $vx) (i32.const 0)))
 
       )
       ;; 0x8XY6  v[x] = v[y] >> 1, vf = shifted out bit
-      (local.set $vf (i32.and (local.get $vy) (i32.const 1)))
-      (br $set-vx-vf (i32.shr_u (local.get $vy) (i32.const 1)))
+      (local.set $vx (i32.shr_u (local.get $vy) (i32.const 1)))
+      (br $set-vf-vx (i32.and (local.get $vy) (i32.const 1)))
 
       )
       ;; 0x8XY7  v[x] = v[y] - v[x], vf = borrow
-      (local.set $vf (i32.ge_u (local.get $vy) (local.get $vx)))
-      (br $set-vx-vf (i32.sub (local.get $vy) (local.get $vx)))
+      (local.set $vx (i32.sub (local.get $vy) (local.get $vx)))
+      (br $set-vf-vx (i32.ge_s (local.get $vx) (i32.const 0)))
 
       )
       ;; 0x8XYE  v[x] = v[y] << 1, vf = shifted out bit
-      (local.set $vf (i32.shr_u (local.get $vy) (i32.const 7)))
-      (br $set-vx-vf (i32.shl (local.get $vy) (i32.const 1)))
+      (local.set $vx (i32.shl (local.get $vy) (i32.const 1)))
+      (br $set-vf-vx (i32.shr_u (local.get $vy) (i32.const 7)))
 
     )
     ;; 0x9XY0  skip if v[x] != v[y]
@@ -221,20 +207,22 @@
     )
     ;; 0xBNNN  PC = NNN + v[0]
     (br $setpc
-      (i32.add (local.get $nnn) (i32.load8_u offset=0x60 (i32.const 0))))
+      (i32.add (local.get $nnn) (i32.load8_u (i32.const 0))))
 
     )
     ;; 0xCXNN  v[x] = random() & NN
     (br $set-vx
       (i32.and
         (i32.trunc_f32_u
-          (f32.mul (call $random) (f32.const 256)))
+          (f32.mul
+            (call $random)
+            ;; This is used instead of (f32.const 256) since it's smaller.
+            (f32.convert_i32_s (i32.const 256))))
         (local.get $nn)))
 
     )
     ;; 0xDXYN  draw N-line sprite at (v[x], v[y])
-    (local.set $vf (i32.const 0))
-    (local.set $j (i32.const 0))
+    (local.set $vf (local.tee $j (i32.const 0)))
     (loop $yloop
       ;; Load the sprite data. It is loaded into a 64-bit local, and rotated to
       ;; the right to account for the x-coordinate (vx). Since the sprite data
@@ -266,7 +254,7 @@
       ;; display in the correct order.
 
       ;; draw sprite
-      (i64.store offset=0x1000
+      (i64.store offset=0x20
 
         ;; Calculate the destination address. The data is stored in reverse, so
         ;; it is easier to access using a 64-bit load/store in little-endian.
@@ -284,7 +272,7 @@
 
         (i64.xor
           (local.tee $orig-row
-            (i64.load offset=0x1000 (local.get $sprite-addr)))
+            (i64.load offset=0x20 (local.get $sprite-addr)))
           (local.tee $sprite-row
             (i64.rotr
               (i64.extend_i32_u
@@ -308,32 +296,48 @@
           (local.tee $j (i32.add (local.get $j) (i32.const 1)))
           (local.get $n))))
 
-    (i32.store8 offset=0x6f (i32.const 0) (local.get $vf))
-    (br $nextpc)
+    ;; This sets vx too, but that's OK because it hasn't been changed.
+    (br $set-vf-vx (local.get $vf))
 
     )
     ;; 0xEX9E  skip if v[x] key is pressed
     ;; 0xEXA1  skip if v[x] key is not pressed
+
+    ;; Whether a key is pressed is stored as a 16-bit value @ 0x10. The bit is
+    ;; shifted and masked to either 0 or 1, then xor'ed to flip the bit
+    ;; depending on whether the instruction was 0xEX91 or 0xEXA1, by checking
+    ;; whether the low nibble of the opcode is 1.
     (br $skip
       (i32.xor
         (i32.and
           (i32.shr_u
-            (i32.load16_u offset=0x50 (i32.const 0))
+            (i32.load16_u offset=0x10 (i32.const 0))
             (local.get $vx))
           (i32.const 1))
-        (i32.eq (local.get $nn) (i32.const 0xa1))))
+        (i32.eq (local.get $n) (i32.const 0x1))))
 
     )
     ;; 0xF???
 
-      (block
-      (block
-      (block
-      (block
-      (block
-      (block
-      (block
-      (block
+      (block (block (block (block (block (block (block (block
+        ;; The 0xF instructions are discriminated by the low byte. Rather than
+        ;; using a completely filled br_table (which would have to go up to
+        ;; 0x65), we divide this value by 8 to create a smaller table. This
+        ;; does mean that a few instructions overlap:
+        ;;
+        ;;     0xFX07 -> 0
+        ;;     0xFX0A -> 1
+        ;;     0xFX15 -> 2
+        ;;     0xFX18 -> 3!
+        ;;     0xFX1E -> 3!
+        ;;     0xFX29 -> 4
+        ;;     0xFX33 -> 5
+        ;;     0xFX55 -> 6
+        ;;     0xFX65 -> 7
+        ;;
+        ;; These are handled by checking the low nibble of the instruction
+        ;; after the br_table.
+
                ;; 0 1 2 3 4 5 6 7 8 9 10 11 12
         (br_table 0 1 2 3 3 4 5 5 5 5 6  6  7
           (i32.shr_u (local.get $nn) (i32.const 3)))
@@ -346,8 +350,8 @@
       ;; 0xFX0A  v[x] = wait for key
       ;; Store key, choosing lowest numbered first.
       (br_if $set-vx
-        (i32.ctz (local.get $keys))
-        (local.tee $keys (i32.load16_u offset=0x50 (i32.const 0))))
+        (i32.ctz (local.tee $keys (i32.load16_u offset=0x10 (i32.const 0))))
+        (local.get $keys))
         ;; no key pressed.
       (br $exit-loop)
 
@@ -358,90 +362,99 @@
 
       )
       ;; 0xFX18 or 0xFX1E
-      (if (i32.eq (local.get $nn) (i32.const 0x1e))
-        (then
-          ;; 0xFX1E  I += v[x]
-          (global.set $i
-            (i32.and
-              (i32.add (global.get $i) (local.get $vx))
-              (i32.const 0xffff)))))
+      (br_if $nextpc (i32.ne (local.get $n) (i32.const 0xe)))
+      ;; 0xFX1E  I += v[x]
+      (global.set $i
+        (i32.and
+          (i32.add (global.get $i) (local.get $vx))
+          (i32.const 0xffff)))
       (br $nextpc)
 
       )
       ;; 0xFX29  I = &font[v[x] & 0xf]
       (global.set $i
-        (i32.mul
-          (i32.and (local.get $vx) (i32.const 0xf))
-        (i32.const 5)))
+        (i32.add
+          (i32.mul
+            (i32.and (local.get $vx) (i32.const 0xf))
+            ;; Each character is 5 bytes.
+            (i32.const 5))
+          (i32.const 0x120)))
       (br $nextpc)
 
       )
       ;; 0xFX33  I[0:2] = BCD(v[x])
-      (i32.store8 (global.get $i)
-        (i32.div_u (local.get $vx) (i32.const 100)))
-      (i32.store8 offset=1 (global.get $i)
-        (i32.rem_u (i32.div_u (local.get $vx) (i32.const 10)) (i32.const 10)))
+      (i32.store16 (global.get $i)
+        (i32.or
+          (i32.div_u (local.get $vx) (i32.const 100))
+          (i32.shl
+            (i32.rem_u
+              (i32.div_u (local.get $vx) (i32.const 10))
+              (i32.const 10))
+            (i32.const 8))))
       (i32.store8 offset=2 (global.get $i)
         (i32.rem_u (local.get $vx) (i32.const 10)))
       (br $nextpc)
 
       )
       ;; 0xFX55  I[0:X] = v[0:X], I += X + 1
-      (local.set $copy-src (i32.const 0x60))
+      (local.set $copy-src (i32.const 0x00))
       (local.set $copy-dst (global.get $i))
       (br $do-copy-update-i)
 
       )
       ;; 0xFX65  v[0:X] = I[0:X], I += X + 1
       (local.set $copy-src (global.get $i))
-      (local.set $copy-dst (i32.const 0x60))
+      (local.set $copy-dst (i32.const 0x00))
       ;; fallthrough.
 
     )
     ;; $do-copy-update-i
-    ;; i += x + 1
+
+    ;; The load and save instructions (0xFX55 and 0xFX65) both will save all
+    ;; registers from v0 through vx. This means that it copies 1 more than the
+    ;; value in x. In addition, the original VIP implementation of chip-8 also
+    ;; increments the i register during these instructions.
+
+    ;; x += 1   (x is the number of items to copy)
+    ;; i += x
     (global.set $i
       (i32.and
         (i32.add
-          (i32.add (global.get $i) (local.get $x))
-          (i32.const 1))
+          (global.get $i)
+          (local.tee $x
+            (i32.add (local.get $x) (i32.const 1))))
         (i32.const 0xffff)))
     ;; fallthrough.
 
     )
     ;; $do-copy
-    (local.set $j (i32.const 0))
+    ;; always copy at least one byte
     (loop $copy
+      (local.set $x (i32.sub (local.get $x) (i32.const 1)))
       (i32.store8
-        (i32.add (local.get $copy-dst) (local.get $j))
+        (i32.add (local.get $copy-dst) (local.get $x))
         (i32.load8_u
-          (i32.add (local.get $copy-src) (local.get $j))))
-      (br_if $copy
-        (i32.le_u
-          (local.tee $j (i32.add (local.get $j) (i32.const 1)))
-          (local.get $x))))
+          (i32.add (local.get $copy-src) (local.get $x))))
+      (br_if $copy (local.get $x)))
     (br $nextpc)
 
     )
     ;; $skip
-    ;; (i32.const <skip>)
     (br $setpc
-      (i32.add (i32.shl (i32.const 1)) (local.get $nextpc)))
+      (i32.add (i32.shl (i32.const 1) (;(i32.const <skip>);)) (local.get $nextpc)))
 
     )
-    ;; $set-vx-vf
-    ;; (i32.const <new-vx>)
-    (local.set $vx)
+    ;; $set-vf-vx
     ;; update vf
-    (i32.store8 offset=0x6f (i32.const 0) (local.get $vf))
+    (local.set $vf (;(i32.const <new-vf>);))
+    (i32.store8 offset=0xf (i32.const 0) (local.get $vf))
     (local.get $vx)
     ;; fallthrough
 
     )
     ;; $set-vx
-    ;; (i32.const <new-vx>)
-    (local.set $vx)
-    (i32.store8 offset=0x60 (local.get $x) (local.get $vx))
+    (local.set $vx (;(i32.const <new-vx>);))
+    (i32.store8 (local.get $x) (local.get $vx))
     ;; fallthrough.
 
     )
@@ -451,8 +464,7 @@
 
     )
     ;; $setpc
-    ;; (local.get $nextpc)
-    (global.set $pc)
+    (global.set $pc (;(i32.const <new-pc>);))
 
     (br_if $cycle
       (local.tee $cycles (i32.sub (local.get $cycles) (i32.const 1)))))
@@ -463,17 +475,21 @@
   ;; draw screen
   (local.set $draw-src (i32.const 0x100))
   (loop $bytes
-    (local.set $b0 (i32.load8_u offset=0xfff (local.get $draw-src)))
+    ;; Start at 0x1c instead of 0x20, so that each byte is at the "top" of the
+    ;; i32. That way we can rotate the most-significant bit to the left by 1,
+    ;; into the least-significant bit. This means the mask can be `1` instead
+    ;; of `0x100`, which saves a byte.
+    (local.set $b0 (i32.load offset=0x1c (local.get $draw-src)))
 
     (loop $bits
-      (i32.store offset=0x1100
+      (i32.store offset=0x1000
         (local.get $draw-dst)
         (select
           (i32.const 0xff_ff_ff_ff)
           (i32.const 0xff_00_00_00)
           (i32.and
-            (local.tee $b0 (i32.shl (local.get $b0) (i32.const 1)))
-            (i32.const 0x100))))
+            (local.tee $b0 (i32.rotl (local.get $b0) (i32.const 1)))
+            (i32.const 1))))
 
       (br_if $bits
         (i32.and
