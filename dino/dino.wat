@@ -1,7 +1,14 @@
 (import "Math" "random" (func $random (result f32)))
 
+;; 0x0                Left
+;; 0x1                Right
+;; 0x2                Up
+;; 0x3                Down
+;; [0x4, 0x0743)      Image data
 ;; [0x3000, 0x19000)  Color[300*75]  canvas
 (memory (export "mem") 2)
+
+(global $run_timer (mut i32) (i32.const 0))
 
 (data (i32.const 4)
   ;; +0 dead.ppm 20 22
@@ -88,19 +95,19 @@
 ;; objects
 (data (i32.const 746)
   ;; x dx y img
-  (f32 22 0 40) (i16 62)
-  (f32 0 -1.5 57) (i16 678)
-  (f32 32 -1.5 57) (i16 678)
-  (f32 64 -1.5 57) (i16 678)
-  (f32 96 -1.5 57) (i16 678)
-  (f32 128 -1.5 57) (i16 678)
-  (f32 160 -1.5 57) (i16 678)
-  (f32 192 -1.5 57) (i16 678)
-  (f32 224 -1.5 57) (i16 678)
-  (f32 256 -1.5 57) (i16 678)
-  (f32 288 -1.5 57) (i16 678)
-  (f32 320 -1.5 57) (i16 678)
-  (f32 352 -1.5 57) (i16 678)
+  (f32 22 0 40) (i16 62)  ;; dino
+
+  ;; ground x 12
+
+  ;; clouds x 3
+)
+
+(data (i32.const 1000)
+  ;; dummy y img
+  (i16 0) (f32 40) (i16 120)   ;; run1
+  (i16 0) (f32 40) (i16 178)  ;; run2
+  (i16 0) (f32 49) (i16 236)  ;; duck1
+  (i16 0) (f32 49) (i16 285)  ;; duck2
 )
 
 (func $blit (param $obj i32) (result i32)
@@ -326,12 +333,53 @@
 
   (f32.store (local.get $obj) (local.get $x)))
 
+(start $init)
+(func $init
+  (local $i i32)
+  (local $addr i32)
+
+  ;; init ground
+  (loop $loop
+    (f32.store offset=760
+      (local.tee $addr (i32.mul (local.get $i) (i32.const 14)))
+      (f32.convert_i32_s (i32.shl (local.get $i) (i32.const 5))))
+
+    (f32.store offset=764 (local.get $addr) (f32.const -3))
+    (f32.store offset=768 (local.get $addr) (f32.const 57))
+
+    (i32.store16 offset=772
+      (local.get $addr)
+      (i32.add
+        (i32.mul (i32.rem_u (local.get $i) (i32.const 3)) (i32.const 23))
+        (i32.const 678)))
+
+    (br_if $loop
+      (i32.lt_s
+        (local.tee $i (i32.add (local.get $i) (i32.const 1)))
+        (i32.const 12))))
+
+  ;; init clouds
+  (local.set $i (i32.const 0))
+  (loop $loop
+    (f32.store offset=928
+      (local.tee $addr (i32.mul (local.get $i) (i32.const 14)))
+      (f32.mul (f32.convert_i32_s (local.get $i)) (f32.const 128)))
+
+    (f32.store offset=932 (local.get $addr) (f32.const -0.5))
+    (f32.store offset=936 (local.get $addr) (f32.const 23))
+    (i32.store16 offset=940 (local.get $addr) (i32.const 649))
+
+    (br_if $loop
+      (i32.lt_s
+        (local.tee $i (i32.add (local.get $i) (i32.const 1)))
+        (i32.const 3))))
+)
+
 (func (export "run")
   (local $i i32)
 
   ;; clear screen
   (loop $loop
-
     (i32.store offset=0x3000
       (local.get $i)
       (i32.const 0xff_ffffff))
@@ -341,6 +389,16 @@
       (i32.lt_s
         (local.tee $i (i32.add (local.get $i) (i32.const 4)))
         (i32.const 90000))))
+
+  ;; Run animation
+  (global.set $run_timer
+    (i32.add (global.get $run_timer) (i32.const 1)))
+
+  (i64.store (i32.const 752)
+    (i64.load offset=1000
+      (i32.add
+        (i32.shl (i32.load8_u (i32.const 3)) (i32.const 4))
+        (i32.shl (i32.and (global.get $run_timer) (i32.const 4)) (i32.const 1)))))
 
   ;; blit dino
   (drop (call $blit (i32.const 746)))
@@ -354,6 +412,6 @@
     (br_if $blit
       (i32.lt_s
         (local.tee $i (i32.add (local.get $i) (i32.const 14)))
-        (i32.const 928))))
+        (i32.const 970))))
 
-  )
+)
