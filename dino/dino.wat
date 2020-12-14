@@ -9,6 +9,8 @@
 (memory (export "mem") 2)
 
 (global $timer (mut i32) (i32.const 0))
+(global $jump_state (mut i32) (i32.const 0))
+(global $jump_vel (mut f32) (f32.const 0))
 
 (data (i32.const 4)
   ;; =4 dead.ppm 20 22
@@ -107,32 +109,32 @@
 ;; objects  20 * 9 bytes = 180 bytes
 (data (i32.const 900)
   ;; kind       x  y
-  (i8 11) (f32 22 40)  ;; dino
+  (i8 11) (f32 22 50)  ;; dino
 
   ;; ground x 12
-  (i8 7)  (f32   0 57)
-  (i8 8)  (f32  32 57)
-  (i8 9)  (f32  64 57)
-  (i8 7)  (f32  96 57)
-  (i8 8)  (f32 128 57)
-  (i8 9)  (f32 160 57)
-  (i8 7)  (f32 192 57)
-  (i8 8)  (f32 224 57)
-  (i8 9)  (f32 256 57)
-  (i8 7)  (f32 288 57)
-  (i8 8)  (f32 320 57)
-  (i8 9)  (f32 352 57)
+  (i8 7)  (f32   0 67)
+  (i8 8)  (f32  32 67)
+  (i8 9)  (f32  64 67)
+  (i8 7)  (f32  96 67)
+  (i8 8)  (f32 128 67)
+  (i8 9)  (f32 160 67)
+  (i8 7)  (f32 192 67)
+  (i8 8)  (f32 224 67)
+  (i8 9)  (f32 256 67)
+  (i8 7)  (f32 288 67)
+  (i8 8)  (f32 320 67)
+  (i8 9)  (f32 352 67)
 
   ;; clouds x 3
-  (i8 6)  (f32   0 30)
-  (i8 6)  (f32 128 30)
-  (i8 6)  (f32 256 30)
+  (i8 6)  (f32   0 40)
+  (i8 6)  (f32 128 40)
+  (i8 6)  (f32 256 40)
 
   ;; obstacles x 4
-  (i8 1)  (f32 128 45)
-  (i8 2)  (f32 256 45)
-  (i8 3)  (f32 384 45)
-  (i8 0)  (f32 512 36)
+  (i8 1)  (f32 128 55)
+  (i8 2)  (f32 256 55)
+  (i8 3)  (f32 384 55)
+  (i8 0)  (f32 512 46)
 
   ;; end=1080
 )
@@ -140,16 +142,16 @@
 ;; info  13 * 11 bytes = 143 bytes
 (data (i32.const 1100)
   ;;  id anim       img      x  y +y     *dx
-  (i8  0    0) (i16 334) (i8 0 36  0) (f32 1)     ;;  0 cactus1
-  (i8  0    0) (i16 380) (i8 0 44  0) (f32 1)     ;;  1 cactus2
-  (i8  0    0) (i16 426) (i8 0 44  0) (f32 1)     ;;  2 cactus3
-  (i8  0    0) (i16 492) (i8 0 44  0) (f32 1)     ;;  3 cactus4
-  (i8  0    0) (i16 516) (i8 0 36  0) (f32 1)     ;;  4 cactus5
-  (i8  0    3) (i16 747) (i8 0 15 30) (f32 1.25)  ;;  5 bird
-  (i8  1    0) (i16 649) (i8 0  5 25) (f32 0.25)  ;;  6 cloud
-  (i8  2    0) (i16 678) (i8 0 57  0) (f32 1)     ;;  7 ground1
-  (i8  2    0) (i16 701) (i8 0 57  0) (f32 1)     ;;  8 ground2
-  (i8  2    0) (i16 724) (i8 0 57  0) (f32 1)     ;;  9 ground3
+  (i8  0    0) (i16 334) (i8 0 46  0) (f32 1)     ;;  0 cactus1
+  (i8  0    0) (i16 380) (i8 0 54  0) (f32 1)     ;;  1 cactus2
+  (i8  0    0) (i16 426) (i8 0 54  0) (f32 1)     ;;  2 cactus3
+  (i8  0    0) (i16 492) (i8 0 54  0) (f32 1)     ;;  3 cactus4
+  (i8  0    0) (i16 516) (i8 0 46  0) (f32 1)     ;;  4 cactus5
+  (i8  0    3) (i16 747) (i8 0 25 30) (f32 1.25)  ;;  5 bird
+  (i8  1    0) (i16 649) (i8 0 15 25) (f32 0.25)  ;;  6 cloud
+  (i8  2    0) (i16 678) (i8 0 67  0) (f32 1)     ;;  7 ground1
+  (i8  2    0) (i16 701) (i8 0 67  0) (f32 1)     ;;  8 ground2
+  (i8  2    0) (i16 724) (i8 0 67  0) (f32 1)     ;;  9 ground3
   (i8  3    0) (i16  62) (i8 0  0  0) (f32 0)     ;; 10 stand
   (i8  3    1) (i16 120) (i8 0  0  0) (f32 0)     ;; 11 run
   (i8  3    2) (i16 236) (i8 0  0  0) (f32 0)     ;; 12 duck
@@ -461,6 +463,9 @@
 
 (func (export "run")
   (local $i i32)
+  (local $input i32)
+  (local $dino_id i32)
+  (local $y f32)
 
   ;; clear screen
   (loop $loop
@@ -479,12 +484,63 @@
     (i32.and (i32.add (global.get $timer) (i32.const 1))
              (i32.const 15)))
 
-  ;; If down pressed, duck
-  (i32.store8
-    (i32.const 900)
-    (if (result i32) (i32.load8_u (i32.const 3))
-      (then (i32.const 12))
-      (else (i32.const 11))))
+  (local.set $input (i32.load8_u (i32.const 0)))
+  (local.set $y (f32.load (i32.const 905)))
+
+  block $done
+  block $falling
+  block $rising
+  block $running
+    (br_table $running $rising $falling (global.get $jump_state))
+
+  end $running
+    ;; If down pressed, duck
+    (local.set $dino_id
+      (select
+        (i32.const 12)
+        (i32.const 11)
+        (i32.eq (local.get $input) (i32.const 2))))
+
+    ;; if up pressed, jump
+    (if (i32.eq (local.get $input) (i32.const 1))
+      (then
+        (global.set $jump_state (i32.const 1))
+        (global.set $jump_vel (f32.const -6))))
+    (br $done)
+
+  end $rising
+    ;; Stop jumping if the button is released and we've reached the minimum
+    ;; height, or we've reached the maximum height.
+    (if
+      (i32.or
+        (i32.and
+          (i32.ne (local.get $input) (i32.const 1))
+          (f32.lt (local.get $y) (f32.const 30)))
+        (f32.lt (local.get $y) (f32.const 10)))
+      (then
+        ;; start falling.
+        (global.set $jump_state (i32.const 2))
+        (global.set $jump_vel (f32.const -1))
+        ))
+
+    ;; fallthrough
+  end $falling
+    (local.set $dino_id (i32.const 10))
+    (local.set $y (f32.add (local.get $y) (global.get $jump_vel)))
+    (global.set $jump_vel (f32.add (global.get $jump_vel) (f32.const 0.4)))
+
+    ;; Stop falling if the ground is reached.
+    (if (f32.gt (local.get $y) (f32.const 50))
+      (then
+        (global.set $jump_state (i32.const 0))
+        (local.set $y (f32.const 50))
+        (global.set $jump_vel (f32.const 0))
+        ))
+
+  end $done
+
+  (i32.store8 (i32.const 900) (local.get $dino_id))
+  (f32.store (i32.const 905) (local.get $y))
 
   ;; blit dino
   (local.set $i (i32.const 900))

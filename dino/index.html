@@ -36,11 +36,16 @@
         let imageData = context.createImageData(300, 75);
         let u8 = new Uint8Array(instance.exports.mem.buffer, 0, 4);
         let onkey = (down, event) => {
+          let bit;
           switch (event.code) {
-            case 'ArrowLeft': u8[0] = down; break;
-            case 'ArrowRight': u8[1] = down; break;
-            case 'ArrowUp': u8[2] = down; break;
-            case 'ArrowDown': u8[3] = down; break;
+            case 'ArrowUp': bit = 1; break;
+            case 'ArrowDown': bit = 2; break;
+            default: return;
+          }
+          if (down) {
+            u8[0] |= bit;
+          } else {
+            u8[0] &= ~bit;
           }
         };
         document.addEventListener('keydown', onkey.bind(null, 1), false);
