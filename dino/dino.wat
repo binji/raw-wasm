@@ -9,6 +9,7 @@
 (memory (export "mem") 2)
 
 (global $timer (mut i32) (i32.const 0))
+(global $score (mut i32) (i32.const 0))
 (global $dino_state (mut i32) (i32.const 0))
 (global $jump_vel (mut f32) (f32.const 0))
 (global $speed (mut f32) (f32.const -0.5))
@@ -104,19 +105,32 @@
   "\30\00\00\1c\00\00\1f\00\c0\0f\00\f0\ff\07\00\fe\07\00\fe\ff\01\fe\1f\00"
   "\ff\3f\80\ff\03\c0\ff\00\e0\01\00\70\00\00\18\00\00\0c\00\00\02\00"
 
-  ;; +836
-)
+  ;; =840 numbers 3 5
+  "\6f\7b" ;; 0
+  "\93\74" ;; 1
+  "\e7\73" ;; 2
+  "\e7\79" ;; 3
+  "\ed\49" ;; 4
+  "\cf\79" ;; 5
+  "\c9\7b" ;; 6
+  "\27\49" ;; 7
+  "\ef\7b" ;; 8
+  "\ef\49" ;; 9
 
-;; objects  20 * 9 bytes = 180 bytes
-(data (i32.const 900)
-  ;; kind       x  y
+  ;; =860 gameover.ppm 50 8
+  "\1e\c7\cc\e3\6c\ef\fd\be\7f\cf\b7\bd\3f\db\fe\0d\db\36\f6\e0\db\f6\6c\db"
+  "\7b\bb\6f\db\b3\6d\ef\cf\b6\6d\c3\f6\8d\fd\db\b6\3d\9f\f3\b6\67\db\f6\38"
+  "\c4\db"
 
+  ;; =910
+  ;; objects  20 * 9 bytes = 180 bytes
   ;; obstacles x 4
+  ;; kind       x  y
   (i8 1)  (f32 300 55)
   (i8 1)  (f32 600 55)
   (i8 1)  (f32 900 55)
 
-  ;; dino
+  ;; =937 dino
   (i8 11) (f32 22 50)
 
   ;; ground x 12
@@ -139,11 +153,9 @@
   (i8 6)  (f32 256 40)
   (i8 6)  (f32 384 40)
 
-  ;; end=1080
-)
+  ;; end=1090
+  ;; info  14 * 8 bytes = 112 bytes
 
-;; info  14 * 8 bytes = 112 bytes
-(data (i32.const 1100)
   ;;  id anim       img      +4x  y +y *4dx
   (i8  0    0) (i16 334) (i8  75 46  0   4)  ;;  0 cactus1
   (i8  0    0) (i16 380) (i8  75 54  0   4)  ;;  1 cactus2
@@ -159,49 +171,31 @@
   (i8  3    1) (i16 120) (i8   0  0  0   0)  ;; 11 dino run
   (i8  3    2) (i16 236) (i8   0  0  0   0)  ;; 12 dino duck
   (i8  3    0) (i16   4) (i8   0  0  0   0)  ;; 13 dino dead
-  ;; end=1212
-)
+  ;; end=1202
 
-;; random id  3 * 2 bytes = 6 bytes
-(data (i32.const 1212)
+  ;; random id  3 * 2 bytes = 6 bytes
   (i8 0 6)
   (i8 6 1)
   (i8 7 3)
-  ;; end=1218
-)
+  ;; end=1208
 
-;; anims (y addend)  4 * 4 bytes = 16 bytes
-(data (i32.const 1218)
+  ;; anims (y addend)  4 * 4 bytes = 16 bytes
   (i8 0 0 0 0)  ;; 0 none
   (i8 0 0 0 0)  ;; 1 run
   (i8 9 9 9 9)  ;; 2 duck
   (i8 0 0 3 3)  ;; 3 bird
-  ;; end=1234
-)
+  ;; end=1224
 
-;; anims (img addend)  4 * 4 bytes = 16 bytes
-(data (i32.const 1234)
+  ;; anims (img addend)  4 * 4 bytes = 16 bytes
   (i8 0  0  0  0)  ;; 0 none
   (i8 0 58  0 58)  ;; 1 run
   (i8 0 49  0 49)  ;; 2 duck
   (i8 0  0 44 44)  ;; 3 bird
-  ;; end=1250
+  ;; end=1240
 )
 
-
-(func $blit (param $obj i32) (result i32)
-  (local $kind i32)
-  (local $anim i32)
-  (local $x i32)
-  (local $y i32)
-  (local $img i32)
-  (local $info i32)
-
-  (local $w i32)
-  (local $h i32)
-  (local $src_addr i32)
-  (local $color i32)
-
+(func $blit (param $x i32) (param $y i32) (param $w i32) (param $h i32)
+            (param $color i32) (param $src_addr i32) (result i32)
   (local $dst_addr i32)
   (local $src_stride_bits i32)
   (local $src_stride_bytes i32)
@@ -211,34 +205,6 @@
   (local $hit i32)
   (local $bits i32)
   (local $data i64)
-
-  (local.set $kind (i32.load8_u (local.get $obj)))
-  (local.set $info (i32.mul (local.get $kind) (i32.const 8)))
-  (local.set $anim
-    (i32.add
-      (i32.shl (i32.load8_u offset=1101 (local.get $info)) (i32.const 2))
-      (i32.shr_u (global.get $timer) (i32.const 2))))
-  (local.set $img
-    (i32.add
-      (i32.load16_u offset=1102 (local.get $info))
-      (i32.load8_u offset=1234 (local.get $anim))))
-
-  (local.set $x (i32.trunc_f32_s (f32.load offset=1 (local.get $obj))))
-  (local.set $y
-    (i32.add
-      (i32.trunc_f32_s (f32.load offset=5 (local.get $obj)))
-      (i32.load8_u offset=1218 (local.get $anim))))
-
-  (local.set $w (i32.load8_u (local.get $img)))
-  (local.set $h (i32.load8_u offset=1 (local.get $img)))
-  ;; TODO(fix)
-  (local.set $color
-    (i32.shl
-      (i32.sub
-        (i32.const 255)
-        (i32.load8_u offset=2 (local.get $img)))
-      (i32.const 24)))
-  (local.set $src_addr (i32.add (local.get $img) (i32.const 3)))
 
   ;; if (y < 0)
   (if
@@ -411,9 +377,69 @@
     (br_if $yloop
       (local.tee $h (i32.sub (local.get $h) (i32.const 1)))))
 
+  (local.get $hit)
+)
+
+(func $number (param $num i32) (param $x i32) (param $y i32)
+  (loop $loop
+    (drop
+      (call $blit
+        (local.tee $x
+          (i32.sub
+            (local.get $x)
+            (i32.const 4)))
+        (local.get $y)
+        (i32.const 3) (i32.const 5)
+        (i32.const 0xac_000000)
+        (i32.add
+          (i32.const 840)
+          (i32.shl
+            (i32.rem_u (local.get $num) (i32.const 10))
+            (i32.const 1)))))
+    (br_if $loop (local.tee $num (i32.div_u (local.get $num) (i32.const 10)))))
+)
+
+(func $draw (param $obj i32) (result i32)
+  (local $kind i32)
+  (local $anim i32)
+  (local $img i32)
+  (local $info i32)
+
+  (local.set $kind (i32.load8_u (local.get $obj)))
+  (local.set $info (i32.mul (local.get $kind) (i32.const 8)))
+  (local.set $anim
+    (i32.add
+      (i32.shl (i32.load8_u offset=1091 (local.get $info)) (i32.const 2))
+      (i32.shr_u (i32.and (global.get $timer) (i32.const 15)) (i32.const 2))))
+  (local.set $img
+    (i32.add
+      (i32.load16_u offset=1092 (local.get $info))
+      (i32.load8_u offset=1224 (local.get $anim))))
+
   (i32.and
-    (local.get $hit)  ;; hit a non-white pixel
-    (i32.ge_u (local.get $kind) (i32.const 10))) ;; is a dino
+    ;; hit a non-white pixel
+    (call $blit
+      ;; x
+      (i32.trunc_f32_s (f32.load offset=1 (local.get $obj)))
+      ;; y
+      (i32.add
+        (i32.trunc_f32_s (f32.load offset=5 (local.get $obj)))
+        (i32.load8_u offset=1208 (local.get $anim)))
+      ;; w
+      (i32.load8_u (local.get $img))
+      ;; h
+      (i32.load8_u offset=1 (local.get $img))
+      ;; color
+      ;; TODO: simplify
+      (i32.shl
+        (i32.sub
+          (i32.const 255)
+          (i32.load8_u offset=2 (local.get $img)))
+        (i32.const 24))
+      ;; src_addr
+      (i32.add (local.get $img) (i32.const 3)))
+     ;; is a dino
+    (i32.ge_u (local.get $kind) (i32.const 10)))
 )
 
 (func $move (param $obj i32)
@@ -428,7 +454,7 @@
     (f32.add
       (f32.load offset=1 (local.get $obj))
       (f32.mul
-        (f32.convert_i32_u (i32.load8_u offset=1107 (local.get $info)))
+        (f32.convert_i32_u (i32.load8_u offset=1097 (local.get $info)))
         (global.get $speed))))
 
   (if
@@ -437,7 +463,7 @@
       ;; Pick a random item.
       (local.set $rand_info
         (i32.shl
-          (i32.load8_u offset=1100 (local.get $info))
+          (i32.load8_u offset=1090 (local.get $info))
           (i32.const 1)))
 
       (local.set $info
@@ -446,8 +472,8 @@
             (f32.mul
               (call $random)
               (f32.convert_i32_u
-                (i32.load8_u offset=1213 (local.get $rand_info)))))
-          (i32.load8_u offset=1212 (local.get $rand_info))))
+                (i32.load8_u offset=1203 (local.get $rand_info)))))
+          (i32.load8_u offset=1202 (local.get $rand_info))))
 
       (i32.store8 (local.get $obj) (local.get $info))
 
@@ -459,16 +485,16 @@
             (f32.const 352))
           (f32.convert_i32_u
             (i32.shl
-              (i32.load8_u offset=1104 (local.get $kind))
+              (i32.load8_u offset=1094 (local.get $kind))
               (i32.const 3)))))
 
       (f32.store offset=5
         (local.get $obj)
         (f32.add
-          (f32.convert_i32_u (i32.load8_u offset=1105 (local.get $kind)))
+          (f32.convert_i32_u (i32.load8_u offset=1095 (local.get $kind)))
           (f32.mul
             (call $random)
-            (f32.convert_i32_u (i32.load8_u offset=1106 (local.get $kind))))))))
+            (f32.convert_i32_u (i32.load8_u offset=1096 (local.get $kind))))))))
 
   (f32.store offset=1 (local.get $obj) (local.get $x)))
 
@@ -491,9 +517,7 @@
         (i32.const 90000))))
 
   ;; Run animation
-  (global.set $timer
-    (i32.and (i32.add (global.get $timer) (i32.const 1))
-             (i32.const 15)))
+  (global.set $timer (i32.add (global.get $timer) (i32.const 1)))
 
   (global.set $speed
     (f32.max
@@ -501,9 +525,10 @@
       (f32.const -1)))
 
   (local.set $input (i32.load8_u (i32.const 0)))
-  (local.set $y (f32.load (i32.const 932)))
+  (local.set $y (f32.load (i32.const 942)))
 
   block $done
+  block $playing
   block $falling
   block $rising
   block $running
@@ -513,6 +538,12 @@
   end $dead
     (local.set $dino_id (i32.const 13))
     (global.set $speed (f32.const 0))
+    ;; GAME OVER
+    (call $blit
+      (i32.const 125) (i32.const 33)
+      (i32.const 50) (i32.const 8)
+      (i32.const 0xac_000000)
+      (i32.const 860))
     (br $done)
 
   end $running
@@ -528,7 +559,7 @@
       (then
         (global.set $dino_state (i32.const 1))
         (global.set $jump_vel (f32.const -6))))
-    (br $done)
+    (br $playing)
 
   end $rising
     ;; Stop jumping if the button is released and we've reached the minimum
@@ -559,15 +590,20 @@
         (global.set $jump_vel (f32.const 0))
         ))
 
+    ;; fallthrough
+  end $playing
+    (global.set $score (i32.add (global.get $score) (i32.const 1)))
+
+    ;; fallthrough
   end $done
 
-  (i32.store8 (i32.const 927) (local.get $dino_id))
-  (f32.store (i32.const 932) (local.get $y))
+  (i32.store8 (i32.const 937) (local.get $dino_id))
+  (f32.store (i32.const 942) (local.get $y))
 
   ;; update objects
-  (local.set $i (i32.const 900))
+  (local.set $i (i32.const 910))
   (loop $loop
-    (if (call $blit (local.get $i))
+    (if (call $draw (local.get $i))
       (then (global.set $dino_state (i32.const 3))))
 
     (call $move (local.get $i))
@@ -576,6 +612,8 @@
     (br_if $loop
       (i32.lt_s
         (local.tee $i (i32.add (local.get $i) (i32.const 9)))
-        (i32.const 1080))))
+        (i32.const 1090))))
 
+  ;; draw score
+  (call $number (global.get $score) (i32.const 300) (i32.const 4))
 )
