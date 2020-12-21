@@ -516,7 +516,7 @@
         (local.tee $i (i32.add (local.get $i) (i32.const 8)))
         (i32.const 90000))))
 
-  ;; Run animation
+  ;; Animation timer
   (global.set $timer (i32.add (global.get $timer) (i32.const 1)))
 
   (global.set $speed
@@ -544,6 +544,30 @@
       (i32.const 50) (i32.const 8)
       (i32.const 0xac_000000)
       (i32.const 860))
+
+    ;; If any button pressed, reset.
+    (if (i32.and
+          (i32.ne (local.get $input) (i32.const 0))
+          ;; Wait at least 20 frames before restarting.
+          (i32.gt_u
+            (i32.sub (global.get $timer) (global.get $score))
+            (i32.const 20)))
+      (then
+        ;; only need to reset score, dino state, and obstacles.
+        (global.set $score (i32.const 0))
+        (global.set $timer (i32.const 0))
+        (global.set $dino_state (i32.const 0))
+        (global.set $jump_vel (f32.const 0))
+        (global.set $speed (f32.const -0.5))
+        (local.set $dino_id (i32.const 11))
+        (local.set $y (f32.const 50))
+
+        ;; reset obstacles
+        (i64.store (i32.const 910) (i64.const 0x5c0000_43960000_01))
+        (i64.store (i32.const 918) (i64.const 0x0000_44160000_01_42))
+        (i64.store (i32.const 926) (i64.const 0x00_44610000_01_425c))
+        (i32.store (i32.const 934) (i32.const 0x0b_425c00))))
+
     (br $done)
 
   end $running
@@ -587,8 +611,7 @@
       (then
         (global.set $dino_state (i32.const 0))
         (local.set $y (f32.const 50))
-        (global.set $jump_vel (f32.const 0))
-        ))
+        (global.set $jump_vel (f32.const 0))))
 
     ;; fallthrough
   end $playing
@@ -604,7 +627,8 @@
   (local.set $i (i32.const 910))
   (loop $loop
     (if (call $draw (local.get $i))
-      (then (global.set $dino_state (i32.const 3))))
+      (then
+        (global.set $dino_state (i32.const 3)))) ;; Set state to dead.
 
     (call $move (local.get $i))
 
