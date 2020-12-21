@@ -206,43 +206,6 @@
   (local $bits i32)
   (local $data i64)
 
-  ;; if (y < 0)
-  (if
-    (i32.lt_s (local.get $y) (i32.const 0))
-    (then
-      ;; y = -y
-      (local.set $y (i32.sub (i32.const 0) (local.get $y)))
-      ;; reduce height by y
-      (local.set $h (i32.sub (local.get $h) (local.get $y)))
-
-      ;; bits = w * y
-      (local.set $bits (i32.mul (local.get $w) (local.get $y)))
-
-      ;; advance src_addr by (w * y bits)
-      (local.set $src_addr
-        (i32.add
-          (local.get $src_addr)
-          (i32.shr_u
-            (local.get $bits)
-            (i32.const 3))))
-      (local.set $rot
-        (i32.and
-          (local.get $bits)
-          (i32.const 7)))
-
-      (local.set $y (i32.const 0)))
-
-    (else
-      ;; if (y + h > SCREEN_HEIGHT)
-      (if
-        (i32.gt_s (i32.add (local.get $y) (local.get $h)) (i32.const 75))
-        (then
-          ;; h = SCREEN_HEIGHT - y
-          (local.set $h
-            (i32.sub
-              (i32.const 75)
-              (local.get $y)))))))
-
   ;; if (x < 0)
   (if
     (i32.lt_s (local.get $x) (i32.const 0))
@@ -399,109 +362,18 @@
     (br_if $loop (local.tee $num (i32.div_u (local.get $num) (i32.const 10)))))
 )
 
-(func $draw (param $obj i32) (result i32)
+(func (export "run")
+  (local $i i32)
+  (local $obj i32)
+  (local $input i32)
+  (local $dino_id i32)
   (local $kind i32)
   (local $anim i32)
   (local $img i32)
   (local $info i32)
-
-  (local.set $kind (i32.load8_u (local.get $obj)))
-  (local.set $info (i32.mul (local.get $kind) (i32.const 8)))
-  (local.set $anim
-    (i32.add
-      (i32.shl (i32.load8_u offset=1091 (local.get $info)) (i32.const 2))
-      (i32.shr_u (i32.and (global.get $timer) (i32.const 15)) (i32.const 2))))
-  (local.set $img
-    (i32.add
-      (i32.load16_u offset=1092 (local.get $info))
-      (i32.load8_u offset=1224 (local.get $anim))))
-
-  (i32.and
-    ;; hit a non-white pixel
-    (call $blit
-      ;; x
-      (i32.trunc_f32_s (f32.load offset=1 (local.get $obj)))
-      ;; y
-      (i32.add
-        (i32.trunc_f32_s (f32.load offset=5 (local.get $obj)))
-        (i32.load8_u offset=1208 (local.get $anim)))
-      ;; w
-      (i32.load8_u (local.get $img))
-      ;; h
-      (i32.load8_u offset=1 (local.get $img))
-      ;; color
-      ;; TODO: simplify
-      (i32.shl
-        (i32.sub
-          (i32.const 255)
-          (i32.load8_u offset=2 (local.get $img)))
-        (i32.const 24))
-      ;; src_addr
-      (i32.add (local.get $img) (i32.const 3)))
-     ;; is a dino
-    (i32.ge_u (local.get $kind) (i32.const 10)))
-)
-
-(func $move (param $obj i32)
-  (local $info i32)
   (local $rand_info i32)
-  (local $kind i32)
+
   (local $x f32)
-  (local $dx f32)
-
-  (local.set $info (i32.mul (i32.load8_u (local.get $obj)) (i32.const 8)))
-  (local.set $x
-    (f32.add
-      (f32.load offset=1 (local.get $obj))
-      (f32.mul
-        (f32.convert_i32_u (i32.load8_u offset=1097 (local.get $info)))
-        (global.get $speed))))
-
-  (if
-    (f32.lt (local.get $x) (f32.const -32))
-    (then
-      ;; Pick a random item.
-      (local.set $rand_info
-        (i32.shl
-          (i32.load8_u offset=1090 (local.get $info))
-          (i32.const 1)))
-
-      (local.set $info
-        (i32.add
-          (i32.trunc_f32_s
-            (f32.mul
-              (call $random)
-              (f32.convert_i32_u
-                (i32.load8_u offset=1203 (local.get $rand_info)))))
-          (i32.load8_u offset=1202 (local.get $rand_info))))
-
-      (i32.store8 (local.get $obj) (local.get $info))
-
-      (local.set $kind (i32.mul (local.get $info) (i32.const 8)))
-      (local.set $x
-        (f32.add
-          (f32.add
-            (local.get $x)
-            (f32.const 352))
-          (f32.convert_i32_u
-            (i32.shl
-              (i32.load8_u offset=1094 (local.get $kind))
-              (i32.const 3)))))
-
-      (f32.store offset=5
-        (local.get $obj)
-        (f32.add
-          (f32.convert_i32_u (i32.load8_u offset=1095 (local.get $kind)))
-          (f32.mul
-            (call $random)
-            (f32.convert_i32_u (i32.load8_u offset=1096 (local.get $kind))))))))
-
-  (f32.store offset=1 (local.get $obj) (local.get $x)))
-
-(func (export "run")
-  (local $i i32)
-  (local $input i32)
-  (local $dino_id i32)
   (local $y f32)
 
   ;; clear screen
@@ -620,22 +492,118 @@
     ;; fallthrough
   end $done
 
+  ;; Update dino id and y-coordinate.
   (i32.store8 (i32.const 937) (local.get $dino_id))
   (f32.store (i32.const 942) (local.get $y))
 
   ;; update objects
-  (local.set $i (i32.const 910))
+  (local.set $obj (i32.const 910))
   (loop $loop
-    (if (call $draw (local.get $i))
+    ;;; Draw and check for collision.
+    (if
+      (i32.and
+        ;; hit a non-white pixel
+        (call $blit
+          ;; x
+          (i32.trunc_f32_s (f32.load offset=1 (local.get $obj)))
+          ;; y
+          (i32.add
+            (i32.trunc_f32_s (f32.load offset=5 (local.get $obj)))
+            (i32.load8_u offset=1208
+              (local.tee $anim
+                (i32.add
+                  (i32.shl
+                    (i32.load8_u offset=1091
+                      (local.tee $info
+                        (i32.mul
+                          (local.tee $kind (i32.load8_u (local.get $obj)))
+                          (i32.const 8))))
+                    (i32.const 2))
+                  (i32.shr_u
+                    (i32.and (global.get $timer) (i32.const 15))
+                    (i32.const 2))))))
+          ;; w
+          (i32.load8_u
+            (local.tee $img
+              (i32.add
+                (i32.load16_u offset=1092 (local.get $info))
+                (i32.load8_u offset=1224 (local.get $anim)))))
+          ;; h
+          (i32.load8_u offset=1 (local.get $img))
+          ;; color
+          ;; TODO: simplify
+          (i32.shl
+            (i32.sub
+              (i32.const 255)
+              (i32.load8_u offset=2 (local.get $img)))
+            (i32.const 24))
+          ;; src_addr
+          (i32.add (local.get $img) (i32.const 3)))
+         ;; is a dino
+        (i32.ge_u (local.get $kind) (i32.const 10)))
+        (then
+          ;; Set state to dead.
+          (global.set $dino_state (i32.const 3))))
+
+    ;;; Move
+    (if
+      ;; If object goes off screen to the left...
+      (f32.lt
+        (local.tee $x
+          (f32.add
+            (f32.load offset=1 (local.get $obj))
+            (f32.mul
+              (f32.convert_i32_u (i32.load8_u offset=1097 (local.get $info)))
+              (global.get $speed))))
+        (f32.const -32))
       (then
-        (global.set $dino_state (i32.const 3)))) ;; Set state to dead.
+        ;; Write new object kind.
+        (i32.store8
+          (local.get $obj)
+          (local.tee $info
+            (i32.add
+              (i32.trunc_f32_s
+                (f32.mul
+                  ;; Pick a random item.
+                  (call $random)
+                  (f32.convert_i32_u
+                    (i32.load8_u offset=1203
+                      (local.tee $rand_info
+                        (i32.shl
+                          (i32.load8_u offset=1090 (local.get $info))
+                          (i32.const 1)))))))
+              (i32.load8_u offset=1202 (local.get $rand_info)))))
 
-    (call $move (local.get $i))
+        ;; Set new object x (stored below).
+        (local.set $x
+          (f32.add
+            (f32.add
+              (local.get $x)
+              (f32.const 352))
+            (f32.convert_i32_u
+              (i32.shl
+                (i32.load8_u offset=1094
+                  (local.tee $kind (i32.mul (local.get $info) (i32.const 8))))
+                (i32.const 3)))))
 
-    ;; loop on x
+        ;; Write new object y.
+        (f32.store offset=5
+          (local.get $obj)
+          (f32.add
+            (f32.convert_i32_u
+              (i32.load8_u offset=1095 (local.get $kind)))
+            (f32.mul
+              (call $random)
+              (f32.convert_i32_u
+                (i32.load8_u offset=1096 (local.get $kind))))))))
+
+    ;; Write object x coordinate.
+    (f32.store offset=1 (local.get $obj) (local.get $x))
+
+    ;; loop over all objects.
     (br_if $loop
       (i32.lt_s
-        (local.tee $i (i32.add (local.get $i) (i32.const 9)))
+        (local.tee $obj (i32.add (local.get $obj) (i32.const 9)))
         (i32.const 1090))))
 
   ;; draw score
