@@ -15,97 +15,7 @@
 (global $speed (mut f32) (f32.const -0.5))
 
 (data (i32.const 4)
-  ;; =4 dead.ppm 20 22
-  "\00\f8\07\c0\f8\00\ac\0f\c0\f8\00\fc\0f\c0\ff\00\fc\0f\c0\3f\01\3e\10\f0"
-  "\03\c3\ff\70\fe\0b\ff\3f\f0\ff\03\fe\1f\c0\ff\01\f8\0f\00\7f\00\e0\06\00"
-  "\46\00\20\04\00\c6\00"
-
-  ;; =59 stand.ppm 20 22
-  "\00\f8\07\c0\ff\00\ec\0f\c0\ff\00\fc\0f\c0\ff\00\7c\00\c0\3f\01\3e\10\f0"
-  "\03\c3\ff\70\fe\0b\ff\3f\f0\ff\03\fe\1f\c0\ff\01\f8\0f\00\7f\00\e0\06\00"
-  "\46\00\20\04\00\c6\00"
-
-  ;; =114 run1.ppm 20 22
-  "\00\f8\07\c0\ff\00\ec\0f\c0\ff\00\fc\0f\c0\ff\00\7c\00\c0\3f\01\3e\10\f0"
-  "\03\c3\ff\70\fe\0b\ff\3f\f0\ff\03\fe\1f\c0\ff\01\f8\0f\00\7f\00\e0\1c\00"
-  "\06\00\20\00\00\06\00"
-
-  ;; =169 run2.ppm 20 22
-  "\00\f8\07\c0\ff\00\ec\0f\c0\ff\00\fc\0f\c0\ff\00\7c\00\c0\3f\01\3e\10\f0"
-  "\03\c3\ff\70\fe\0b\ff\3f\f0\ff\03\fe\1f\c0\ff\01\f8\0f\00\7f\00\60\06\00"
-  "\4c\00\00\04\00\c0\00"
-
-  ;; =224 duck1.ppm 28 13
-  "\01\00\f8\77\f8\cf\ff\ff\ff\ef\ef\ff\ff\ff\fc\ff\ff\8f\ff\ff\ff\f0\ff\7f"
-  "\00\fe\9f\3f\c0\8f\00\00\e4\18\00\c0\06\00\00\20\00\00\00\06\00\00"
-
-  ;; =270 duck2.ppm 28 13
-  "\01\00\f8\77\f8\cf\ff\ff\ff\ef\ef\ff\ff\ff\fc\ff\ff\8f\ff\ff\ff\f0\ff\7f"
-  "\00\fe\9f\3f\c0\8f\00\00\9c\1b\00\c0\00\00\00\04\00\00\c0\00\00\00"
-
-  ;; =316 cactus1.ppm 13 26
-  "\e0\00\3e\c0\07\f8\00\1f\e0\03\7c\92\ef\f7\fd\be\df\f7\fb\7e\df\ef\fb\7d"
-  "\ff\7f\ff\c7\3f\c0\07\f8\00\1f\e0\03\7c\80\0f\f0\01\3e\00"
-
-  ;; =359 cactus2.ppm 19 18
-  "\18\60\c0\01\07\4e\bb\70\db\9d\db\ee\dd\76\ef\b6\7b\b7\df\fb\f9\de\07\ff"
-  "\0f\f8\7c\c0\81\03\0e\1c\70\e0\80\03\07\1c\38\e0\c0\01\07"
-
-  ;; =402 cactus3.ppm 28 18
-  "\38\e0\80\81\03\0e\18\b8\ed\b0\81\db\0e\db\b8\ed\b6\bd\db\6e\db\bb\ed\b6"
-  "\bd\db\6e\db\fb\ed\f6\bd\cf\6e\fe\3f\ec\86\e7\c3\6f\18\38\f8\87\81\03\3e"
-  "\18\38\e0\80\81\03\0e\18\38\e0\80\81\03\0e\18"
-
-  ;; =465 cactus4.ppm 9 18
-  "\38\70\e0\c0\bd\7b\f7\ee\dd\fb\f7\fd\f0\81\03\07\0e\1c\38\70\00"
-
-  ;; =486 cactus5.ppm 40 26
-  "\c0\00\00\00\06\e0\01\04\00\0f\e0\01\0e\00\0f\e0\01\0e\00\0f\e0\01\0e\70"
-  "\0f\e0\01\6e\70\0f\e0\01\6e\70\0f\e2\19\6e\70\cf\e7\19\6e\70\cf\e7\19\6e"
-  "\70\cf\e7\d9\7e\70\cf\e7\d9\3e\f2\cf\e7\d9\0e\e3\cf\e7\d9\0e\c3\cf\e7\d9"
-  "\6e\1b\cf\fe\df\6e\1b\ff\fe\cf\6e\1b\7f\f8\c1\6f\1b\0f\e0\81\6f\1b\0f\e0"
-  "\01\ee\1f\0f\e0\01\ce\0f\0f\e0\01\0e\03\0f\e0\01\0e\03\0f\e0\01\0e\03\0f"
-  "\e0\01\0e\03\0f\e0\01\0e\03\0f"
-
-  ;; =616 cloud.ppm 26 8
-  "\00\f8\01\00\30\08\00\20\60\00\c0\40\0e\f0\00\c0\20\00\00\84\00\00\60\f1"
-  "\ff\ff"
-
-  ;; =642 ground1.ppm 32 5
-  "\ff\ff\ff\ff\00\00\00\00\02\00\00\10\c0\00\00\00\00\00\c0\00"
-
-  ;; =662 ground2.ppm 32 5
-  "\ff\ff\ff\ff\00\00\00\00\00\00\00\08\00\00\00\00\10\40\00\00"
-
-  ;; =682 ground3.ppm 32 5
-  "\ff\ff\ff\ff\00\00\00\00\08\30\00\00\00\00\00\40\00\00\00\40"
-
-  ;; =702 bird1.ppm 23 14
-  "\80\01\00\c0\01\00\e0\01\00\e6\01\80\f3\01\e0\fb\01\f8\fd\01\fe\ff\00\c0"
-  "\ff\00\c0\ff\3f\c0\ff\03\c0\ff\07\c0\7f\00\c0\1f\00"
-
-  ;; =743 bird2.ppm 23 16
-  "\30\00\00\1c\00\00\1f\00\c0\0f\00\f0\ff\07\00\fe\07\00\fe\ff\01\fe\1f\00"
-  "\ff\3f\80\ff\03\c0\ff\00\e0\01\00\70\00\00\18\00\00\0c\00\00\02\00"
-
-  ;; =789 numbers 3 5
-  "\6f\7b" ;; 0
-  "\93\74" ;; 1
-  "\e7\73" ;; 2
-  "\e7\79" ;; 3
-  "\ed\49" ;; 4
-  "\cf\79" ;; 5
-  "\c9\7b" ;; 6
-  "\27\49" ;; 7
-  "\ef\7b" ;; 8
-  "\ef\49" ;; 9
-
-  ;; =809 gameover.ppm 50 8
-  "\1e\c7\cc\e3\6c\ef\fd\be\7f\cf\b7\bd\3f\db\fe\0d\db\36\f6\e0\db\f6\6c\db"
-  "\7b\bb\6f\db\b3\6d\ef\cf\b6\6d\c3\f6\8d\fd\db\b6\3d\9f\f3\b6\67\db\f6\38"
-  "\c4\db"
-
-  ;; =859
+  ;; =4
   ;; objects  20 * 9 bytes = 180 bytes
   ;; obstacles x 4
   ;; kind       x  y
@@ -113,7 +23,7 @@
   (i8 1)  (f32 600 55)
   (i8 1)  (f32 900 55)
 
-  ;; =886 dino
+  ;; =31 dino
   (i8 11) (f32 22 50)
 
   ;; ground x 12
@@ -135,7 +45,7 @@
   (i8 6)  (f32 128 40)
   (i8 6)  (f32 256 40)
   (i8 6)  (f32 384 40)
-  ;; end=1039
+  ;; end=184
 
   ;; info  14 * 7 bytes = 98 bytes
   ;;  id anim  img  +4x  y +y *4dx
@@ -153,48 +63,138 @@
   (i8  3    1   10    0  0  0   0)  ;; 11 dino run
   (i8  3    2   20    0  0  0   0)  ;; 12 dino duck
   (i8  3    0    0    0  0  0   0)  ;; 13 dino dead
-  ;; end=1137
+  ;; end=282
 
   ;; random id  3 * 2 bytes = 6 bytes
   (i8 0 6)
   (i8 6 1)
   (i8 7 3)
-  ;; end=1143
+  ;; end=288
 
   ;; anims (y addend)  4 * 4 bytes = 16 bytes
   (i8 0 0 0 0)  ;; 0 none
   (i8 0 0 0 0)  ;; 1 run
   (i8 9 9 9 9)  ;; 2 duck
   (i8 0 0 3 3)  ;; 3 bird
-  ;; end=1159
+  ;; end=304
 
   ;; anims (img addend)  4 * 4 bytes = 16 bytes
   (i8 0  0  0  0)  ;; 0 none
   (i8 0  5  0  5)  ;; 1 run
   (i8 0  5  0  5)  ;; 2 duck
   (i8 0  0  5  5)  ;; 3 bird
-  ;; end=1175
+  ;; end=320
 
   ;; images  17 * 5 bytes = 85 bytes
   ;;   w  h col   data
-  (i8 20 22  83) (i16 4)    ;; dead     = 0
-  (i8 20 22  83) (i16 59)   ;; stand    = 5
-  (i8 20 22  83) (i16 114)  ;; run1     = 10
-  (i8 20 22  83) (i16 169)  ;; run2     = 15
-  (i8 28 13  83) (i16 224)  ;; duck1    = 20
-  (i8 28 13  83) (i16 270)  ;; duck2    = 25
-  (i8 13 26  83) (i16 316)  ;; cactus1  = 30
-  (i8 19 18  83) (i16 359)  ;; cactus2  = 35
-  (i8 28 18  83) (i16 402)  ;; cactus3  = 40
-  (i8  9 18  83) (i16 465)  ;; cactus4  = 45
-  (i8 40 26  83) (i16 486)  ;; cactus5  = 50
-  (i8 26  8 218) (i16 616)  ;; cloud    = 55
-  (i8 32  5  83) (i16 642)  ;; ground1  = 60
-  (i8 32  5  83) (i16 662)  ;; ground2  = 65
-  (i8 32  5  83) (i16 682)  ;; ground3  = 70
-  (i8 23 14  83) (i16 702)  ;; bird1    = 75
-  (i8 23 16  83) (i16 743)  ;; bird2    = 80
-  ;; end=1260
+  (i8 20 22  83) (i16 405)   ;; dead     = 0
+  (i8 20 22  83) (i16 460)   ;; stand    = 5
+  (i8 20 22  83) (i16 515)   ;; run1     = 10
+  (i8 20 22  83) (i16 570)   ;; run2     = 15
+  (i8 28 13  83) (i16 625)   ;; duck1    = 20
+  (i8 28 13  83) (i16 671)   ;; duck2    = 25
+  (i8 13 26  83) (i16 717)   ;; cactus1  = 30
+  (i8 19 18  83) (i16 760)   ;; cactus2  = 35
+  (i8 28 18  83) (i16 803)   ;; cactus3  = 40
+  (i8  9 18  83) (i16 866)   ;; cactus4  = 45
+  (i8 40 26  83) (i16 887)   ;; cactus5  = 50
+  (i8 26  8 218) (i16 1017)  ;; cloud    = 55
+  (i8 32  5  83) (i16 1043)  ;; ground1  = 60
+  (i8 32  5  83) (i16 1063)  ;; ground2  = 65
+  (i8 32  5  83) (i16 1083)  ;; ground3  = 70
+  (i8 23 14  83) (i16 1103)  ;; bird1    = 75
+  (i8 23 16  83) (i16 1144)  ;; bird2    = 80
+  ;; end=405
+
+  ;; =405 dead.ppm 20 22
+  "\00\f8\07\c0\f8\00\ac\0f\c0\f8\00\fc\0f\c0\ff\00\fc\0f\c0\3f\01\3e\10\f0"
+  "\03\c3\ff\70\fe\0b\ff\3f\f0\ff\03\fe\1f\c0\ff\01\f8\0f\00\7f\00\e0\06\00"
+  "\46\00\20\04\00\c6\00"
+
+  ;; =460 stand.ppm 20 22
+  "\00\f8\07\c0\ff\00\ec\0f\c0\ff\00\fc\0f\c0\ff\00\7c\00\c0\3f\01\3e\10\f0"
+  "\03\c3\ff\70\fe\0b\ff\3f\f0\ff\03\fe\1f\c0\ff\01\f8\0f\00\7f\00\e0\06\00"
+  "\46\00\20\04\00\c6\00"
+
+  ;; =515 run1.ppm 20 22
+  "\00\f8\07\c0\ff\00\ec\0f\c0\ff\00\fc\0f\c0\ff\00\7c\00\c0\3f\01\3e\10\f0"
+  "\03\c3\ff\70\fe\0b\ff\3f\f0\ff\03\fe\1f\c0\ff\01\f8\0f\00\7f\00\e0\1c\00"
+  "\06\00\20\00\00\06\00"
+
+  ;; =570 run2.ppm 20 22
+  "\00\f8\07\c0\ff\00\ec\0f\c0\ff\00\fc\0f\c0\ff\00\7c\00\c0\3f\01\3e\10\f0"
+  "\03\c3\ff\70\fe\0b\ff\3f\f0\ff\03\fe\1f\c0\ff\01\f8\0f\00\7f\00\60\06\00"
+  "\4c\00\00\04\00\c0\00"
+
+  ;; =625 duck1.ppm 28 13
+  "\01\00\f8\77\f8\cf\ff\ff\ff\ef\ef\ff\ff\ff\fc\ff\ff\8f\ff\ff\ff\f0\ff\7f"
+  "\00\fe\9f\3f\c0\8f\00\00\e4\18\00\c0\06\00\00\20\00\00\00\06\00\00"
+
+  ;; =671 duck2.ppm 28 13
+  "\01\00\f8\77\f8\cf\ff\ff\ff\ef\ef\ff\ff\ff\fc\ff\ff\8f\ff\ff\ff\f0\ff\7f"
+  "\00\fe\9f\3f\c0\8f\00\00\9c\1b\00\c0\00\00\00\04\00\00\c0\00\00\00"
+
+  ;; =717 cactus1.ppm 13 26
+  "\e0\00\3e\c0\07\f8\00\1f\e0\03\7c\92\ef\f7\fd\be\df\f7\fb\7e\df\ef\fb\7d"
+  "\ff\7f\ff\c7\3f\c0\07\f8\00\1f\e0\03\7c\80\0f\f0\01\3e\00"
+
+  ;; =760 cactus2.ppm 19 18
+  "\18\60\c0\01\07\4e\bb\70\db\9d\db\ee\dd\76\ef\b6\7b\b7\df\fb\f9\de\07\ff"
+  "\0f\f8\7c\c0\81\03\0e\1c\70\e0\80\03\07\1c\38\e0\c0\01\07"
+
+  ;; =803 cactus3.ppm 28 18
+  "\38\e0\80\81\03\0e\18\b8\ed\b0\81\db\0e\db\b8\ed\b6\bd\db\6e\db\bb\ed\b6"
+  "\bd\db\6e\db\fb\ed\f6\bd\cf\6e\fe\3f\ec\86\e7\c3\6f\18\38\f8\87\81\03\3e"
+  "\18\38\e0\80\81\03\0e\18\38\e0\80\81\03\0e\18"
+
+  ;; =866 cactus4.ppm 9 18
+  "\38\70\e0\c0\bd\7b\f7\ee\dd\fb\f7\fd\f0\81\03\07\0e\1c\38\70\00"
+
+  ;; =887 cactus5.ppm 40 26
+  "\c0\00\00\00\06\e0\01\04\00\0f\e0\01\0e\00\0f\e0\01\0e\00\0f\e0\01\0e\70"
+  "\0f\e0\01\6e\70\0f\e0\01\6e\70\0f\e2\19\6e\70\cf\e7\19\6e\70\cf\e7\19\6e"
+  "\70\cf\e7\d9\7e\70\cf\e7\d9\3e\f2\cf\e7\d9\0e\e3\cf\e7\d9\0e\c3\cf\e7\d9"
+  "\6e\1b\cf\fe\df\6e\1b\ff\fe\cf\6e\1b\7f\f8\c1\6f\1b\0f\e0\81\6f\1b\0f\e0"
+  "\01\ee\1f\0f\e0\01\ce\0f\0f\e0\01\0e\03\0f\e0\01\0e\03\0f\e0\01\0e\03\0f"
+  "\e0\01\0e\03\0f\e0\01\0e\03\0f"
+
+  ;; =1017 cloud.ppm 26 8
+  "\00\f8\01\00\30\08\00\20\60\00\c0\40\0e\f0\00\c0\20\00\00\84\00\00\60\f1"
+  "\ff\ff"
+
+  ;; =1043 ground1.ppm 32 5
+  "\ff\ff\ff\ff\00\00\00\00\02\00\00\10\c0\00\00\00\00\00\c0\00"
+
+  ;; =1063 ground2.ppm 32 5
+  "\ff\ff\ff\ff\00\00\00\00\00\00\00\08\00\00\00\00\10\40\00\00"
+
+  ;; =1083 ground3.ppm 32 5
+  "\ff\ff\ff\ff\00\00\00\00\08\30\00\00\00\00\00\40\00\00\00\40"
+
+  ;; =1103 bird1.ppm 23 14
+  "\80\01\00\c0\01\00\e0\01\00\e6\01\80\f3\01\e0\fb\01\f8\fd\01\fe\ff\00\c0"
+  "\ff\00\c0\ff\3f\c0\ff\03\c0\ff\07\c0\7f\00\c0\1f\00"
+
+  ;; =1144 bird2.ppm 23 16
+  "\30\00\00\1c\00\00\1f\00\c0\0f\00\f0\ff\07\00\fe\07\00\fe\ff\01\fe\1f\00"
+  "\ff\3f\80\ff\03\c0\ff\00\e0\01\00\70\00\00\18\00\00\0c\00\00\02\00"
+
+  ;; =1190 numbers 3 5
+  "\6f\7b" ;; 0
+  "\93\74" ;; 1
+  "\e7\73" ;; 2
+  "\e7\79" ;; 3
+  "\ed\49" ;; 4
+  "\cf\79" ;; 5
+  "\c9\7b" ;; 6
+  "\27\49" ;; 7
+  "\ef\7b" ;; 8
+  "\ef\49" ;; 9
+
+  ;; =1210 gameover.ppm 50 8
+  "\1e\c7\cc\e3\6c\ef\fd\be\7f\cf\b7\bd\3f\db\fe\0d\db\36\f6\e0\db\f6\6c\db"
+  "\7b\bb\6f\db\b3\6d\ef\cf\b6\6d\c3\f6\8d\fd\db\b6\3d\9f\f3\b6\67\db\f6\38"
+  "\c4\db"
 )
 
 (func $blit (param $x i32) (param $y i32) (param $w i32) (param $h i32)
@@ -358,7 +358,7 @@
         (i32.const 3) (i32.const 5)
         (i32.const 0xac_000000)
         (i32.add
-          (i32.const 789)
+          (i32.const 1190)
           (i32.shl
             (i32.rem_u (local.get $num) (i32.const 10))
             (i32.const 1)))))
@@ -400,7 +400,7 @@
       (f32.const -1)))
 
   (local.set $input (i32.load8_u (i32.const 0)))
-  (local.set $y (f32.load (i32.const 891)))
+  (local.set $y (f32.load (i32.const 36)))  ;; dino.y
 
   block $done
   block $playing
@@ -418,7 +418,7 @@
       (i32.const 125) (i32.const 33)
       (i32.const 50) (i32.const 8)
       (i32.const 0xac_000000)
-      (i32.const 809))
+      (i32.const 1210))
 
     ;; If any button pressed, reset.
     (if (i32.and
@@ -438,10 +438,10 @@
         (local.set $y (f32.const 50))
 
         ;; reset obstacles
-        (i64.store (i32.const 859) (i64.const 0x5c0000_43960000_01))
-        (i64.store (i32.const 867) (i64.const 0x0000_44160000_01_42))
-        (i64.store (i32.const 875) (i64.const 0x00_44610000_01_425c))
-        (i32.store (i32.const 883) (i32.const 0x0b_425c00))))
+        (i64.store (i32.const 4)  (i64.const 0x5c0000_43960000_01))
+        (i64.store (i32.const 12) (i64.const 0x0000_44160000_01_42))
+        (i64.store (i32.const 20) (i64.const 0x00_44610000_01_425c))
+        (i32.store (i32.const 28) (i32.const 0x0b_425c00))))
 
     (br $done)
 
@@ -496,11 +496,11 @@
   end $done
 
   ;; Update dino id and y-coordinate.
-  (i32.store8 (i32.const 886) (local.get $dino_id))
-  (f32.store (i32.const 891) (local.get $y))
+  (i32.store8 (i32.const 31) (local.get $dino_id))
+  (f32.store (i32.const 36) (local.get $y))
 
   ;; update objects
-  (local.set $obj (i32.const 859))
+  (local.set $obj (i32.const 4))
   (loop $loop
     ;;; Draw and check for collision.
     (if
@@ -512,11 +512,11 @@
           ;; y
           (i32.add
             (i32.trunc_f32_s (f32.load offset=5 (local.get $obj)))
-            (i32.load8_u offset=1143
+            (i32.load8_u offset=288
               (local.tee $anim
                 (i32.add
                   (i32.shl
-                    (i32.load8_u offset=1040
+                    (i32.load8_u offset=185
                       (local.tee $info
                         (i32.mul
                           (local.tee $kind (i32.load8_u (local.get $obj)))
@@ -526,22 +526,22 @@
                     (i32.and (global.get $timer) (i32.const 15))
                     (i32.const 2))))))
           ;; w
-          (i32.load8_u offset=1175
+          (i32.load8_u offset=320
             (local.tee $img
               (i32.add
-                (i32.load8_u offset=1041 (local.get $info))
-                (i32.load8_u offset=1159 (local.get $anim)))))
+                (i32.load8_u offset=186 (local.get $info))
+                (i32.load8_u offset=304 (local.get $anim)))))
           ;; h
-          (i32.load8_u offset=1176 (local.get $img))
+          (i32.load8_u offset=321 (local.get $img))
           ;; color
           ;; TODO: simplify
           (i32.shl
             (i32.sub
               (i32.const 255)
-              (i32.load8_u offset=1177 (local.get $img)))
+              (i32.load8_u offset=322 (local.get $img)))
             (i32.const 24))
           ;; src_addr
-          (i32.load16_u offset=1178 (local.get $img)))
+          (i32.load16_u offset=323 (local.get $img)))
          ;; is a dino
         (i32.ge_u (local.get $kind) (i32.const 10)))
         (then
@@ -556,7 +556,7 @@
           (f32.add
             (f32.load offset=1 (local.get $obj))
             (f32.mul
-              (f32.convert_i32_u (i32.load8_u offset=1045 (local.get $info)))
+              (f32.convert_i32_u (i32.load8_u offset=190 (local.get $info)))
               (global.get $speed))))
         (f32.const -32))
       (then
@@ -570,12 +570,12 @@
                   ;; Pick a random item.
                   (call $random)
                   (f32.convert_i32_u
-                    (i32.load8_u offset=1138
+                    (i32.load8_u offset=283
                       (local.tee $rand_info
                         (i32.shl
-                          (i32.load8_u offset=1039 (local.get $info))
+                          (i32.load8_u offset=184 (local.get $info))
                           (i32.const 1)))))))
-              (i32.load8_u offset=1137 (local.get $rand_info)))))
+              (i32.load8_u offset=282 (local.get $rand_info)))))
 
         ;; Set new object x (stored below).
         (local.set $x
@@ -585,7 +585,7 @@
               (f32.const 352))
             (f32.convert_i32_u
               (i32.shl
-                (i32.load8_u offset=1042
+                (i32.load8_u offset=187
                   (local.tee $kind (i32.mul (local.get $info) (i32.const 7))))
                 (i32.const 3)))))
 
@@ -594,11 +594,11 @@
           (local.get $obj)
           (f32.add
             (f32.convert_i32_u
-              (i32.load8_u offset=1043 (local.get $kind)))
+              (i32.load8_u offset=188 (local.get $kind)))
             (f32.mul
               (call $random)
               (f32.convert_i32_u
-                (i32.load8_u offset=1044 (local.get $kind))))))))
+                (i32.load8_u offset=189 (local.get $kind))))))))
 
     ;; Write object x coordinate.
     (f32.store offset=1 (local.get $obj) (local.get $x))
@@ -607,7 +607,7 @@
     (br_if $loop
       (i32.lt_s
         (local.tee $obj (i32.add (local.get $obj) (i32.const 9)))
-        (i32.const 1039))))
+        (i32.const 184))))
 
   ;; draw score
   (call $number (global.get $score) (i32.const 300) (i32.const 4))
