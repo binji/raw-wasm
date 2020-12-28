@@ -135,46 +135,45 @@
   (i8 6)  (f32 128 40)
   (i8 6)  (f32 256 40)
   (i8 6)  (f32 384 40)
-
   ;; end=1039
-  ;; info  14 * 8 bytes = 112 bytes
 
-  ;;  id anim       img      +4x  y +y *4dx
-  (i8  0    0) (i16  30) (i8  75 46  0   4)  ;;  0 cactus1
-  (i8  0    0) (i16  35) (i8  75 54  0   4)  ;;  1 cactus2
-  (i8  0    0) (i16  40) (i8  75 54  0   4)  ;;  2 cactus3
-  (i8  0    0) (i16  45) (i8  75 54  0   4)  ;;  3 cactus4
-  (i8  0    0) (i16  50) (i8  75 46  0   4)  ;;  4 cactus5
-  (i8  0    3) (i16  75) (i8  75 25 25   5)  ;;  5 bird
-  (i8  1    0) (i16  55) (i8  30 15 25   1)  ;;  6 cloud
-  (i8  2    0) (i16  60) (i8   0 67  0   4)  ;;  7 ground1
-  (i8  2    0) (i16  65) (i8   0 67  0   4)  ;;  8 ground2
-  (i8  2    0) (i16  70) (i8   0 67  0   4)  ;;  9 ground3
-  (i8  3    0) (i16   5) (i8   0  0  0   0)  ;; 10 dino stand
-  (i8  3    1) (i16  10) (i8   0  0  0   0)  ;; 11 dino run
-  (i8  3    2) (i16  20) (i8   0  0  0   0)  ;; 12 dino duck
-  (i8  3    0) (i16   0) (i8   0  0  0   0)  ;; 13 dino dead
-  ;; end=1151
+  ;; info  14 * 7 bytes = 98 bytes
+  ;;  id anim  img  +4x  y +y *4dx
+  (i8  0    0   30   75 46  0   4)  ;;  0 cactus1
+  (i8  0    0   35   75 54  0   4)  ;;  1 cactus2
+  (i8  0    0   40   75 54  0   4)  ;;  2 cactus3
+  (i8  0    0   45   75 54  0   4)  ;;  3 cactus4
+  (i8  0    0   50   75 46  0   4)  ;;  4 cactus5
+  (i8  0    3   75   75 25 25   5)  ;;  5 bird
+  (i8  1    0   55   30 15 25   1)  ;;  6 cloud
+  (i8  2    0   60    0 67  0   4)  ;;  7 ground1
+  (i8  2    0   65    0 67  0   4)  ;;  8 ground2
+  (i8  2    0   70    0 67  0   4)  ;;  9 ground3
+  (i8  3    0    5    0  0  0   0)  ;; 10 dino stand
+  (i8  3    1   10    0  0  0   0)  ;; 11 dino run
+  (i8  3    2   20    0  0  0   0)  ;; 12 dino duck
+  (i8  3    0    0    0  0  0   0)  ;; 13 dino dead
+  ;; end=1137
 
   ;; random id  3 * 2 bytes = 6 bytes
   (i8 0 6)
   (i8 6 1)
   (i8 7 3)
-  ;; end=1157
+  ;; end=1143
 
   ;; anims (y addend)  4 * 4 bytes = 16 bytes
   (i8 0 0 0 0)  ;; 0 none
   (i8 0 0 0 0)  ;; 1 run
   (i8 9 9 9 9)  ;; 2 duck
   (i8 0 0 3 3)  ;; 3 bird
-  ;; end=1173
+  ;; end=1159
 
   ;; anims (img addend)  4 * 4 bytes = 16 bytes
   (i8 0  0  0  0)  ;; 0 none
   (i8 0  5  0  5)  ;; 1 run
   (i8 0  5  0  5)  ;; 2 duck
   (i8 0  0  5  5)  ;; 3 bird
-  ;; end=1189
+  ;; end=1175
 
   ;; images  17 * 5 bytes = 85 bytes
   ;;   w  h col   data
@@ -195,7 +194,7 @@
   (i8 32  5  83) (i16 682)  ;; ground3  = 70
   (i8 23 14  83) (i16 702)  ;; bird1    = 75
   (i8 23 16  83) (i16 743)  ;; bird2    = 80
-  ;; end=1274
+  ;; end=1260
 )
 
 (func $blit (param $x i32) (param $y i32) (param $w i32) (param $h i32)
@@ -513,7 +512,7 @@
           ;; y
           (i32.add
             (i32.trunc_f32_s (f32.load offset=5 (local.get $obj)))
-            (i32.load8_u offset=1157
+            (i32.load8_u offset=1143
               (local.tee $anim
                 (i32.add
                   (i32.shl
@@ -521,28 +520,28 @@
                       (local.tee $info
                         (i32.mul
                           (local.tee $kind (i32.load8_u (local.get $obj)))
-                          (i32.const 8))))
+                          (i32.const 7))))
                     (i32.const 2))
                   (i32.shr_u
                     (i32.and (global.get $timer) (i32.const 15))
                     (i32.const 2))))))
           ;; w
-          (i32.load8_u offset=1189
+          (i32.load8_u offset=1175
             (local.tee $img
               (i32.add
-                (i32.load16_u offset=1041 (local.get $info))
-                (i32.load8_u offset=1173 (local.get $anim)))))
+                (i32.load8_u offset=1041 (local.get $info))
+                (i32.load8_u offset=1159 (local.get $anim)))))
           ;; h
-          (i32.load8_u offset=1190 (local.get $img))
+          (i32.load8_u offset=1176 (local.get $img))
           ;; color
           ;; TODO: simplify
           (i32.shl
             (i32.sub
               (i32.const 255)
-              (i32.load8_u offset=1191 (local.get $img)))
+              (i32.load8_u offset=1177 (local.get $img)))
             (i32.const 24))
           ;; src_addr
-          (i32.load16_u offset=1192 (local.get $img)))
+          (i32.load16_u offset=1178 (local.get $img)))
          ;; is a dino
         (i32.ge_u (local.get $kind) (i32.const 10)))
         (then
@@ -557,7 +556,7 @@
           (f32.add
             (f32.load offset=1 (local.get $obj))
             (f32.mul
-              (f32.convert_i32_u (i32.load8_u offset=1046 (local.get $info)))
+              (f32.convert_i32_u (i32.load8_u offset=1045 (local.get $info)))
               (global.get $speed))))
         (f32.const -32))
       (then
@@ -571,12 +570,12 @@
                   ;; Pick a random item.
                   (call $random)
                   (f32.convert_i32_u
-                    (i32.load8_u offset=1152
+                    (i32.load8_u offset=1138
                       (local.tee $rand_info
                         (i32.shl
                           (i32.load8_u offset=1039 (local.get $info))
                           (i32.const 1)))))))
-              (i32.load8_u offset=1151 (local.get $rand_info)))))
+              (i32.load8_u offset=1137 (local.get $rand_info)))))
 
         ;; Set new object x (stored below).
         (local.set $x
@@ -586,8 +585,8 @@
               (f32.const 352))
             (f32.convert_i32_u
               (i32.shl
-                (i32.load8_u offset=1043
-                  (local.tee $kind (i32.mul (local.get $info) (i32.const 8))))
+                (i32.load8_u offset=1042
+                  (local.tee $kind (i32.mul (local.get $info) (i32.const 7))))
                 (i32.const 3)))))
 
         ;; Write new object y.
@@ -595,11 +594,11 @@
           (local.get $obj)
           (f32.add
             (f32.convert_i32_u
-              (i32.load8_u offset=1044 (local.get $kind)))
+              (i32.load8_u offset=1043 (local.get $kind)))
             (f32.mul
               (call $random)
               (f32.convert_i32_u
-                (i32.load8_u offset=1045 (local.get $kind))))))))
+                (i32.load8_u offset=1044 (local.get $kind))))))))
 
     ;; Write object x coordinate.
     (f32.store offset=1 (local.get $obj) (local.get $x))
