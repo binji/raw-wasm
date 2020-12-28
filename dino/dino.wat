@@ -177,95 +177,91 @@
   (local.set $dst (i32.const 1000))
 
   ;; First pass, decode back-references.
-  (block $exit
-    (loop $loop
-      ;; Read in new bits when the number of bits left is less than 16. This
-      ;; works because we never read more than 7 bits.
-      (if
-        (i32.lt_u (local.get $bits_left) (i32.const 16))
-        (then
-          ;; Read 16 bits into the top of $data_left
-          (local.set $data_left
-            (i32.or
-              (local.get $data_left)
-              (i32.shl
-                (i32.load16_u (local.get $src))
-                (local.get $bits_left))))
-          ;; Add 16 bits to count
-          (local.set $bits_left
-            (i32.add (local.get $bits_left) (i32.const 16)))
-          ;; Increment the src pointer
-          (local.set $src (i32.add (local.get $src) (i32.const 2)))))
+  (loop $loop
+    ;; Read in new bits when the number of bits left is less than 16. This
+    ;; works because we never read more than 7 bits.
+    (if
+      (i32.lt_u (local.get $bits_left) (i32.const 16))
+      (then
+        ;; Read 16 bits into the top of $data_left
+        (local.set $data_left
+          (i32.or
+            (local.get $data_left)
+            (i32.shl
+              (i32.load16_u (local.get $src))
+              (local.get $bits_left))))
+        ;; Add 16 bits to count
+        (local.set $bits_left
+          (i32.add (local.get $bits_left) (i32.const 16)))
+        ;; Increment the src pointer
+        (local.set $src (i32.add (local.get $src) (i32.const 2)))))
 
-      ;; Save bits that were read (masked)
-      (local.set $read_data
-        (i32.and (local.get $data_left)
-          (i32.sub
-            (i32.shl (i32.const 1) (local.get $bits_to_read))
-            (i32.const 1))))
-      ;; Remove bits that were read from $data_left
-      (local.set $data_left
-        (i32.shr_u (local.get $data_left) (local.get $bits_to_read)))
-      ;; Reduce the number of $bits_left
-      (local.set $bits_left
-        (i32.sub (local.get $bits_left) (local.get $bits_to_read)))
+    ;; Save bits that were read (masked)
+    (local.set $read_data
+      (i32.and (local.get $data_left)
+        (i32.sub
+          (i32.shl (i32.const 1) (local.get $bits_to_read))
+          (i32.const 1))))
+    ;; Remove bits that were read from $data_left
+    (local.set $data_left
+      (i32.shr_u (local.get $data_left) (local.get $bits_to_read)))
+    ;; Reduce the number of $bits_left
+    (local.set $bits_left
+      (i32.sub (local.get $bits_left) (local.get $bits_to_read)))
 
-      block $3
-      block $2
-      block $1
-      block $0
-        (br_table $0 $1 $2 $3 (local.get $state))
+    block $2
+    block $3
+    block $goto2
+    block $1
+    block $0
+      (br_table $0 $1 $2 $3 (local.get $state))
 
-      ;; 0: read literal count (7 bits)
-      end $0
-        (if (local.tee $lit_count (local.get $read_data))
-          (then
-            (local.set $state (i32.const 1))
-            (local.set $bits_to_read (i32.const 4)))
-          (else
-            ;; Empty literal block, skip it.
-            (local.set $state (i32.const 2))
-            (local.set $bits_to_read (i32.const 7))))
-        (br $loop)
+    ;; 0: read literal count (7 bits)
+    end $0
+      ;; skip if count is 0
+      (br_if $goto2 (i32.eqz (local.tee $lit_count (local.get $read_data))))
+      (local.set $state (i32.const 1))
+      (local.set $bits_to_read (i32.const 4))
+      (br $loop)
 
-      ;; 1: read literal (4 bits)
-      end $1
-        (i32.store8 (local.get $dst) (local.get $read_data))
-        (local.set $dst (i32.add (local.get $dst) (i32.const 1)))
-        (if
-          (i32.eqz
-            (local.tee $lit_count (i32.sub (local.get $lit_count) (i32.const 1))))
-          (then
-            ;; done with literals
-            (local.set $state (i32.const 2))
-            (local.set $bits_to_read (i32.const 7))))
-        (br $loop)
+    ;; 1: read literal (4 bits)
+    end $1
+      (i32.store8 (local.get $dst) (local.get $read_data))
+      (local.set $dst (i32.add (local.get $dst) (i32.const 1)))
+      (br_if $loop
+        (local.tee $lit_count (i32.sub (local.get $lit_count) (i32.const 1))))
+      ;; fallthrough
 
-      ;; 2: read backreference distance
-      end $2
-        ;; Check for end, since compressed data ends with literals.
-        (br_if $exit (i32.ge_u (local.get $src) (i32.const 878)))
-        (local.set $ref_dist (local.get $read_data))
-        (local.set $state (i32.const 3))
-        (br $loop)
+    end $goto2
+      (local.set $state (i32.const 2))
+      (local.set $bits_to_read (i32.const 7))
+      (br $loop)
 
-      ;; 3: read backreference length
-      end $3
-        (local.set $i (i32.const 0))
-        ;; Copy len bytes from (dst - ref_dist) to dst
-        (loop $copy
-          (i32.store8
-            (local.tee $temp_dst (i32.add (local.get $dst) (local.get $i)))
-            (i32.load8_u (i32.sub (local.get $temp_dst) (local.get $ref_dist))))
+    ;; 3: read backreference length
+    end $3
+      (local.set $i (i32.const 0))
+      ;; Copy len bytes from (dst - ref_dist) to dst
+      (loop $copy
+        (i32.store8
+          (local.tee $temp_dst (i32.add (local.get $dst) (local.get $i)))
+          (i32.load8_u (i32.sub (local.get $temp_dst) (local.get $ref_dist))))
 
-          (br_if $copy
-            (i32.lt_u (local.tee $i (i32.add (local.get $i) (i32.const 1)))
-                      (local.get $read_data))))
+        (br_if $copy
+          (i32.lt_u (local.tee $i (i32.add (local.get $i) (i32.const 1)))
+                    (local.get $read_data))))
 
-        (local.set $dst (i32.add (local.get $dst) (local.get $read_data)))
-        (local.set $state (i32.const 0))
-        (br $loop)
-    ))
+      (local.set $dst (i32.add (local.get $dst) (local.get $read_data)))
+      (local.set $state (i32.const 0))
+      (br $loop)
+
+    ;; 2: read backreference distance
+    end $2
+      ;; Check for end, since compressed data ends with literals.
+      (local.set $ref_dist (local.get $read_data))
+      (local.set $state (i32.const 3))
+      (br_if $loop (i32.lt_u (local.get $src) (i32.const 878)))
+      ;; fall out of loop
+  )
 
   ;; Second pass, decode 1bpp runs
   (local.set $src (i32.const 1000))
