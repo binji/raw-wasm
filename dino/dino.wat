@@ -165,9 +165,10 @@
   (local $lit_count i32)    ;; number of 4-bit literals to read
   (local $ref_dist i32)     ;; backreference distance
   (local $ref_len i32)      ;; backreference length
-  (local $copy_src i32)     ;; backreference copy source
+  (local $i i32)            ;; index
   (local $src i32)
   (local $dst i32)
+  (local $temp_dst i32)
   (local $state i32) ;; see below
 
   (local $run_count i32)    ;; number of bits in this run
@@ -258,16 +259,18 @@
 
       ;; 3: read backreference length
       end $3
-        (local.set $ref_len (local.get $read_data))
+        (local.set $i (i32.const 0))
         ;; Copy len bytes from (dst - ref_dist) to dst
-        (local.set $copy_src (i32.sub (local.get $dst) (local.get $ref_dist)))
         (loop $copy
-          (i32.store8 (local.get $dst) (i32.load8_u (local.get $copy_src)))
-          (local.set $copy_src (i32.add (local.get $copy_src) (i32.const 1)))
-          (local.set $dst (i32.add (local.get $dst) (i32.const 1)))
+          (i32.store8
+            (local.tee $temp_dst (i32.add (local.get $dst) (local.get $i)))
+            (i32.load8_u (i32.sub (local.get $temp_dst) (local.get $ref_dist))))
 
           (br_if $copy
-            (local.tee $ref_len (i32.sub (local.get $ref_len) (i32.const 1)))))
+            (i32.lt_u (local.tee $i (i32.add (local.get $i) (i32.const 1)))
+                      (local.get $read_data))))
+
+        (local.set $dst (i32.add (local.get $dst) (local.get $read_data)))
         (local.set $state (i32.const 0))
         (br $loop)
     ))
