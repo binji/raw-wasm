@@ -159,8 +159,6 @@
   (local $data_left i32)    ;; rest of currently read byte
   (local $bits_left i32)    ;; number of bits available
   (local $bits_to_read i32) ;; number of bits to read
-  (local $temp_bits_to_read i32)
-  (local $read_shift i32)   ;; amount to shift the masked bytes
   (local $read_data i32)    ;; currently read value
   (local $lit_count i32)    ;; number of 4-bit literals to read
   (local $ref_dist i32)     ;; backreference distance
@@ -181,42 +179,36 @@
   ;; First pass, decode back-references.
   (block $exit
     (loop $loop
+      ;; Read in new bits when the number of bits left is less than 16. This
+      ;; works because we never read more than 7 bits.
       (if
-        (i32.lt_u (local.get $bits_left) (local.get $bits_to_read))
+        (i32.lt_u (local.get $bits_left) (i32.const 16))
         (then
-          ;; Use as many bits as are available.
-          (local.set $read_data (local.get $data_left))
-          (local.set $read_shift (local.get $bits_left))
-          ;; Decrement the number of bits read.
-          (local.set $temp_bits_to_read
-            (i32.sub (local.get $bits_to_read) (local.get $bits_left)))
-          ;; Read the next 32 bits
-          (local.set $data_left (i32.load (local.get $src)))
-          (local.set $bits_left (i32.const 32))
+          ;; Read 16 bits into the top of $data_left
+          (local.set $data_left
+            (i32.or
+              (local.get $data_left)
+              (i32.shl
+                (i32.load16_u (local.get $src))
+                (local.get $bits_left))))
+          ;; Add 16 bits to count
+          (local.set $bits_left
+            (i32.add (local.get $bits_left) (i32.const 16)))
           ;; Increment the src pointer
-          (local.set $src (i32.add (local.get $src) (i32.const 4))))
-        (else
-          (local.set $read_shift (i32.const 0))
-          (local.set $read_data (i32.const 0))
-          (local.set $temp_bits_to_read (local.get $bits_to_read))
-          ))
+          (local.set $src (i32.add (local.get $src) (i32.const 2)))))
 
       ;; Save bits that were read (masked)
       (local.set $read_data
-        (i32.or
-          (local.get $read_data)
-          (i32.shl
-            (i32.and (local.get $data_left)
-              (i32.sub
-                (i32.shl (i32.const 1) (local.get $temp_bits_to_read))
-                (i32.const 1)))
-            (local.get $read_shift))))
+        (i32.and (local.get $data_left)
+          (i32.sub
+            (i32.shl (i32.const 1) (local.get $bits_to_read))
+            (i32.const 1))))
       ;; Remove bits that were read from $data_left
       (local.set $data_left
-        (i32.shr_u (local.get $data_left) (local.get $temp_bits_to_read)))
+        (i32.shr_u (local.get $data_left) (local.get $bits_to_read)))
       ;; Reduce the number of $bits_left
       (local.set $bits_left
-        (i32.sub (local.get $bits_left) (local.get $temp_bits_to_read)))
+        (i32.sub (local.get $bits_left) (local.get $bits_to_read)))
 
       block $3
       block $2
