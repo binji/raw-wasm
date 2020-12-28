@@ -80,23 +80,23 @@
 
   ;; images  17 * 5 bytes = 85 bytes
   ;;   w  h col   data
-  (i8 20 22  83) (i16 2471)  ;; dead     = 0
-  (i8 20 22  83) (i16 2911)  ;; stand    = 5
-  (i8 20 22  83) (i16 3351)  ;; run1     = 10
-  (i8 20 22  83) (i16 3791)  ;; run2     = 15
-  (i8 28 13  83) (i16 4231)  ;; duck1    = 20
-  (i8 28 13  83) (i16 4595)  ;; duck2    = 25
-  (i8 13 26  83) (i16 4959)  ;; cactus1  = 30
-  (i8 19 18  83) (i16 5297)  ;; cactus2  = 35
-  (i8 28 18  83) (i16 5639)  ;; cactus3  = 40
-  (i8  9 18  83) (i16 6143)  ;; cactus4  = 45
-  (i8 40 26  83) (i16 6305)  ;; cactus5  = 50
-  (i8 26  8 218) (i16 7345)  ;; cloud    = 55
-  (i8 64  5  83) (i16 7553)  ;; ground1  = 60
-  (i8 64  5  83) (i16 7873)  ;; ground2  = 65
-  (i8 64  5  83) (i16 8193)  ;; ground3  = 70
-  (i8 23 14  83) (i16 8513)  ;; bird1    = 75
-  (i8 23 16  83) (i16 8835)  ;; bird2    = 80
+  (i8 20 22 172) (i16 2471)  ;; dead     = 0
+  (i8 20 22 172) (i16 2911)  ;; stand    = 5
+  (i8 20 22 172) (i16 3351)  ;; run1     = 10
+  (i8 20 22 172) (i16 3791)  ;; run2     = 15
+  (i8 28 13 172) (i16 4231)  ;; duck1    = 20
+  (i8 28 13 172) (i16 4595)  ;; duck2    = 25
+  (i8 13 26 172) (i16 4959)  ;; cactus1  = 30
+  (i8 19 18 172) (i16 5297)  ;; cactus2  = 35
+  (i8 28 18 172) (i16 5639)  ;; cactus3  = 40
+  (i8  9 18 172) (i16 6143)  ;; cactus4  = 45
+  (i8 40 26 172) (i16 6305)  ;; cactus5  = 50
+  (i8 26  8  37) (i16 7345)  ;; cloud    = 55
+  (i8 64  5 172) (i16 7553)  ;; ground1  = 60
+  (i8 64  5 172) (i16 7873)  ;; ground2  = 65
+  (i8 64  5 172) (i16 8193)  ;; ground3  = 70
+  (i8 23 14 172) (i16 8513)  ;; bird1    = 75
+  (i8 23 16 172) (i16 8835)  ;; bird2    = 80
   ;; end=351
 
   ;; compressed graphics data
@@ -349,7 +349,8 @@
                 (i32.const -1))))
           ;; set new pixel
           (i32.store offset=0x5000
-            (local.get $tmp_dst_addr) (local.get $color))))
+            (local.get $tmp_dst_addr)
+            (i32.shl (local.get $color) (i32.const 24)))))
 
       ;; loop while (++ix < w)
       (br_if $xloop
@@ -369,25 +370,6 @@
   (local.get $hit)
 )
 
-(func $number (param $num i32) (param $x i32) (param $y i32)
-  (loop $loop
-    (drop
-      (call $blit
-        (local.tee $x
-          (i32.sub
-            (local.get $x)
-            (i32.const 4)))
-        (local.get $y)
-        (i32.const 3) (i32.const 5)
-        (i32.const 0xac_000000)
-        (i32.add
-          (i32.const 9203)
-          (i32.mul
-            (i32.rem_u (local.get $num) (i32.const 10))
-            (i32.const 15)))))
-    (br_if $loop (local.tee $num (i32.div_u (local.get $num) (i32.const 10)))))
-)
-
 (func (export "run")
   (local $i i32)
   (local $obj i32)
@@ -398,6 +380,10 @@
   (local $img i32)
   (local $info i32)
   (local $rand_info i32)
+
+  (local $ix i32)
+  (local $iy i32)
+  (local $num i32)
 
   (local $x f32)
   (local $y f32)
@@ -438,9 +424,13 @@
     (global.set $speed (f32.const 0))
     ;; GAME OVER
     (call $blit
+      ;; x y
       (i32.const 125) (i32.const 33)
+      ;; w h
       (i32.const 50) (i32.const 8)
-      (i32.const 0xac_000000)
+      ;; color
+      (i32.const 172)
+      ;; data
       (i32.const 9353))
 
     ;; If any button pressed, reset.
@@ -557,12 +547,7 @@
           ;; h
           (i32.load8_u offset=267 (local.get $img))
           ;; color
-          ;; TODO: simplify
-          (i32.shl
-            (i32.sub
-              (i32.const 255)
-              (i32.load8_u offset=268 (local.get $img)))
-            (i32.const 24))
+          (i32.load8_u offset=268 (local.get $img))
           ;; src_addr
           (i32.load16_u offset=269 (local.get $img)))
          ;; is a dino
@@ -633,5 +618,26 @@
         (i32.const 130))))
 
   ;; draw score
-  (call $number (global.get $score) (i32.const 300) (i32.const 4))
+  (local.set $num (global.get $score))
+  (local.set $ix (i32.const 300))
+  (loop $loop
+    (drop
+      (call $blit
+        ;; x
+        (local.tee $ix
+          (i32.sub
+            (local.get $ix)
+            (i32.const 4)))
+        ;; y
+        (i32.const 4)
+        ;; w, h
+        (i32.const 3) (i32.const 5)
+        ;; color
+        (i32.const 172)
+        (i32.add
+          (i32.const 9203)
+          (i32.mul
+            (i32.rem_u (local.get $num) (i32.const 10))
+            (i32.const 15)))))
+    (br_if $loop (local.tee $num (i32.div_u (local.get $num) (i32.const 10)))))
 )
