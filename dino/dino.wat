@@ -80,23 +80,23 @@
 
   ;; images  17 * 5 bytes = 85 bytes
   ;;   w  h col   data
-  (i8 20 22  83) (i16 2592)  ;; dead     = 0
-  (i8 20 22  83) (i16 3032)  ;; stand    = 5
-  (i8 20 22  83) (i16 3472)  ;; run1     = 10
-  (i8 20 22  83) (i16 3912)  ;; run2     = 15
-  (i8 28 13  83) (i16 4352)  ;; duck1    = 20
-  (i8 28 13  83) (i16 4716)  ;; duck2    = 25
-  (i8 13 26  83) (i16 5080)  ;; cactus1  = 30
-  (i8 19 18  83) (i16 5418)  ;; cactus2  = 35
-  (i8 28 18  83) (i16 5760)  ;; cactus3  = 40
-  (i8  9 18  83) (i16 6264)  ;; cactus4  = 45
-  (i8 40 26  83) (i16 6426)  ;; cactus5  = 50
-  (i8 26  8 218) (i16 7466)  ;; cloud    = 55
-  (i8 64  5  83) (i16 7674)  ;; ground1  = 60
-  (i8 64  5  83) (i16 7994)  ;; ground2  = 65
-  (i8 64  5  83) (i16 8314)  ;; ground3  = 70
-  (i8 23 14  83) (i16 8634)  ;; bird1    = 75
-  (i8 23 16  83) (i16 8956)  ;; bird2    = 80
+  (i8 20 22  83) (i16 2471)  ;; dead     = 0
+  (i8 20 22  83) (i16 2911)  ;; stand    = 5
+  (i8 20 22  83) (i16 3351)  ;; run1     = 10
+  (i8 20 22  83) (i16 3791)  ;; run2     = 15
+  (i8 28 13  83) (i16 4231)  ;; duck1    = 20
+  (i8 28 13  83) (i16 4595)  ;; duck2    = 25
+  (i8 13 26  83) (i16 4959)  ;; cactus1  = 30
+  (i8 19 18  83) (i16 5297)  ;; cactus2  = 35
+  (i8 28 18  83) (i16 5639)  ;; cactus3  = 40
+  (i8  9 18  83) (i16 6143)  ;; cactus4  = 45
+  (i8 40 26  83) (i16 6305)  ;; cactus5  = 50
+  (i8 26  8 218) (i16 7345)  ;; cloud    = 55
+  (i8 64  5  83) (i16 7553)  ;; ground1  = 60
+  (i8 64  5  83) (i16 7873)  ;; ground2  = 65
+  (i8 64  5  83) (i16 8193)  ;; ground3  = 70
+  (i8 23 14  83) (i16 8513)  ;; bird1    = 75
+  (i8 23 16  83) (i16 8835)  ;; bird2    = 80
   ;; end=351
 
   ;; compressed graphics data
@@ -122,36 +122,39 @@
   "\09\89\a0\99\11\11\a1\19\91\90\a0\a0\30\d0\41\50\21\31\08\4e\72\06\02\86"
   "\d0\f0\70\08\19\09\2a\91\61\20\41\a2\03\00\68\20\48\4c\68\28\00\24\02\20"
   "\38\30\48\42\a2\42\46\02\31\8b\03\49\c9\08\f9\1e\0d\09\9a\a1\18\0a\09\01"
-  ;; end=879
+  ;; end=879 (size=528)
 
-  ;; dead.ppm => 2592
-  ;; stand.ppm => 3032
-  ;; run1.ppm => 3472
-  ;; run2.ppm => 3912
-  ;; duck1.ppm => 4352
-  ;; duck2.ppm => 4716
-  ;; cactus1.ppm => 5080
-  ;; cactus2.ppm => 5418
-  ;; cactus3.ppm => 5760
-  ;; cactus4.ppm => 6264
-  ;; cactus5.ppm => 6426
-  ;; cloud.ppm => 7466
-  ;; ground1b.ppm => 7674
-  ;; ground2b.ppm => 7994
-  ;; ground3b.ppm => 8314
-  ;; bird1.ppm => 8634
-  ;; bird2.ppm => 8956
-  ;; 0.ppm => 9324
-  ;; 1.ppm => 9339
-  ;; 2.ppm => 9354
-  ;; 3.ppm => 9369
-  ;; 4.ppm => 9384
-  ;; 5.ppm => 9399
-  ;; 6.ppm => 9414
-  ;; 7.ppm => 9429
-  ;; 8.ppm => 9444
-  ;; 9.ppm => 9459
-  ;; gameover.ppm => 9474
+  ;; first pass decompressed output [879, 2471)
+  ;; second pass decompressed ouput [2471, 9751)
+
+  ;; dead.ppm => 2471
+  ;; stand.ppm => 2911
+  ;; run1.ppm => 3351
+  ;; run2.ppm => 3791
+  ;; duck1.ppm => 4231
+  ;; duck2.ppm => 4595
+  ;; cactus1.ppm => 4959
+  ;; cactus2.ppm => 5297
+  ;; cactus3.ppm => 5639
+  ;; cactus4.ppm => 6143
+  ;; cactus5.ppm => 6305
+  ;; cloud.ppm => 7345
+  ;; ground1b.ppm => 7553
+  ;; ground2b.ppm => 7873
+  ;; ground3b.ppm => 8193
+  ;; bird1.ppm => 8513
+  ;; bird2.ppm => 8835
+  ;; 0.ppm => 9203
+  ;; 1.ppm => 9218
+  ;; 2.ppm => 9233
+  ;; 3.ppm => 9248
+  ;; 4.ppm => 9263
+  ;; 5.ppm => 9278
+  ;; 6.ppm => 9293
+  ;; 7.ppm => 9308
+  ;; 8.ppm => 9323
+  ;; 9.ppm => 9338
+  ;; gameover.ppm => 9353
 )
 
 (start $decompress)
@@ -162,19 +165,17 @@
   (local $read_data i32)    ;; currently read value
   (local $lit_count i32)    ;; number of 4-bit literals to read
   (local $ref_dist i32)     ;; backreference distance
-  (local $ref_len i32)      ;; backreference length
   (local $i i32)            ;; index
   (local $src i32)
   (local $dst i32)
   (local $temp_dst i32)
-  (local $state i32) ;; see below
+  (local $state i32)        ;; see below
 
   (local $run_count i32)    ;; number of bits in this run
   (local $run_byte i32)     ;; byte to write
 
   (local.set $bits_to_read (i32.const 7))
-  (local.set $src (i32.const 351))
-  (local.set $dst (i32.const 1000))
+  (local.set $dst (i32.const 879))
 
   ;; First pass, decode back-references.
   (loop $loop
@@ -188,7 +189,7 @@
           (i32.or
             (local.get $data_left)
             (i32.shl
-              (i32.load16_u (local.get $src))
+              (i32.load16_u offset=351 (local.get $src))
               (local.get $bits_left))))
         ;; Add 16 bits to count
         (local.set $bits_left
@@ -259,15 +260,15 @@
       ;; Check for end, since compressed data ends with literals.
       (local.set $ref_dist (local.get $read_data))
       (local.set $state (i32.const 3))
-      (br_if $loop (i32.lt_u (local.get $src) (i32.const 878)))
+      (br_if $loop (i32.lt_u (local.get $src) (i32.const 528)))
       ;; fall out of loop
   )
 
   ;; Second pass, decode 1bpp runs
-  (local.set $src (i32.const 1000))
-  (local.set $dst (i32.const 2592))
+  ;; $src == 530
+  ;; $dst == 2471
   (loop $loop
-    (if (local.tee $run_count (i32.load8_u (local.get $src)))
+    (if (local.tee $run_count (i32.load8_u offset=349 (local.get $src)))
       (then
         (loop $byte_loop
           (i32.store8 (local.get $dst) (local.get $run_byte))
@@ -281,7 +282,7 @@
     (br_if $loop
       (i32.lt_u
         (local.tee $src (i32.add (local.get $src) (i32.const 1)))
-        (i32.const 2592))))
+        (i32.const 2122))))
 )
 
 (func $blit
@@ -380,7 +381,7 @@
         (i32.const 3) (i32.const 5)
         (i32.const 0xac_000000)
         (i32.add
-          (i32.const 9324)
+          (i32.const 9203)
           (i32.mul
             (i32.rem_u (local.get $num) (i32.const 10))
             (i32.const 15)))))
@@ -440,7 +441,7 @@
       (i32.const 125) (i32.const 33)
       (i32.const 50) (i32.const 8)
       (i32.const 0xac_000000)
-      (i32.const 9474))
+      (i32.const 9353))
 
     ;; If any button pressed, reset.
     (if (i32.and
