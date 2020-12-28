@@ -1,11 +1,10 @@
 (import "Math" "random" (func $random (result f32)))
 
-;; 0x0                Left
-;; 0x1                Right
-;; 0x2                Up
-;; 0x3                Down
-;; [0x4, 0x0743)      Image data
-;; [0x3000, 0x19000)  Color[300*75]  canvas
+;; 0x0                Input: 1=up, 2=down, 3=up+down
+;; [0x4, 913)         See below
+;; [1000, 2520)       Decompressed 1-bit runs
+;; [2520, 9320)       Decompressed graphics @ 8bpp
+;; [0x5000, 0x1c000)  Color[300*75]  canvas
 (memory (export "mem") 2)
 
 (global $timer (mut i32) (i32.const 0))
@@ -87,164 +86,248 @@
 
   ;; images  17 * 5 bytes = 85 bytes
   ;;   w  h col   data
-  (i8 20 22  83) (i16 405)   ;; dead     = 0
-  (i8 20 22  83) (i16 460)   ;; stand    = 5
-  (i8 20 22  83) (i16 515)   ;; run1     = 10
-  (i8 20 22  83) (i16 570)   ;; run2     = 15
-  (i8 28 13  83) (i16 625)   ;; duck1    = 20
-  (i8 28 13  83) (i16 671)   ;; duck2    = 25
-  (i8 13 26  83) (i16 717)   ;; cactus1  = 30
-  (i8 19 18  83) (i16 760)   ;; cactus2  = 35
-  (i8 28 18  83) (i16 803)   ;; cactus3  = 40
-  (i8  9 18  83) (i16 866)   ;; cactus4  = 45
-  (i8 40 26  83) (i16 887)   ;; cactus5  = 50
-  (i8 26  8 218) (i16 1017)  ;; cloud    = 55
-  (i8 32  5  83) (i16 1043)  ;; ground1  = 60
-  (i8 32  5  83) (i16 1063)  ;; ground2  = 65
-  (i8 32  5  83) (i16 1083)  ;; ground3  = 70
-  (i8 23 14  83) (i16 1103)  ;; bird1    = 75
-  (i8 23 16  83) (i16 1144)  ;; bird2    = 80
+  (i8 20 22  83) (i16 2520)  ;; dead     = 0
+  (i8 20 22  83) (i16 2960)  ;; stand    = 5
+  (i8 20 22  83) (i16 3400)  ;; run1     = 10
+  (i8 20 22  83) (i16 3840)  ;; run2     = 15
+  (i8 28 13  83) (i16 4280)  ;; duck1    = 20
+  (i8 28 13  83) (i16 4644)  ;; duck2    = 25
+  (i8 13 26  83) (i16 5008)  ;; cactus1  = 30
+  (i8 19 18  83) (i16 5346)  ;; cactus2  = 35
+  (i8 28 18  83) (i16 5688)  ;; cactus3  = 40
+  (i8  9 18  83) (i16 6192)  ;; cactus4  = 45
+  (i8 40 26  83) (i16 6354)  ;; cactus5  = 50
+  (i8 26  8 218) (i16 7394)  ;; cloud    = 55
+  (i8 32  5  83) (i16 7602)  ;; ground1  = 60
+  (i8 32  5  83) (i16 7762)  ;; ground2  = 65
+  (i8 32  5  83) (i16 7922)  ;; ground3  = 70
+  (i8 23 14  83) (i16 8082)  ;; bird1    = 75
+  (i8 23 16  83) (i16 8404)  ;; bird2    = 80
   ;; end=405
 
-  ;; =405 dead.ppm 20 22
-  "\00\f8\07\c0\f8\00\ac\0f\c0\f8\00\fc\0f\c0\ff\00\fc\0f\c0\3f\01\3e\10\f0"
-  "\03\c3\ff\70\fe\0b\ff\3f\f0\ff\03\fe\1f\c0\ff\01\f8\0f\00\7f\00\e0\06\00"
-  "\46\00\20\04\00\c6\00"
+  ;; compressed graphics data
+  "\91\c5\95\29\95\88\28\95\29\0d\18\72\28\81\65\71\66\42\4a\23\19\41\6e\7e"
+  "\9c\ab\c9\e7\13\e2\32\e1\41\e1\32\f2\40\b8\aa\12\07\3c\08\ea\85\e3\87\0c"
+  "\cb\c3\c4\03\c9\43\02\61\48\11\79\91\78\a0\78\20\c1\78\18\8c\a1\94\87\8f"
+  "\8b\07\96\87\9d\07\a5\07\52\96\43\9b\78\98\90\19\79\10\09\79\d8\d4\21\20"
+  "\40\15\62\64\42\1e\c4\b7\28\e8\64\a1\20\91\90\90\90\0a\0b\82\a6\f0\b1\83"
+  "\32\05\40\60\e8\9c\a0\dc\dc\d8\48\84\c4\44\d0\84\84\c4\c4\88\02\21\a0\50"
+  "\60\2a\16\14\26\15\14\55\7c\25\75\63\43\d0\08\4e\0c\08\80\d1\30\20\09\46"
+  "\63\10\32\60\44\41\42\42\e0\0b\00\04\15\30\c7\c1\55\41\51\22\31\21\d2\24"
+  "\31\21\44\52\64\21\24\36\85\24\36\57\25\36\37\67\a8\00\04\86\41\50\10\20"
+  "\07\8c\0a\a3\12\21\2a\36\36\29\0f\2a\4a\19\4d\49\38\6c\58\2c\70\82\92\70"
+  "\42\4a\d1\38\54\0c\89\90\e3\30\90\12\c7\87\10\12\e6\68\14\6a\42\d0\91\28"
+  "\0c\c9\9c\83\21\20\73\28\18\21\21\21\43\22\c1\90\05\01\63\c5\a1\28\1c\59"
+  "\99\0a\41\48\b2\62\28\08\38\81\08\c3\42\8c\28\09\87\c4\10\21\dd\db\03\49"
+  "\c5\83\c4\c9\8b\85\0c\92\4b\c5\43\05\c5\83\49\c4\3c\3c\3c\dc\c3\c3\c4\c3"
+  "\46\ca\c4\70\08\c1\87\07\c7\41\e1\f1\f0\a0\91\31\39\20\e4\e1\a1\02\41\87"
+  "\e2\c4\c3\43\04\ca\83\cd\43\d1\43\88\90\8f\14\57\98\5a\1c\be\ab\3f\04\32"
+  "\f7\e6\5f\ca\43\cd\03\d5\83\d8\43\80\12\c0\f5\5c\d6\a6\07\9a\87\92\07\93"
+  "\07\0b\a7\90\90\30\09\09\89\30\29\31\21\a9\90\20\09\29\19\41\a1\38\90\41"
+  "\24\15\15\18\24\21\11\34\33\22\22\34\23\12\12\14\14\06\3a\08\2a\24\06\c1"
+  "\49\ce\40\c0\10\1a\1e\0e\21\23\41\25\32\0c\24\48\74\00\00\0d\04\89\09\0d"
+  "\05\80\44\00\04\07\06\49\48\54\c8\48\20\66\71\20\29\19\21\df\a3\21\41\33"
+  "\14\43\21\21"
+  ;; end=913
 
-  ;; =460 stand.ppm 20 22
-  "\00\f8\07\c0\ff\00\ec\0f\c0\ff\00\fc\0f\c0\ff\00\7c\00\c0\3f\01\3e\10\f0"
-  "\03\c3\ff\70\fe\0b\ff\3f\f0\ff\03\fe\1f\c0\ff\01\f8\0f\00\7f\00\e0\06\00"
-  "\46\00\20\04\00\c6\00"
-
-  ;; =515 run1.ppm 20 22
-  "\00\f8\07\c0\ff\00\ec\0f\c0\ff\00\fc\0f\c0\ff\00\7c\00\c0\3f\01\3e\10\f0"
-  "\03\c3\ff\70\fe\0b\ff\3f\f0\ff\03\fe\1f\c0\ff\01\f8\0f\00\7f\00\e0\1c\00"
-  "\06\00\20\00\00\06\00"
-
-  ;; =570 run2.ppm 20 22
-  "\00\f8\07\c0\ff\00\ec\0f\c0\ff\00\fc\0f\c0\ff\00\7c\00\c0\3f\01\3e\10\f0"
-  "\03\c3\ff\70\fe\0b\ff\3f\f0\ff\03\fe\1f\c0\ff\01\f8\0f\00\7f\00\60\06\00"
-  "\4c\00\00\04\00\c0\00"
-
-  ;; =625 duck1.ppm 28 13
-  "\01\00\f8\77\f8\cf\ff\ff\ff\ef\ef\ff\ff\ff\fc\ff\ff\8f\ff\ff\ff\f0\ff\7f"
-  "\00\fe\9f\3f\c0\8f\00\00\e4\18\00\c0\06\00\00\20\00\00\00\06\00\00"
-
-  ;; =671 duck2.ppm 28 13
-  "\01\00\f8\77\f8\cf\ff\ff\ff\ef\ef\ff\ff\ff\fc\ff\ff\8f\ff\ff\ff\f0\ff\7f"
-  "\00\fe\9f\3f\c0\8f\00\00\9c\1b\00\c0\00\00\00\04\00\00\c0\00\00\00"
-
-  ;; =717 cactus1.ppm 13 26
-  "\e0\00\3e\c0\07\f8\00\1f\e0\03\7c\92\ef\f7\fd\be\df\f7\fb\7e\df\ef\fb\7d"
-  "\ff\7f\ff\c7\3f\c0\07\f8\00\1f\e0\03\7c\80\0f\f0\01\3e\00"
-
-  ;; =760 cactus2.ppm 19 18
-  "\18\60\c0\01\07\4e\bb\70\db\9d\db\ee\dd\76\ef\b6\7b\b7\df\fb\f9\de\07\ff"
-  "\0f\f8\7c\c0\81\03\0e\1c\70\e0\80\03\07\1c\38\e0\c0\01\07"
-
-  ;; =803 cactus3.ppm 28 18
-  "\38\e0\80\81\03\0e\18\b8\ed\b0\81\db\0e\db\b8\ed\b6\bd\db\6e\db\bb\ed\b6"
-  "\bd\db\6e\db\fb\ed\f6\bd\cf\6e\fe\3f\ec\86\e7\c3\6f\18\38\f8\87\81\03\3e"
-  "\18\38\e0\80\81\03\0e\18\38\e0\80\81\03\0e\18"
-
-  ;; =866 cactus4.ppm 9 18
-  "\38\70\e0\c0\bd\7b\f7\ee\dd\fb\f7\fd\f0\81\03\07\0e\1c\38\70\00"
-
-  ;; =887 cactus5.ppm 40 26
-  "\c0\00\00\00\06\e0\01\04\00\0f\e0\01\0e\00\0f\e0\01\0e\00\0f\e0\01\0e\70"
-  "\0f\e0\01\6e\70\0f\e0\01\6e\70\0f\e2\19\6e\70\cf\e7\19\6e\70\cf\e7\19\6e"
-  "\70\cf\e7\d9\7e\70\cf\e7\d9\3e\f2\cf\e7\d9\0e\e3\cf\e7\d9\0e\c3\cf\e7\d9"
-  "\6e\1b\cf\fe\df\6e\1b\ff\fe\cf\6e\1b\7f\f8\c1\6f\1b\0f\e0\81\6f\1b\0f\e0"
-  "\01\ee\1f\0f\e0\01\ce\0f\0f\e0\01\0e\03\0f\e0\01\0e\03\0f\e0\01\0e\03\0f"
-  "\e0\01\0e\03\0f\e0\01\0e\03\0f"
-
-  ;; =1017 cloud.ppm 26 8
-  "\00\f8\01\00\30\08\00\20\60\00\c0\40\0e\f0\00\c0\20\00\00\84\00\00\60\f1"
-  "\ff\ff"
-
-  ;; =1043 ground1.ppm 32 5
-  "\ff\ff\ff\ff\00\00\00\00\02\00\00\10\c0\00\00\00\00\00\c0\00"
-
-  ;; =1063 ground2.ppm 32 5
-  "\ff\ff\ff\ff\00\00\00\00\00\00\00\08\00\00\00\00\10\40\00\00"
-
-  ;; =1083 ground3.ppm 32 5
-  "\ff\ff\ff\ff\00\00\00\00\08\30\00\00\00\00\00\40\00\00\00\40"
-
-  ;; =1103 bird1.ppm 23 14
-  "\80\01\00\c0\01\00\e0\01\00\e6\01\80\f3\01\e0\fb\01\f8\fd\01\fe\ff\00\c0"
-  "\ff\00\c0\ff\3f\c0\ff\03\c0\ff\07\c0\7f\00\c0\1f\00"
-
-  ;; =1144 bird2.ppm 23 16
-  "\30\00\00\1c\00\00\1f\00\c0\0f\00\f0\ff\07\00\fe\07\00\fe\ff\01\fe\1f\00"
-  "\ff\3f\80\ff\03\c0\ff\00\e0\01\00\70\00\00\18\00\00\0c\00\00\02\00"
-
-  ;; =1190 numbers 3 5
-  "\6f\7b" ;; 0
-  "\93\74" ;; 1
-  "\e7\73" ;; 2
-  "\e7\79" ;; 3
-  "\ed\49" ;; 4
-  "\cf\79" ;; 5
-  "\c9\7b" ;; 6
-  "\27\49" ;; 7
-  "\ef\7b" ;; 8
-  "\ef\49" ;; 9
-
-  ;; =1210 gameover.ppm 50 8
-  "\1e\c7\cc\e3\6c\ef\fd\be\7f\cf\b7\bd\3f\db\fe\0d\db\36\f6\e0\db\f6\6c\db"
-  "\7b\bb\6f\db\b3\6d\ef\cf\b6\6d\c3\f6\8d\fd\db\b6\3d\9f\f3\b6\67\db\f6\38"
-  "\c4\db"
+  ;; uncompressed graphics data
+  ;; dead.ppm => 2520
+  ;; stand.ppm => 2960
+  ;; run1.ppm => 3400
+  ;; run2.ppm => 3840
+  ;; duck1.ppm => 4280
+  ;; duck2.ppm => 4644
+  ;; cactus1.ppm => 5008
+  ;; cactus2.ppm => 5346
+  ;; cactus3.ppm => 5688
+  ;; cactus4.ppm => 6192
+  ;; cactus5.ppm => 6354
+  ;; cloud.ppm => 7394
+  ;; ground1.ppm => 7602
+  ;; ground2.ppm => 7762
+  ;; ground3.ppm => 7922
+  ;; bird1.ppm => 8082
+  ;; bird2.ppm => 8404
+  ;; 0.ppm => 8772
+  ;; 1.ppm => 8787
+  ;; 2.ppm => 8802
+  ;; 3.ppm => 8817
+  ;; 4.ppm => 8832
+  ;; 5.ppm => 8847
+  ;; 6.ppm => 8862
+  ;; 7.ppm => 8877
+  ;; 8.ppm => 8892
+  ;; 9.ppm => 8907
+  ;; gameover.ppm => 8922
 )
 
-(func $blit (param $x i32) (param $y i32) (param $w i32) (param $h i32)
-            (param $color i32) (param $src_addr i32) (result i32)
+(start $decompress)
+(func $decompress
+  (local $data_left i32)    ;; rest of currently read byte
+  (local $bits_left i32)    ;; number of bits available
+  (local $bits_to_read i32) ;; number of bits to read
+  (local $temp_bits_to_read i32)
+  (local $read_shift i32)   ;; amount to shift the masked bytes
+  (local $read_data i32)    ;; currently read value
+  (local $lit_count i32)    ;; number of 4-bit literals to read
+  (local $ref_dist i32)     ;; backreference distance
+  (local $ref_len i32)      ;; backreference length
+  (local $copy_src i32)     ;; backreference copy source
+  (local $src i32)
+  (local $dst i32)
+  (local $state i32) ;; see below
+
+  (local $run_count i32)    ;; number of bits in this run
+  (local $run_byte i32)     ;; byte to write
+
+  (local.set $bits_to_read (i32.const 7))
+  (local.set $src (i32.const 405))
+  (local.set $dst (i32.const 1000))
+
+  ;; First pass, decode back-references.
+  (block $exit
+    (loop $loop
+      (if
+        (i32.lt_u (local.get $bits_left) (local.get $bits_to_read))
+        (then
+          ;; Use as many bits as are available.
+          (local.set $read_data (local.get $data_left))
+          (local.set $read_shift (local.get $bits_left))
+          ;; Decrement the number of bits read.
+          (local.set $temp_bits_to_read
+            (i32.sub (local.get $bits_to_read) (local.get $bits_left)))
+          ;; Read the next 32 bits
+          (local.set $data_left (i32.load (local.get $src)))
+          (local.set $bits_left (i32.const 32))
+          ;; Increment the src pointer
+          (local.set $src (i32.add (local.get $src) (i32.const 4))))
+        (else
+          (local.set $read_shift (i32.const 0))
+          (local.set $read_data (i32.const 0))
+          (local.set $temp_bits_to_read (local.get $bits_to_read))
+          ))
+
+      ;; Save bits that were read (masked)
+      (local.set $read_data
+        (i32.or
+          (local.get $read_data)
+          (i32.shl
+            (i32.and (local.get $data_left)
+              (i32.sub
+                (i32.shl (i32.const 1) (local.get $temp_bits_to_read))
+                (i32.const 1)))
+            (local.get $read_shift))))
+      ;; Remove bits that were read from $data_left
+      (local.set $data_left
+        (i32.shr_u (local.get $data_left) (local.get $temp_bits_to_read)))
+      ;; Reduce the number of $bits_left
+      (local.set $bits_left
+        (i32.sub (local.get $bits_left) (local.get $temp_bits_to_read)))
+
+      block $3
+      block $2
+      block $1
+      block $0
+        (br_table $0 $1 $2 $3 (local.get $state))
+
+      ;; 0: read literal count (7 bits)
+      end $0
+        (if (local.tee $lit_count (local.get $read_data))
+          (then
+            (local.set $state (i32.const 1))
+            (local.set $bits_to_read (i32.const 4)))
+          (else
+            ;; Empty literal block, skip it.
+            (local.set $state (i32.const 2))
+            (local.set $bits_to_read (i32.const 7))))
+        (br $loop)
+
+      ;; 1: read literal (4 bits)
+      end $1
+        (i32.store8 (local.get $dst) (local.get $read_data))
+        (local.set $dst (i32.add (local.get $dst) (i32.const 1)))
+        (if
+          (i32.eqz
+            (local.tee $lit_count (i32.sub (local.get $lit_count) (i32.const 1))))
+          (then
+            ;; done with literals
+            (local.set $state (i32.const 2))
+            (local.set $bits_to_read (i32.const 7))))
+        (br $loop)
+
+      ;; 2: read backreference distance
+      end $2
+        ;; Check for end, since compressed data ends with literals.
+        (br_if $exit (i32.ge_u (local.get $src) (i32.const 908)))
+        (local.set $ref_dist (local.get $read_data))
+        (local.set $state (i32.const 3))
+        (br $loop)
+
+      ;; 3: read backreference length
+      end $3
+        (local.set $ref_len (local.get $read_data))
+        ;; Copy len bytes from (dst - ref_dist) to dst
+        (local.set $copy_src (i32.sub (local.get $dst) (local.get $ref_dist)))
+        (loop $copy
+          (i32.store8 (local.get $dst) (i32.load8_u (local.get $copy_src)))
+          (local.set $copy_src (i32.add (local.get $copy_src) (i32.const 1)))
+          (local.set $dst (i32.add (local.get $dst) (i32.const 1)))
+
+          (br_if $copy
+            (local.tee $ref_len (i32.sub (local.get $ref_len) (i32.const 1)))))
+        (local.set $state (i32.const 0))
+        (br $loop)
+    ))
+
+  ;; Second pass, decode 1bpp runs
+  (local.set $src (i32.const 1000))
+  (local.set $dst (i32.const 2520))
+  (loop $loop
+    (if (local.tee $run_count (i32.load8_u (local.get $src)))
+      (then
+        (loop $byte_loop
+          (i32.store8 (local.get $dst) (local.get $run_byte))
+          (local.set $dst (i32.add (local.get $dst) (i32.const 1)))
+          (br_if $byte_loop
+            (local.tee $run_count
+              (i32.sub (local.get $run_count) (i32.const 1)))))))
+
+    ;; Flip written byte between 0 and 1.
+    (local.set $run_byte (i32.eqz (local.get $run_byte)))
+    (br_if $loop
+      (i32.lt_u
+        (local.tee $src (i32.add (local.get $src) (i32.const 1)))
+        (i32.const 2520))))
+)
+
+(func $blit
+      (param $x i32) (param $y i32) (param $w i32) (param $h i32)
+      (param $color i32) (param $src_addr i32) (result i32)
   (local $dst_addr i32)
-  (local $src_stride_bits i32)
-  (local $src_stride_bytes i32)
-  (local $src_stride_rot i32)
-  (local $rot i32)
+  (local $tmp_dst_addr i32)
+  (local $src_stride i32)
   (local $ix i32)
   (local $hit i32)
-  (local $bits i32)
-  (local $data i64)
+
+  (local.set $src_stride (local.get $w))
 
   ;; if (x < 0)
   (if
     (i32.lt_s (local.get $x) (i32.const 0))
     (then
-      ;; x = -x
-      (local.set $x (i32.sub (i32.const 0) (local.get $x)))
       ;; reduce width by x
-      (local.set $w (i32.sub (local.get $w) (local.get $x)))
+      (local.set $w (i32.add (local.get $w) (local.get $x)))
 
-      ;; increase src_stride by x
-      (local.set $src_stride_bits (local.get $x))
+      ;; advance src_addr by x
+      (local.set $src_addr (i32.sub (local.get $src_addr) (local.get $x)))
 
-      ;; advance src_addr by x bits
-      (local.set $src_addr
-        (i32.add
-          (local.get $src_addr)
-          (i32.shr_u
-            (local.get $x)
-            (i32.const 3))))
-      (local.set $rot
-        (i32.add
-          (local.get $rot)
-          (i32.and
-            (local.get $x)
-            (i32.const 7))))
-
+      ;; set x to 0
       (local.set $x (i32.const 0)))
     (else
       ;; if (x + w > SCREEN_WIDTH)
       (if
         (i32.gt_s (i32.add (local.get $x) (local.get $w)) (i32.const 300))
         (then
-          ;; increase src_stride by clipped width (done below)
-          (local.set $src_stride_bits
-            (i32.sub (i32.add (local.get $x) (local.get $w)) (i32.const 300)))
-
           ;; w = SCREEN_WIDTH - x
           (local.set $w (i32.sub (i32.const 300) (local.get $x)))))))
 
@@ -256,69 +339,32 @@
     (then
       (return (i32.const 0))))
 
-  ;; src_stride_bits += w
-  (local.set $src_stride_bits
-    (i32.add (local.get $src_stride_bits) (local.get $w)))
-
-  ;; src_stride = src_stride_bits / 8
-  (local.set $src_stride_bytes
-    (i32.shr_u (local.get $src_stride_bits) (i32.const 3)))
-
-  ;; src_stride_rot = src_stride_bits % 8
-  (local.set $src_stride_rot
-    (i32.and (local.get $src_stride_bits) (i32.const 7)))
-
-  ;; dst_addr = 0x3000 + (y * SCREEN_WIDTH + x) * 4
+  ;; dst_addr = y * SCREEN_WIDTH + x
   (local.set $dst_addr
-    (i32.add
-      (i32.const 0x3000)
-      (i32.shl
-        (i32.add
-          (i32.mul
-            (local.get $y)
-            (i32.const 300))
-          (local.get $x))
-        (i32.const 2))))
+    (i32.add (i32.mul (local.get $y) (i32.const 300)) (local.get $x)))
 
   (loop $yloop
-    ;; src_addr += rot / 8;
-    (local.set $src_addr
-      (i32.add
-        (local.get $src_addr)
-        (i32.shr_u (local.get $rot) (i32.const 3))))
-
-    ;; rot %= 8;
-    (local.set $rot (i32.and (local.get $rot) (i32.const 7)))
-
-    ;; data = i64_mem[src_addr] >> rot;
-    (local.set $data
-      (i64.shr_u
-        (i64.load (local.get $src_addr))
-        (i64.extend_i32_u (local.get $rot))))
-
     ;; ix = 0;
     (local.set $ix (i32.const 0))
 
     (loop $xloop
-      ;; if (data & 1)
-      (if
-        (i32.wrap_i64 (i64.and (local.get $data) (i64.const 1)))
+      ;; data = i8_mem[src_addr]
+      (if (i32.load8_u (i32.add (local.get $src_addr) (local.get $ix)))
         (then
           ;; get old pixel
           (local.set $hit
             (i32.or
               (local.get $hit)
               (i32.ne
-                (i32.load (local.get $dst_addr))
+                (i32.load offset=0x5000
+                  (local.tee $tmp_dst_addr
+                    (i32.shl (i32.add (local.get $dst_addr)
+                                      (local.get $ix))
+                             (i32.const 2))))
                 (i32.const -1))))
-
           ;; set new pixel
-          (i32.store (local.get $dst_addr) (local.get $color))))
-
-      ;; data >>= 1
-      (local.set $data (i64.shr_u (local.get $data) (i64.const 1)))
-
-      (local.set $dst_addr (i32.add (local.get $dst_addr) (i32.const 4)))
+          (i32.store offset=0x5000
+            (local.get $tmp_dst_addr) (local.get $color))))
 
       ;; loop while (++ix < w)
       (br_if $xloop
@@ -326,18 +372,10 @@
           (local.tee $ix (i32.add (local.get $ix) (i32.const 1)))
           (local.get $w))))
 
-    ;; dst_addr += SCREEN_WIDTH - w * 4;
-    (local.set $dst_addr
-      (i32.sub
-        (i32.add
-          (local.get $dst_addr)
-          (i32.const 1200))
-        (i32.shl (local.get $w) (i32.const 2))))
+    ;; dst_addr += SCREEN_WIDTH
+    (local.set $dst_addr (i32.add (local.get $dst_addr) (i32.const 300)))
     ;; src_addr += src_stride;
-    (local.set $src_addr
-      (i32.add (local.get $src_addr) (local.get $src_stride_bytes)))
-    ;; rot += src_stride_rot;
-    (local.set $rot (i32.add (local.get $rot) (local.get $src_stride_rot)))
+    (local.set $src_addr (i32.add (local.get $src_addr) (local.get $src_stride)))
 
     ;; loop while (--h != 0)
     (br_if $yloop
@@ -358,10 +396,10 @@
         (i32.const 3) (i32.const 5)
         (i32.const 0xac_000000)
         (i32.add
-          (i32.const 1190)
-          (i32.shl
+          (i32.const 8772)
+          (i32.mul
             (i32.rem_u (local.get $num) (i32.const 10))
-            (i32.const 1)))))
+            (i32.const 15)))))
     (br_if $loop (local.tee $num (i32.div_u (local.get $num) (i32.const 10)))))
 )
 
@@ -381,7 +419,7 @@
 
   ;; clear screen
   (loop $loop
-    (i64.store offset=0x3000
+    (i64.store offset=0x5000
       (local.get $i)
       (i64.const 0xffffffff_ffffffff))
 
@@ -418,7 +456,7 @@
       (i32.const 125) (i32.const 33)
       (i32.const 50) (i32.const 8)
       (i32.const 0xac_000000)
-      (i32.const 1210))
+      (i32.const 8922))
 
     ;; If any button pressed, reset.
     (if (i32.and

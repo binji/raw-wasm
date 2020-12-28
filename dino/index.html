@@ -30,7 +30,7 @@
       .then(bytes => WebAssembly.instantiate(bytes, {Math, env}))
       .then(source => {
         let instance = source.instance;
-        let canvasData = new Uint8Array(instance.exports.mem.buffer, 0x3000, 90000);
+        let canvasData = new Uint8Array(instance.exports.mem.buffer, 0x5000, 90000);
         let canvas = document.querySelector('canvas');
         let context = canvas.getContext('2d');
         let imageData = context.createImageData(300, 75);
