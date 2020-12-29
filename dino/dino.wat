@@ -81,23 +81,23 @@
 
   ;; images  17 * 3 bytes = 51 bytes
   ;; whcol     data
-  (i8  0) (i16 2476)  ;; dead     = 0
-  (i8  0) (i16 2916)  ;; stand    = 3
-  (i8  0) (i16 3356)  ;; run1     = 6
-  (i8  0) (i16 3796)  ;; run2     = 9
-  (i8  3) (i16 4236)  ;; duck1    = 12
-  (i8  3) (i16 4600)  ;; duck2    = 15
-  (i8  6) (i16 4964)  ;; cactus1  = 18
-  (i8  9) (i16 5302)  ;; cactus2  = 21
-  (i8 12) (i16 5644)  ;; cactus3  = 24
-  (i8 15) (i16 6148)  ;; cactus4  = 27
-  (i8 18) (i16 6310)  ;; cactus5  = 30
-  (i8 21) (i16 7350)  ;; cloud    = 33
-  (i8 24) (i16 7558)  ;; ground1  = 36
-  (i8 24) (i16 7878)  ;; ground2  = 39
-  (i8 24) (i16 8198)  ;; ground3  = 42
-  (i8 27) (i16 8518)  ;; bird1    = 45
-  (i8 30) (i16 8840)  ;; bird2    = 48
+  (i8  0) (i16 0)  ;; dead     = 0
+  (i8  0) (i16 440)  ;; stand    = 3
+  (i8  0) (i16 880)  ;; run1     = 6
+  (i8  0) (i16 1320)  ;; run2     = 9
+  (i8  3) (i16 1760)  ;; duck1    = 12
+  (i8  3) (i16 2124)  ;; duck2    = 15
+  (i8  6) (i16 2488)  ;; cactus1  = 18
+  (i8  9) (i16 2826)  ;; cactus2  = 21
+  (i8 12) (i16 3168)  ;; cactus3  = 24
+  (i8 15) (i16 3672)  ;; cactus4  = 27
+  (i8 18) (i16 3834)  ;; cactus5  = 30
+  (i8 21) (i16 4874)  ;; cloud    = 33
+  (i8 24) (i16 5082)  ;; ground1  = 36
+  (i8 24) (i16 5402)  ;; ground2  = 39
+  (i8 24) (i16 5722)  ;; ground3  = 42
+  (i8 27) (i16 6042)  ;; bird1    = 45
+  (i8 30) (i16 6364)  ;; bird2    = 48
   ;; end=317
 
   ;; width,height,color  13 * 3 = 39 bytes
@@ -333,7 +333,7 @@
 
     (loop $xloop
       ;; data = i8_mem[src_addr]
-      (if (i32.load8_u (i32.add (local.get $src_addr) (local.get $ix)))
+      (if (i32.load8_u offset=2476 (i32.add (local.get $src_addr) (local.get $ix)))
         (then
           ;; get old pixel
           (local.set $hit
@@ -428,7 +428,7 @@
         ;; whcol_addr
         (i32.const 36)
         ;; data
-        (i32.const 9358)))
+        (i32.const 6882)))
 
     ;; Wait until button pressed.
     (br_if $done
@@ -631,7 +631,7 @@
         ;; whcol_addr
         (i32.const 33)
         (i32.add
-          (i32.const 9208)
+          (i32.const 6732)
           (i32.mul
             (i32.rem_u (local.get $num) (i32.const 10))
             (i32.const 15)))))
