@@ -14,7 +14,7 @@
 (global $jump_vel (mut f32) (f32.const 0))
 (global $speed (mut f32) (f32.const -0.5))
 
-(data (i32.const 36)
+(data (i32.const 40)
   ;; =4
   ;; objects  14 * 9 bytes = 126 bytes
   ;; obstacles x 3
@@ -24,7 +24,7 @@
   ;; (i8 1)  (f32 55 900)
 
   ;; =31 dino
-  (;(i8 11) (f32 50);) (f32 22)
+  ;; (i8 11) (f32 50) (f32 22)
 
   ;; ground x 6
   (i8 7)  (f32 67   0)
@@ -143,6 +143,29 @@
   ;; gameover.ppm => 6242
 )
 
+(data (i32.const 0x4fdb)
+  ;; Starting obstacles + dino
+  ;; id        x   y
+  (i8 1) (f32 55 300)
+  (i8 1) (f32 55 600)
+  (i8 1) (f32 55 900)
+  (i8 9) (f32 50 22)
+  ;; Byte to replicate when clearing the screen.
+  (i8 0xff)
+)
+
+(func $memcpy (param $dst i32) (param $src i32) (param $dstend i32)
+  ;; Copy len bytes from $src to $dst. We can emulate a fill if the regions
+  ;; overlap. Always copies at least one byte!
+  (loop $copy
+    (i32.store8 (local.get $dst) (i32.load8_u (local.get $src)))
+    (local.set $src (i32.add (local.get $src) (i32.const 1)))
+    (br_if $copy
+      (i32.lt_u
+        (local.tee $dst (i32.add (local.get $dst) (i32.const 1)))
+        (local.get $dstend))))
+)
+
 (start $decompress)
 (func $decompress
   (local $data_left i32)    ;; rest of currently read byte
@@ -151,7 +174,6 @@
   (local $read_data i32)    ;; currently read value
   (local $lit_count i32)    ;; number of 4-bit literals to read
   (local $ref_dist i32)     ;; backreference distance
-  (local $i i32)            ;; index
   (local $src i32)
   (local $dst i32)
   (local $temp_dst i32)
@@ -226,18 +248,14 @@
 
     ;; 3: read backreference length
     end $3
-      (local.set $i (i32.const 0))
-      ;; Copy len bytes from (dst - ref_dist) to dst
-      (loop $copy
-        (i32.store8
-          (local.tee $temp_dst (i32.add (local.get $dst) (local.get $i)))
-          (i32.load8_u (i32.sub (local.get $temp_dst) (local.get $ref_dist))))
+      ;; $memcpy always copies at least one byte. That may happen here but it's
+      ;; OK because we'll not advance $dst, so the value we copied will be
+      ;; overwritten.
+      (call $memcpy
+        (local.get $dst)
+        (i32.sub (local.get $dst) (local.get $ref_dist))
+        (local.tee $dst (i32.add (local.get $dst) (local.get $read_data))))
 
-        (br_if $copy
-          (i32.lt_u (local.tee $i (i32.add (local.get $i) (i32.const 1)))
-                    (local.get $read_data))))
-
-      (local.set $dst (i32.add (local.get $dst) (local.get $read_data)))
       (local.set $state (i32.const 0))
       (br $loop)
 
@@ -257,12 +275,13 @@
   (loop $loop
     (if (local.tee $run_count (i32.load8_u offset=335 (local.get $src)))
       (then
-        (loop $byte_loop
-          (i32.store8 (local.get $dst) (local.get $run_byte))
-          (local.set $dst (i32.add (local.get $dst) (i32.const 1)))
-          (br_if $byte_loop
-            (local.tee $run_count
-              (i32.sub (local.get $run_count) (i32.const 1)))))))
+        ;; Set first byte.
+        (i32.store8 (local.get $dst) (local.get $run_byte))
+        ;; Then replicate with memcpy.
+        (call $memcpy
+          (i32.add (local.get $dst) (i32.const 1))
+          (local.get $dst)
+          (local.tee $dst (i32.add (local.get $dst) (local.get $run_count))))))
 
     ;; Flip written byte between 0 and 1.
     (local.set $run_byte (i32.eqz (local.get $run_byte)))
@@ -381,17 +400,8 @@
   (local $x f32)
   (local $y f32)
 
-  ;; clear screen
-  (loop $loop
-    (i64.store offset=0x5000
-      (local.get $i)
-      (i64.const 0xffffffff_ffffffff))
-
-    ;; loop on x
-    (br_if $loop
-      (i32.lt_s
-        (local.tee $i (i32.add (local.get $i) (i32.const 8)))
-        (i32.const 90000))))
+  ;; clear screen (the byte at 0x4fff is initialized to 0xff)
+  (call $memcpy (i32.const 0x5000) (i32.const 0x4fff) (i32.const 0x1af90))
 
   ;; Animation timer
   (global.set $timer (i32.add (global.get $timer) (i32.const 1)))
@@ -450,10 +460,7 @@
 
     ;; reset obstacles
     (global.set $dino_state (i32.const 1))
-    (i64.store (i32.const 4)  (i64.const 0x960000_425c0000_01))
-    (i64.store (i32.const 12) (i64.const 0x0000_425c0000_01_43))
-    (i64.store (i32.const 20) (i64.const 0x00_425c0000_01_4416))
-    (i32.store (i32.const 28) (i32.const 0x0b_446100))
+    (call $memcpy (i32.const 4) (i32.const 0x4fdb) (i32.const 40))
 
     ;; fallthrough
   end $running
