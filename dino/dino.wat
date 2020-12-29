@@ -28,11 +28,11 @@
 
   ;; ground x 6
   (i8 7)  (f32 67   0)
-  (i8 8)  (f32 67  64)
-  (i8 9)  (f32 67 128)
+  (i8 7)  (f32 67  64)
+  (i8 7)  (f32 67 128)
   (i8 7)  (f32 67 192)
-  (i8 8)  (f32 67 256)
-  (i8 9)  (f32 67 320)
+  (i8 7)  (f32 67 256)
+  (i8 7)  (f32 67 320)
 
   ;; clouds x 4
   (i8 6)  (f32 40   0)
@@ -41,49 +41,47 @@
   (i8 6)  (f32 40 384)
   ;; end=130
 
-  ;; info  14 * 7 bytes = 98 bytes
+  ;; info  12 * 7 bytes = 84 bytes
   ;;  id anim  img  +4x  y +y *4dx
   (i8  0    0   18   75 46  0   4)  ;;  0 cactus1
   (i8  0    0   21   75 54  0   4)  ;;  1 cactus2
   (i8  0    0   24   75 54  0   4)  ;;  2 cactus3
   (i8  0    0   27   75 54  0   4)  ;;  3 cactus4
   (i8  0    0   30   75 46  0   4)  ;;  4 cactus5
-  (i8  0    3   45   75 25 25   5)  ;;  5 bird
+  (i8  0    3   39   75 25 25   5)  ;;  5 bird
   (i8  1    0   33   30 15 25   1)  ;;  6 cloud
-  (i8  2    0   36    0 67  0   4)  ;;  7 ground1
-  (i8  2    0   39    0 67  0   4)  ;;  8 ground2
-  (i8  2    0   42    0 67  0   4)  ;;  9 ground3
-  (i8  3    0    3    0  0  0   0)  ;; 10 dino stand
-  (i8  3    1    6    0  0  0   0)  ;; 11 dino run
-  (i8  3    2   12    0  0  0   0)  ;; 12 dino duck
-  (i8  3    0    0    0  0  0   0)  ;; 13 dino dead
-  ;; end=228
+  (i8  2    0   36    0 67  0   4)  ;;  7 ground
+  (i8  3    0    3    0  0  0   0)  ;;  8 dino stand
+  (i8  3    1    6    0  0  0   0)  ;;  9 dino run
+  (i8  3    2   12    0  0  0   0)  ;; 10 dino duck
+  (i8  3    0    0    0  0  0   0)  ;; 11 dino dead
+  ;; end=214
 
   ;; random id  3 * 2 bytes = 6 bytes
   (i8 0 6)
   (i8 6 1)
-  (i8 7 3)
-  ;; end=234
+  (i8 7 1)
+  ;; end=220
 
   ;; anims (y addend)  4 * 4 bytes = 16 bytes
   (i8 0 0 0 0)  ;; 0 none
   (i8 0 0 0 0)  ;; 1 run
   (i8 9 9 9 9)  ;; 2 duck
   (i8 0 0 3 3)  ;; 3 bird
-  ;; end=250
+  ;; end=236
 
   ;; anims (img addend)  4 * 4 bytes = 16 bytes
   (i8 0  0  0  0)  ;; 0 none
   (i8 0  3  0  3)  ;; 1 run
   (i8 0  3  0  3)  ;; 2 duck
   (i8 0  0  3  3)  ;; 3 bird
-  ;; end=266
+  ;; end=252
 
-  ;; images  17 * 3 bytes = 51 bytes
+  ;; images  15 * 3 bytes = 45 bytes
   ;; whcol     data
-  (i8  0) (i16 0)  ;; dead     = 0
-  (i8  0) (i16 440)  ;; stand    = 3
-  (i8  0) (i16 880)  ;; run1     = 6
+  (i8  0) (i16 0)     ;; dead     = 0
+  (i8  0) (i16 440)   ;; stand    = 3
+  (i8  0) (i16 880)   ;; run1     = 6
   (i8  0) (i16 1320)  ;; run2     = 9
   (i8  3) (i16 1760)  ;; duck1    = 12
   (i8  3) (i16 2124)  ;; duck2    = 15
@@ -93,12 +91,10 @@
   (i8 15) (i16 3672)  ;; cactus4  = 27
   (i8 18) (i16 3834)  ;; cactus5  = 30
   (i8 21) (i16 4874)  ;; cloud    = 33
-  (i8 24) (i16 5082)  ;; ground1  = 36
-  (i8 24) (i16 5402)  ;; ground2  = 39
-  (i8 24) (i16 5722)  ;; ground3  = 42
-  (i8 27) (i16 6042)  ;; bird1    = 45
-  (i8 30) (i16 6364)  ;; bird2    = 48
-  ;; end=317
+  (i8 24) (i16 5082)  ;; ground   = 36
+  (i8 27) (i16 5402)  ;; bird1    = 39
+  (i8 30) (i16 5724)  ;; bird2    = 42
+  ;; end=297
 
   ;; width,height,color  13 * 3 = 39 bytes
   (i8 20 22 172)  ;;  0 dead,stand,run1,run2
@@ -109,12 +105,12 @@
   (i8  9 18 172)  ;; 15 cactus4
   (i8 40 26 172)  ;; 18 cactus5
   (i8 26  8  37)  ;; 21 cloud
-  (i8 64  5 172)  ;; 24 ground1,ground2,ground3
+  (i8 64  5 172)  ;; 24 ground
   (i8 23 14 172)  ;; 27 bird1
   (i8 23 16 172)  ;; 30 bird2
   (i8  3  5 172)  ;; 33 digits
   (i8 50  8 172)  ;; 36 gameover
-  ;; end=356
+  ;; end=336
 
   ;; compressed graphics data
   "\91\c5\95\29\95\88\28\95\29\0d\18\72\28\81\65\71\66\42\4a\23\19\41\6e\7e"
@@ -131,21 +127,20 @@
   "\0c\c9\9c\83\21\20\73\28\18\21\21\21\43\22\c1\90\05\01\63\c5\a1\28\1c\59"
   "\99\0a\41\48\b2\62\28\08\38\81\08\c3\42\8c\28\09\87\c4\10\a1\d4\db\03\49"
   "\c5\83\c4\c9\8b\85\0c\92\4b\c5\43\05\c5\83\49\c4\3c\08\10\81\4c\20\18\15"
-  "\0f\1b\0f\1f\2a\1f\05\62\84\23\e3\61\92\08\50\02\71\b8\40\79\20\1b\82\00"
-  "\13\57\3a\1c\32\1e\50\50\16\31\3c\3c\44\e0\0c\00\bb\82\50\91\c1\30\fc\24"
-  "\50\1e\6c\1e\8a\1e\42\84\7c\a4\b8\c2\d4\e2\f0\5d\fd\21\90\b9\37\ff\52\1e"
-  "\6a\1e\a8\1e\c4\1e\02\94\00\ae\e7\b2\36\3d\d0\3c\94\3c\98\3c\58\38\85\84"
-  "\84\49\48\48\84\49\89\09\49\85\04\49\48\c9\08\0a\c5\81\0c\22\a9\a8\c0\20"
-  "\09\89\a0\99\11\11\a1\19\91\90\a0\a0\30\d0\41\50\21\31\08\4e\72\06\02\86"
-  "\d0\f0\70\08\19\09\2a\91\61\20\41\a2\03\00\68\20\48\4c\68\28\00\24\02\20"
-  "\38\30\48\42\a2\42\46\02\31\8b\03\49\c9\08\f9\1e\0d\09\9a\a1\18\0a\09\01"
-  ;; end=884 (size=528)
+  "\0f\1b\0f\1f\2a\1f\45\71\84\23\e3\21\e5\c1\e6\a1\e8\21\44\c8\47\8a\2b\4c"
+  "\2d\0e\df\d5\1f\02\99\7b\f3\2f\e5\a1\e6\81\ea\41\ec\21\40\09\e0\7a\2e\6b"
+  "\d3\03\cd\43\c9\83\c9\83\85\53\48\48\98\84\84\44\98\94\98\90\54\48\90\84"
+  "\94\8c\a0\50\1c\c8\20\92\8a\0a\0c\92\90\08\9a\19\11\11\9a\11\09\09\0a\0a"
+  "\03\1d\04\15\12\83\e0\24\67\20\60\08\0d\0f\87\90\91\a0\12\19\06\12\24\3a"
+  "\00\80\06\82\c4\84\86\02\40\22\00\82\03\83\24\24\2a\64\24\10\b3\38\90\94"
+  "\8c\90\ef\d1\90\a0\19\8a\a1\90\10"
+  ;; end=827 (size=491 bytes)
 
-  ;; first pass decompressed output [884, 2476)
-  ;; second pass decompressed ouput [2476, 9756)
+  ;; first pass decompressed output [827, 2317)
+  ;; second pass decompressed ouput [2317, 8957)
 
-  ;; 0.ppm => 9208
-  ;; gameover.ppm => 9358
+  ;; 0.ppm => 6092
+  ;; gameover.ppm => 6242
 )
 
 (start $decompress)
@@ -166,7 +161,7 @@
   (local $run_byte i32)     ;; byte to write
 
   (local.set $bits_to_read (i32.const 7))
-  (local.set $dst (i32.const 884))
+  (local.set $dst (i32.const 827))
 
   ;; First pass, decode back-references.
   (loop $loop
@@ -180,7 +175,7 @@
           (i32.or
             (local.get $data_left)
             (i32.shl
-              (i32.load16_u offset=356 (local.get $src))
+              (i32.load16_u offset=336 (local.get $src))
               (local.get $bits_left))))
         ;; Add 16 bits to count
         (local.set $bits_left
@@ -251,15 +246,16 @@
       ;; Check for end, since compressed data ends with literals.
       (local.set $ref_dist (local.get $read_data))
       (local.set $state (i32.const 3))
-      (br_if $loop (i32.lt_u (local.get $src) (i32.const 528)))
+      (br_if $loop (i32.lt_u (local.get $src) (i32.const 492)))
       ;; fall out of loop
   )
 
   ;; Second pass, decode 1bpp runs
-  ;; $src == 530
-  ;; $dst == 2476
+  ;; $src == 492
+  ;; $dst == 2317
+  (local.set $src (i32.const 492))
   (loop $loop
-    (if (local.tee $run_count (i32.load8_u offset=354 (local.get $src)))
+    (if (local.tee $run_count (i32.load8_u offset=335 (local.get $src)))
       (then
         (loop $byte_loop
           (i32.store8 (local.get $dst) (local.get $run_byte))
@@ -273,7 +269,7 @@
     (br_if $loop
       (i32.lt_u
         (local.tee $src (i32.add (local.get $src) (i32.const 1)))
-        (i32.const 2122))))
+        (i32.const 1982))))
 )
 
 (func $blit
@@ -290,11 +286,11 @@
   (local $hit i32)
 
   (local.set $src_stride
-    (local.tee $w (i32.load8_u offset=317 (local.get $whcol_addr))))
-  (local.set $h (i32.load8_u offset=318 (local.get $whcol_addr)))
+    (local.tee $w (i32.load8_u offset=297 (local.get $whcol_addr))))
+  (local.set $h (i32.load8_u offset=298 (local.get $whcol_addr)))
   (local.set $color
     (i32.shl
-      (i32.load8_u offset=319 (local.get $whcol_addr))
+      (i32.load8_u offset=299 (local.get $whcol_addr))
       (i32.const 24)))
 
   ;; if (x < 0)
@@ -333,7 +329,7 @@
 
     (loop $xloop
       ;; data = i8_mem[src_addr]
-      (if (i32.load8_u offset=2476 (i32.add (local.get $src_addr) (local.get $ix)))
+      (if (i32.load8_u offset=2317 (i32.add (local.get $src_addr) (local.get $ix)))
         (then
           ;; get old pixel
           (local.set $hit
@@ -418,7 +414,7 @@
     (br_table $init $running $rising $falling $dead (global.get $dino_state))
 
   end $dead
-    (local.set $dino_id (i32.const 13))
+    (local.set $dino_id (i32.const 11))
     (global.set $speed (global.get $f0))
     ;; GAME OVER
     (drop
@@ -428,7 +424,7 @@
         ;; whcol_addr
         (i32.const 36)
         ;; data
-        (i32.const 6882)))
+        (i32.const 6242)))
 
     ;; Wait until button pressed.
     (br_if $done
@@ -449,7 +445,7 @@
     ;; fallthrough
   end $init
     ;; init dino
-    (local.set $dino_id (i32.const 11))
+    (local.set $dino_id (i32.const 9))
     (local.set $y (global.get $f50))
 
     ;; reset obstacles
@@ -464,8 +460,8 @@
     ;; If down pressed, duck
     (local.set $dino_id
       (select
-        (i32.const 12)
-        (i32.const 11)
+        (i32.const 10)
+        (i32.const 9)
         (i32.eq (local.get $input) (i32.const 2))))
 
     ;; if up pressed, jump
@@ -492,7 +488,7 @@
 
     ;; fallthrough
   end $falling
-    (local.set $dino_id (i32.const 10))
+    (local.set $dino_id (i32.const 8))
     (local.set $y (f32.add (local.get $y) (global.get $jump_vel)))
     (global.set $jump_vel (f32.add (global.get $jump_vel) (f32.const 0.4)))
 
@@ -527,7 +523,7 @@
           ;; y
           (i32.add
             (i32.trunc_f32_s (f32.load offset=1 (local.get $obj)))
-            (i32.load8_u offset=234
+            (i32.load8_u offset=220
               (local.tee $anim
                 (i32.add
                   (i32.shl
@@ -541,15 +537,15 @@
                     (i32.and (global.get $timer) (i32.const 15))
                     (i32.const 2))))))
           ;; whcol_addr
-          (i32.load8_u offset=266
+          (i32.load8_u offset=252
             (local.tee $img
               (i32.add
                 (i32.load8_u offset=132 (local.get $info))
-                (i32.load8_u offset=250 (local.get $anim)))))
+                (i32.load8_u offset=236 (local.get $anim)))))
           ;; src_addr
-          (i32.load16_u offset=267 (local.get $img)))
+          (i32.load16_u offset=253 (local.get $img)))
          ;; is a dino
-        (i32.ge_u (local.get $kind) (i32.const 10)))
+        (i32.ge_u (local.get $kind) (i32.const 8)))
         (then
           ;; Set state to dead.
           (global.set $dino_state (i32.const 4))))
@@ -576,12 +572,12 @@
                   ;; Pick a random item.
                   (call $random)
                   (f32.convert_i32_u
-                    (i32.load8_u offset=229
+                    (i32.load8_u offset=215
                       (local.tee $rand_info
                         (i32.shl
                           (i32.load8_u offset=130 (local.get $info))
                           (i32.const 1)))))))
-              (i32.load8_u offset=228 (local.get $rand_info)))))
+              (i32.load8_u offset=214 (local.get $rand_info)))))
 
         ;; Set new object x (stored below).
         (local.set $x
@@ -631,7 +627,7 @@
         ;; whcol_addr
         (i32.const 33)
         (i32.add
-          (i32.const 6732)
+          (i32.const 6092)
           (i32.mul
             (i32.rem_u (local.get $num) (i32.const 10))
             (i32.const 15)))))
