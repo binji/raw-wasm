@@ -5,37 +5,40 @@
 ;; [0x5000, 0x1c000)  Color[300*75]  canvas
 (memory (export "mem") 2)
 
+(global $f0 f32 (f32.const 0))
+(global $f50 f32 (f32.const 50))
+
 (global $timer (mut i32) (i32.const 0))
 (global $score (mut i32) (i32.const 0))
 (global $dino_state (mut i32) (i32.const 0))
 (global $jump_vel (mut f32) (f32.const 0))
 (global $speed (mut f32) (f32.const -0.5))
 
-(data (i32.const 4)
+(data (i32.const 36)
   ;; =4
   ;; objects  14 * 9 bytes = 126 bytes
   ;; obstacles x 3
-  ;; kind       x  y
-  (i8 1)  (f32 300 55)
-  (i8 1)  (f32 600 55)
-  (i8 1)  (f32 900 55)
+  ;; kind       y  x
+  ;; (i8 1)  (f32 55 300)
+  ;; (i8 1)  (f32 55 600)
+  ;; (i8 1)  (f32 55 900)
 
   ;; =31 dino
-  (i8 11) (f32 22 50)
+  (;(i8 11) (f32 50);) (f32 22)
 
   ;; ground x 6
-  (i8 7)  (f32   0 67)
-  (i8 8)  (f32  64 67)
-  (i8 9)  (f32 128 67)
-  (i8 7)  (f32 192 67)
-  (i8 8)  (f32 256 67)
-  (i8 9)  (f32 320 67)
+  (i8 7)  (f32 67   0)
+  (i8 8)  (f32 67  64)
+  (i8 9)  (f32 67 128)
+  (i8 7)  (f32 67 192)
+  (i8 8)  (f32 67 256)
+  (i8 9)  (f32 67 320)
 
   ;; clouds x 4
-  (i8 6)  (f32   0 40)
-  (i8 6)  (f32 128 40)
-  (i8 6)  (f32 256 40)
-  (i8 6)  (f32 384 40)
+  (i8 6)  (f32 40   0)
+  (i8 6)  (f32 40 128)
+  (i8 6)  (f32 40 256)
+  (i8 6)  (f32 40 384)
   ;; end=130
 
   ;; info  14 * 7 bytes = 98 bytes
@@ -403,53 +406,60 @@
       (f32.const -1)))
 
   (local.set $input (i32.load8_u (i32.const 0)))
-  (local.set $y (f32.load (i32.const 36)))  ;; dino.y
+  (local.set $y (f32.load (i32.const 32)))  ;; dino.y
 
   block $done
   block $playing
   block $falling
   block $rising
   block $running
+  block $init
   block $dead
-    (br_table $running $rising $falling $dead (global.get $dino_state))
+    (br_table $init $running $rising $falling $dead (global.get $dino_state))
 
   end $dead
     (local.set $dino_id (i32.const 13))
-    (global.set $speed (f32.const 0))
+    (global.set $speed (global.get $f0))
     ;; GAME OVER
-    (call $blit
-      ;; x y
-      (i32.const 125) (i32.const 33)
-      ;; whcol_addr
-      (i32.const 36)
-      ;; data
-      (i32.const 9358))
+    (drop
+      (call $blit
+        ;; x y
+        (i32.const 125) (i32.const 33)
+        ;; whcol_addr
+        (i32.const 36)
+        ;; data
+        (i32.const 9358)))
 
-    ;; If any button pressed, reset.
-    (if (i32.and
-          (i32.ne (local.get $input) (i32.const 0))
-          ;; Wait at least 20 frames before restarting.
-          (i32.gt_u
-            (i32.sub (global.get $timer) (global.get $score))
-            (i32.const 20)))
-      (then
-        ;; only need to reset score, dino state, and obstacles.
-        (global.set $score (i32.const 0))
-        (global.set $timer (i32.const 0))
-        (global.set $dino_state (i32.const 0))
-        (global.set $jump_vel (f32.const 0))
-        (global.set $speed (f32.const -0.5))
-        (local.set $dino_id (i32.const 11))
-        (local.set $y (f32.const 50))
+    ;; Wait until button pressed.
+    (br_if $done
+      (i32.or
+        (i32.eq (local.get $input) (i32.const 0))
+        ;; Wait at least 20 frames before restarting.
+        (i32.le_u
+          (i32.sub (global.get $timer) (global.get $score))
+          (i32.const 20))))
 
-        ;; reset obstacles
-        (i64.store (i32.const 4)  (i64.const 0x5c0000_43960000_01))
-        (i64.store (i32.const 12) (i64.const 0x0000_44160000_01_42))
-        (i64.store (i32.const 20) (i64.const 0x00_44610000_01_425c))
-        (i32.store (i32.const 28) (i32.const 0x0b_425c00))))
+    ;; only need to reset score, dino state, and obstacles.
+    (global.set $score (i32.const 0))
+    (global.set $timer (i32.const 0))
+    (global.set $dino_state (i32.const 0))
+    (global.set $jump_vel (global.get $f0))
+    (global.set $speed (f32.const -0.5))
 
-    (br $done)
+    ;; fallthrough
+  end $init
+    ;; init dino
+    (local.set $dino_id (i32.const 11))
+    (local.set $y (global.get $f50))
 
+    ;; reset obstacles
+    (global.set $dino_state (i32.const 1))
+    (i64.store (i32.const 4)  (i64.const 0x960000_425c0000_01))
+    (i64.store (i32.const 12) (i64.const 0x0000_425c0000_01_43))
+    (i64.store (i32.const 20) (i64.const 0x00_425c0000_01_4416))
+    (i32.store (i32.const 28) (i32.const 0x0b_446100))
+
+    ;; fallthrough
   end $running
     ;; If down pressed, duck
     (local.set $dino_id
@@ -461,7 +471,7 @@
     ;; if up pressed, jump
     (if (i32.eq (local.get $input) (i32.const 1))
       (then
-        (global.set $dino_state (i32.const 1))
+        (global.set $dino_state (i32.const 2))
         (global.set $jump_vel (f32.const -6))))
     (br $playing)
 
@@ -476,7 +486,7 @@
         (f32.lt (local.get $y) (f32.const 10)))
       (then
         ;; start falling.
-        (global.set $dino_state (i32.const 2))
+        (global.set $dino_state (i32.const 3))
         (global.set $jump_vel (f32.const -1))
         ))
 
@@ -487,11 +497,11 @@
     (global.set $jump_vel (f32.add (global.get $jump_vel) (f32.const 0.4)))
 
     ;; Stop falling if the ground is reached.
-    (if (f32.gt (local.get $y) (f32.const 50))
+    (if (f32.gt (local.get $y) (global.get $f50))
       (then
-        (global.set $dino_state (i32.const 0))
-        (local.set $y (f32.const 50))
-        (global.set $jump_vel (f32.const 0))))
+        (global.set $dino_state (i32.const 1))
+        (local.set $y (global.get $f50))
+        (global.set $jump_vel (global.get $f0))))
 
     ;; fallthrough
   end $playing
@@ -502,7 +512,7 @@
 
   ;; Update dino id and y-coordinate.
   (i32.store8 (i32.const 31) (local.get $dino_id))
-  (f32.store (i32.const 36) (local.get $y))
+  (f32.store (i32.const 32) (local.get $y))
 
   ;; update objects
   (local.set $obj (i32.const 4))
@@ -513,10 +523,10 @@
         ;; hit a non-white pixel
         (call $blit
           ;; x
-          (i32.trunc_f32_s (f32.load offset=1 (local.get $obj)))
+          (i32.trunc_f32_s (f32.load offset=5 (local.get $obj)))
           ;; y
           (i32.add
-            (i32.trunc_f32_s (f32.load offset=5 (local.get $obj)))
+            (i32.trunc_f32_s (f32.load offset=1 (local.get $obj)))
             (i32.load8_u offset=234
               (local.tee $anim
                 (i32.add
@@ -542,7 +552,7 @@
         (i32.ge_u (local.get $kind) (i32.const 10)))
         (then
           ;; Set state to dead.
-          (global.set $dino_state (i32.const 3))))
+          (global.set $dino_state (i32.const 4))))
 
     ;;; Move
     (if
@@ -550,7 +560,7 @@
       (f32.lt
         (local.tee $x
           (f32.add
-            (f32.load offset=1 (local.get $obj))
+            (f32.load offset=5 (local.get $obj))
             (f32.mul
               (f32.convert_i32_u (i32.load8_u offset=136 (local.get $info)))
               (global.get $speed))))
@@ -586,7 +596,7 @@
                 (i32.const 3)))))
 
         ;; Write new object y.
-        (f32.store offset=5
+        (f32.store offset=1
           (local.get $obj)
           (f32.add
             (f32.convert_i32_u
@@ -597,7 +607,7 @@
                 (i32.load8_u offset=135 (local.get $kind))))))))
 
     ;; Write object x coordinate.
-    (f32.store offset=1 (local.get $obj) (local.get $x))
+    (f32.store offset=5 (local.get $obj) (local.get $x))
 
     ;; loop over all objects.
     (br_if $loop
