@@ -532,7 +532,7 @@
                     (i32.load8_u offset=131
                       (local.tee $info
                         (i32.mul
-                          (local.tee $kind (i32.load8_u (local.get $obj)))
+                          (i32.load8_u (local.get $obj))
                           (i32.const 7))))
                     (i32.const 2))
                   (i32.shr_u
@@ -547,7 +547,7 @@
           ;; src_addr
           (i32.load16_u offset=253 (local.get $img)))
          ;; is a dino
-        (i32.ge_u (local.get $kind) (i32.const 8)))
+        (i32.eq (local.get $obj) (i32.const 4)))
         (then
           ;; Set state to dead.
           (global.set $dino_state (i32.const 4))))
