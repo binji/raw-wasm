@@ -333,51 +333,49 @@
           (local.set $w (i32.sub (i32.const 300) (local.get $x)))))))
 
   ;; if (w <= 0) { return 0; }
-  (if
-    (i32.le_s (local.get $w) (i32.const 0))
+  (if (i32.gt_s (local.get $w) (i32.const 0))
     (then
-      (return (i32.const 0))))
+      ;; dst_addr = y * SCREEN_WIDTH + x
+      (local.set $dst_addr
+        (i32.add (i32.mul (local.get $y) (i32.const 300)) (local.get $x)))
 
-  ;; dst_addr = y * SCREEN_WIDTH + x
-  (local.set $dst_addr
-    (i32.add (i32.mul (local.get $y) (i32.const 300)) (local.get $x)))
+      (loop $yloop
+        ;; ix = 0;
+        (local.set $ix (i32.const 0))
 
-  (loop $yloop
-    ;; ix = 0;
-    (local.set $ix (i32.const 0))
+        (loop $xloop
+          ;; data = i8_mem[src_addr]
+          (if (i32.load8_u offset=2317 (i32.add (local.get $src_addr) (local.get $ix)))
+            (then
+              ;; get old pixel
+              (local.set $hit
+                (i32.or
+                  (local.get $hit)
+                  (i32.ne
+                    (i32.load offset=0x5000
+                      (local.tee $tmp_dst_addr
+                        (i32.shl (i32.add (local.get $dst_addr)
+                                          (local.get $ix))
+                                 (i32.const 2))))
+                    (i32.const -1))))
+              ;; set new pixel
+              (i32.store offset=0x5000 (local.get $tmp_dst_addr) (local.get $color))))
 
-    (loop $xloop
-      ;; data = i8_mem[src_addr]
-      (if (i32.load8_u offset=2317 (i32.add (local.get $src_addr) (local.get $ix)))
-        (then
-          ;; get old pixel
-          (local.set $hit
-            (i32.or
-              (local.get $hit)
-              (i32.ne
-                (i32.load offset=0x5000
-                  (local.tee $tmp_dst_addr
-                    (i32.shl (i32.add (local.get $dst_addr)
-                                      (local.get $ix))
-                             (i32.const 2))))
-                (i32.const -1))))
-          ;; set new pixel
-          (i32.store offset=0x5000 (local.get $tmp_dst_addr) (local.get $color))))
+          ;; loop while (++ix < w)
+          (br_if $xloop
+            (i32.lt_s
+              (local.tee $ix (i32.add (local.get $ix) (i32.const 1)))
+              (local.get $w))))
 
-      ;; loop while (++ix < w)
-      (br_if $xloop
-        (i32.lt_s
-          (local.tee $ix (i32.add (local.get $ix) (i32.const 1)))
-          (local.get $w))))
+        ;; dst_addr += SCREEN_WIDTH
+        (local.set $dst_addr (i32.add (local.get $dst_addr) (i32.const 300)))
+        ;; src_addr += src_stride;
+        (local.set $src_addr (i32.add (local.get $src_addr) (local.get $src_stride)))
 
-    ;; dst_addr += SCREEN_WIDTH
-    (local.set $dst_addr (i32.add (local.get $dst_addr) (i32.const 300)))
-    ;; src_addr += src_stride;
-    (local.set $src_addr (i32.add (local.get $src_addr) (local.get $src_stride)))
-
-    ;; loop while (--h != 0)
-    (br_if $yloop
-      (local.tee $h (i32.sub (local.get $h) (i32.const 1)))))
+        ;; loop while (--h != 0)
+        (br_if $yloop
+          (local.tee $h (i32.sub (local.get $h) (i32.const 1)))))
+      ))
 
   (local.get $hit)
 )
