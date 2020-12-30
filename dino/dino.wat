@@ -15,16 +15,15 @@
 (global $speed (mut f32) (f32.const -0.5))
 
 (data (i32.const 40)
-  ;; =4
   ;; objects  14 * 9 bytes = 126 bytes
+  ;; =4 dino
+  ;;    kind       y  x
+  ;; (i8 11) (f32 50 22)
+
   ;; obstacles x 3
-  ;; kind       y  x
   ;; (i8 1)  (f32 55 300)
   ;; (i8 1)  (f32 55 600)
   ;; (i8 1)  (f32 55 900)
-
-  ;; =31 dino
-  ;; (i8 11) (f32 50) (f32 22)
 
   ;; ground x 6
   (i8 7)  (f32 67   0)
@@ -97,15 +96,16 @@
   ;; end=297
 
   ;; width,height,color  13 * 3 = 39 bytes
-  (i8 20 22 172)  ;;  0 dead,stand,run1,run2
-  (i8 28 13 172)  ;;  3 duck1,duck2
+  ;; collision only occurs w/ color 172
+  (i8 20 22 171)  ;;  0 dead,stand,run1,run2
+  (i8 28 13 171)  ;;  3 duck1,duck2
   (i8 13 26 172)  ;;  6 cactus1
   (i8 19 18 172)  ;;  9 cactus2
   (i8 28 18 172)  ;; 12 cactus3
   (i8  9 18 172)  ;; 15 cactus4
   (i8 40 26 172)  ;; 18 cactus5
   (i8 26  8  37)  ;; 21 cloud
-  (i8 64  5 172)  ;; 24 ground
+  (i8 64  5 171)  ;; 24 ground
   (i8 23 14 172)  ;; 27 bird1
   (i8 23 16 172)  ;; 30 bird2
   (i8  3  5 172)  ;; 33 digits
@@ -146,10 +146,10 @@
 (data (i32.const 0x4fdb)
   ;; Starting obstacles + dino
   ;; id        x   y
-  (i8 1) (f32 55 300)
-  (i8 1) (f32 55 600)
-  (i8 1) (f32 55 900)
-  (i8 9) (f32 50 22)
+  (i8 9) (f32 50 22)   ;; dino
+  (i8 1) (f32 55 300)  ;; obstacle1
+  (i8 1) (f32 55 600)  ;; obstacle2
+  (i8 1) (f32 55 900)  ;; obstacle3
   ;; Byte to replicate when clearing the screen.
   (i8 0xff)
 )
@@ -347,17 +347,18 @@
           ;; data = i8_mem[src_addr]
           (if (i32.load8_u offset=2317 (i32.add (local.get $src_addr) (local.get $ix)))
             (then
-              ;; get old pixel
+              ;; get alpha value of previous pixel. If it is 172, then it is an
+              ;; obstacle.
               (local.set $hit
                 (i32.or
                   (local.get $hit)
-                  (i32.ne
-                    (i32.load offset=0x5000
+                  (i32.eq
+                    (i32.load8_u offset=0x5003
                       (local.tee $tmp_dst_addr
                         (i32.shl (i32.add (local.get $dst_addr)
                                           (local.get $ix))
                                  (i32.const 2))))
-                    (i32.const -1))))
+                    (i32.const 172))))
               ;; set new pixel
               (i32.store offset=0x5000 (local.get $tmp_dst_addr) (local.get $color))))
 
@@ -410,7 +411,7 @@
       (f32.const -1)))
 
   (local.set $input (i32.load8_u (i32.const 0)))
-  (local.set $y (f32.load (i32.const 32)))  ;; dino.y
+  (local.set $y (f32.load (i32.const 5)))  ;; dino.y
 
   block $done
   block $playing
@@ -512,11 +513,11 @@
   end $done
 
   ;; Update dino id and y-coordinate.
-  (i32.store8 (i32.const 31) (local.get $dino_id))
-  (f32.store (i32.const 32) (local.get $y))
+  (i32.store8 (i32.const 4) (local.get $dino_id))
+  (f32.store (i32.const 5) (local.get $y))
 
-  ;; update objects
-  (local.set $obj (i32.const 4))
+  ;; loop over objects backward, drawing and moving
+  (local.set $obj (i32.const 121))
   (loop $loop
     ;;; Draw and check for collision.
     (if
@@ -610,11 +611,11 @@
     ;; Write object x coordinate.
     (f32.store offset=5 (local.get $obj) (local.get $x))
 
-    ;; loop over all objects.
+    ;; loop over all objects backward.
     (br_if $loop
-      (i32.lt_s
-        (local.tee $obj (i32.add (local.get $obj) (i32.const 9)))
-        (i32.const 130))))
+      (i32.gt_s
+        (local.tee $obj (i32.sub (local.get $obj) (i32.const 9)))
+        (i32.const 0))))
 
   ;; draw score
   (local.set $num (global.get $score))
