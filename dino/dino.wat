@@ -438,7 +438,7 @@
     ;; Wait until button pressed.
     (br_if $done
       (i32.or
-        (i32.eq (local.get $input) (i32.const 0))
+        (i32.eqz (local.get $input))
         ;; Wait at least 20 frames before restarting.
         (i32.le_u
           (i32.sub (global.get $timer) (global.get $score))
@@ -447,7 +447,6 @@
     ;; only need to reset score, dino state, and obstacles.
     (global.set $score (i32.const 0))
     (global.set $timer (i32.const 0))
-    (global.set $dino_state (i32.const 0))
     (global.set $jump_vel (global.get $f0))
     (global.set $speed (f32.const -0.5))
 
@@ -463,34 +462,31 @@
 
     ;; fallthrough
   end $running
-    ;; If down pressed, duck
+    ;; If down pressed, duck (id=10) else stand (id=9)
     (local.set $dino_id
-      (select
-        (i32.const 10)
-        (i32.const 9)
-        (i32.eq (local.get $input) (i32.const 2))))
+      (i32.add (i32.eq (local.get $input) (i32.const 2)) (i32.const 9)))
 
-    ;; if up pressed, jump
-    (if (i32.eq (local.get $input) (i32.const 1))
-      (then
-        (global.set $dino_state (i32.const 2))
-        (global.set $jump_vel (f32.const -6))))
-    (br $playing)
+    ;; if up is not pressed, skip over jumping code
+    (br_if $playing (i32.ne (local.get $input) (i32.const 1)))
 
+    ;; start jumping.
+    (global.set $dino_state (i32.const 2))
+    (global.set $jump_vel (f32.const -6))
+
+    ;; fallthrough
   end $rising
     ;; Stop jumping if the button is released and we've reached the minimum
     ;; height, or we've reached the maximum height.
-    (if
-      (i32.or
-        (i32.and
-          (i32.ne (local.get $input) (i32.const 1))
-          (f32.lt (local.get $y) (f32.const 30)))
-        (f32.lt (local.get $y) (f32.const 10)))
-      (then
-        ;; start falling.
-        (global.set $dino_state (i32.const 3))
-        (global.set $jump_vel (f32.const -1))
-        ))
+    (br_if $falling
+      (i32.and
+        (i32.or
+          (i32.eq (local.get $input) (i32.const 1))
+          (f32.ge (local.get $y) (f32.const 30)))
+        (f32.ge (local.get $y) (f32.const 10))))
+
+    ;; start falling.
+    (global.set $dino_state (i32.const 3))
+    (global.set $jump_vel (f32.const -1))
 
     ;; fallthrough
   end $falling
@@ -499,11 +495,11 @@
     (global.set $jump_vel (f32.add (global.get $jump_vel) (f32.const 0.4)))
 
     ;; Stop falling if the ground is reached.
-    (if (f32.gt (local.get $y) (global.get $f50))
-      (then
-        (global.set $dino_state (i32.const 1))
-        (local.set $y (global.get $f50))
-        (global.set $jump_vel (global.get $f0))))
+    (br_if $playing (f32.le (local.get $y) (global.get $f50)))
+
+    (global.set $dino_state (i32.const 1))
+    (local.set $y (global.get $f50))
+    (global.set $jump_vel (global.get $f0))
 
     ;; fallthrough
   end $playing
@@ -624,10 +620,7 @@
     (drop
       (call $blit
         ;; x
-        (local.tee $ix
-          (i32.sub
-            (local.get $ix)
-            (i32.const 4)))
+        (local.tee $ix (i32.sub (local.get $ix) (i32.const 4)))
         ;; y
         (i32.const 4)
         ;; whcol_addr
