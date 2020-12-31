@@ -22,12 +22,9 @@
 <body>
   <canvas width="300" height="75"></canvas>
   <script>
-    let env = {
-    };
-
     fetch('dino.wasm')
       .then(response => response.arrayBuffer())
-      .then(bytes => WebAssembly.instantiate(bytes, {Math, env}))
+      .then(bytes => WebAssembly.instantiate(bytes, {Math}))
       .then(source => {
         let instance = source.instance;
         let canvasData = new Uint8Array(instance.exports.mem.buffer, 0x5000, 90000);
@@ -51,31 +48,27 @@
         document.addEventListener('keydown', onkey.bind(null, 1), false);
         document.addEventListener('keyup', onkey.bind(null, 0), false);
 
-        // TODO touch controls
-        /*
         let touches = {};
         let ontouch = (down, event) => {
           for (let touch of event.changedTouches) {
             if (down) {
+              let bit;
               if (touch.clientX < event.target.clientWidth * 0.5) {
-                index = 0; // left
+                bit = 2; // down
               } else {
-                index = 1; // right
+                bit = 1; // up
               }
-              u8[index] = 1;
-              touches[touch.identifier] = index;
+              u8[0] |= bit;
+              touches[touch.identifier] = bit;
             } else {
-              u8[touches[touch.identifier]] = 0;
+              u8[0] &= ~touches[touch.identifier];
               delete touches[touch.identifier];
             }
           }
-          // Move forward when touching left and right side of screen.
-          u8[2] = u8[0] & u8[1];
           event.preventDefault();
         };
         canvas.addEventListener('touchstart', ontouch.bind(null, 1), false);
         canvas.addEventListener('touchend', ontouch.bind(null, 0), false);
-        */
 
         (function update() {
           requestAnimationFrame(update);

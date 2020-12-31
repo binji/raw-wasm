@@ -45,6 +45,13 @@ keys, or tap on the left or right side of the screen to turn. [**1976 bytes**]
 
 [Demo!][7]
 
+## Dino
+
+A dinosaur endlessly running through the desert, jumping over cacti and
+pterodactyls. Graphics are compressed using a LZ77-like algorithm. [**2020 bytes**]
+
+[Demo!][15]
+
 ## Maze
 
 A Wolfenstein-style 3d maze race. Each ray is tested against all walls,
@@ -68,3 +75,4 @@ up of 120-levels of brightness, which fade into black in the distance. [**2047 b
 [13]: https://johnearnest.github.io/chip8Archive/?sort=platform
 [14]: https://binji.github.io/raw-wasm/chip8
 [15]: http://johnearnest.github.io/Octo
+[16]: https://binji.github.io/raw-wasm/dino
