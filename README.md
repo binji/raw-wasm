@@ -50,7 +50,7 @@ keys, or tap on the left or right side of the screen to turn. [**1976 bytes**]
 A dinosaur endlessly running through the desert, jumping over cacti and
 pterodactyls. Graphics are compressed using a LZ77-like algorithm. [**2020 bytes**]
 
-[Demo!][15]
+[Demo!][16]
 
 ## Maze
 
