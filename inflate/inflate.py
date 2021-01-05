@@ -1,7 +1,6 @@
 #!/usr/bin/env python
 
 import argparse
-import struct
 import sys
 
 MAXBITS = 15
@@ -13,29 +12,10 @@ FIXLCODES = 288
 FIXED_LIT_LENS = [8] * 144 + [9] * 112 + [7] * 24 + [8] * 8
 FIXED_DIST_LENS = [5] * 32
 CODELEN_LITS = [16, 17, 18, 0, 8, 7, 9, 6, 10, 5, 11, 4, 12, 3, 13, 2, 14, 1, 15]
-
-
-def LengthBase(i):
-  if i < 4: base = 1
-  elif i >= 28: base = 2
-  else: base = 3
-  base += (i & 3) * (1 << ExtraLengthBits(i)) + (1 << ((i + 4) >> 2))
-  return base
-
-
-def ExtraLengthBits(code):
-  return max(0, (code - 4) >> 2) if code < 28 else 0
-
-
-def DistBase(i):
-  if i < 2: base = 0
-  else: base = 1
-  base += (i & 1) * (1 << ExtraDistBits(i)) + (1 << (i >> 1))
-  return base
-
-
-def ExtraDistBits(code):
-  return max(0, (code - 2) >> 1)
+LENGTH_BASE = [3, 4, 5, 6, 7, 8, 9, 10, 11, 13, 15, 17, 19, 23, 27, 31, 35, 43, 51, 59, 67, 83, 99, 115, 131, 163, 195, 227, 258]
+DIST_BASE = [1, 2, 3, 4, 5, 7, 9, 13, 17, 25, 33, 49, 65, 97, 129, 193, 257, 385, 513, 769, 1025, 1537, 2049, 3073, 4097, 6145, 8193, 12289, 16385, 24577]
+EXTRA_LENGTH_BITS = [0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3, 4, 4, 4, 4, 5, 5, 5, 5, 0]
+EXTRA_DIST_BITS = [0, 0, 0, 0, 1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6, 7, 7, 8, 8, 9, 9, 10, 10, 11, 11, 12, 12, 13, 13]
 
 
 class Huffman(object):
@@ -61,6 +41,7 @@ class Huffman(object):
 class Inflater(object):
   def __init__(self, data):
     self.input = data + b'\0\0'  # So we can read a little past the end
+    # gzip header
     assert(self.input[0] == 0x1f)
     assert(self.input[1] == 0x8b)
     assert(self.input[2] == 0x08)
@@ -100,6 +81,7 @@ class Inflater(object):
     data >>= bit_idx
     data &= ((1 << n) - 1)
     self.bit_idx += n
+    # print(f'ReadBits({n}) => {data}')
     return data
 
   def ReadBlock(self):
@@ -135,16 +117,19 @@ class Inflater(object):
       code = self.ReadCode(lit_huff)
       if code < 256:
         self.output.append(code)
+        print(f'>> Output ({repr(chr(code))})')
       elif code == 256:
+        print(f'>> Stop')
         break
       else:
-        lextra = self.ReadBits(ExtraLengthBits(code - 257))
-        length = LengthBase(code - 257) + lextra
+        lextra = self.ReadBits(EXTRA_LENGTH_BITS[code - 257])
+        length = LENGTH_BASE[code - 257] + lextra
         dcode = self.ReadCode(dist_huff)
-        dextra = self.ReadBits(ExtraDistBits(dcode))
-        dist = DistBase(dcode) + dextra
+        dextra = self.ReadBits(EXTRA_DIST_BITS[dcode])
+        dist = DIST_BASE[dcode] + dextra
         for i in range(length):
           self.output.append(self.output[-dist])
+        print(f">> Ref ({dist}, {length}) = {repr(''.join(map(chr, self.output[-length:])))}")
 
     return not bfinal
 
@@ -156,7 +141,9 @@ class Inflater(object):
       code |= self.ReadBits(1)
       count = huffman.count[i]
       if code - count < first:
-        return huffman.symbol[index + (code - first)] 
+        sym = huffman.symbol[index + (code - first)]
+        # print(f'ReadCode() => {sym} ({repr(chr(sym))})')
+        return sym
       index += count
       first += count
       first <<= 1
@@ -191,8 +178,8 @@ def main(args):
 
   inflater = Inflater(open(args.file, 'rb').read())
   output = ''.join(map(chr, inflater.Inflate()))
-  print('output', output)
-  print('len', len(output))
+  # print('output', output)
+  # print('len', len(output))
 
 if __name__ == '__main__':
   sys.exit(main(sys.argv[1:]))
