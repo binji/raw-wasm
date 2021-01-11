@@ -5,12 +5,15 @@ const instance = new WebAssembly.Instance(mod);
 
 const arrbuf = instance.exports.mem.buffer;
 const u8arr = new Uint8Array(arrbuf);
-const u16arr = new Uint16Array(arrbuf);
 
-const end = instance.exports.inflate();
-console.log(end);
+const gzip = fs.readFileSync('alice.gz');
+const skip = 16;  // skip gzip header
+const src = 2000;
+const dst = 2000 + gzip.byteLength;
 
-// console.log(u8arr.slice(0, 0 + 318));
-// console.log(u8arr.slice(382, 382 + 32));
-// console.log(u16arr.slice(414>>1, (414>>1) + 318));
-console.log(u8arr.slice(3000, end).reduce((p,c)=>p+String.fromCharCode(c),''));
+u8arr.set(gzip.slice(skip), src);
+
+const dstend = instance.exports.inflate(src, dst);
+console.log(dstend);
+
+console.log(u8arr.slice(dst, dstend).reduce((p,c)=>p+String.fromCharCode(c),''));

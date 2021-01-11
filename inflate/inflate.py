@@ -21,7 +21,7 @@ EXTRA_DIST_BITS = [0, 0, 0, 0, 1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6, 7, 7, 8, 8, 9
 class Huffman(object):
   def __init__(self, lens, maxsyms):
     # build count
-    self.count = [0] * MAXBITS
+    self.count = [0] * (MAXBITS+1)
     for l in lens:
       self.count[l] += 1
 
