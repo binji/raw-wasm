@@ -1,31 +1,22 @@
 (memory (export "mem") 1)
-(data (i32.const 1020)
+(data (i32.const 1050)
   ;; == Temp huffman data ==
-  ;; addr:0    lens        (size: 1b x 288 = 288)
-  ;; addr:288  offs        (size: 2b x  16 =  16)
+  ;; addr:0    lens    (size: 1b x 318 = 318)
+  ;; addr:318  offs    (size: 2b x  32 =  64)
 
   ;; == Lit/codelen huffman ==
-  ;; addr:304  lit count   (size: 1b x  16 =  16)
-  ;; addr:320  lit syms    (size: 2b x 288 = 576)
-
-  ;; == Dist huffman ==
-  ;; addr:896  dist count  (size: 1b x  16 =  16)
-  ;; addr:912  dist syms   (size: 2b x  30 =  60)
+  ;; addr:382  count   (size: 1b x  32 =  32)
+  ;; addr:414  syms    (size: 2b x 318 = 636)
 
   ;; == Constant data ==
-  ;; addr:972    codelen literals  (size: 1b x 19 = 19)
+  ;; addr:1050   codelen literals  (size: 1b x 19 = 19)
   (i8 16 17 18 0 8 7 9 6 10 5 11 4 12 3 13 2 14 1 15)
-  ;; addr:991    length base (-3)  (size: 1b x 29 = 29)
-  (i8 0 1 2 3 4 5 6 7 8 10 12 14 16 20 24 28 32 40 48 56 64 80 96 112 128 160 192 224 255)
-  ;; addr:1020   extra length bits (size: 1b x 29 = 29)
-  (i8 0 0 0 0 0 0 0 0 1 1 1 1 2 2 2 2 3 3 3 3 4 4 4 4 5 5 5 5 0)
-  ;; addr:1049   dist base         (size: 2b x 30 = 60)
-  (i16 1 2 3 4 5 7 9 13 17 25 33 49 65 97 129 193 257 385 513 769 1025 1537 2049 3073 4097 6145 8193 12289 16385 24577)
-  ;; addr:1109   extra dist bits   (size: 1b x 30 = 30)
-  (i8 0 0 0 0 1 1 2 2 3 3 4 4 5 5 6 6 7 7 8 8 9 9 10 10 11 11 12 12 13 13)
 
-  ;; addr:1139   compressed data
-  "\8d\58\7b\fa\48\10\ff\df\9f\62\7b\95\6a\fb\42\08\36\38\40\94\44\4a\9b\dc"
+  ;; addr:1069 hcode base table
+  (i8 2 3 7)
+
+  ;; addr:1072   compressed data
+  "\8d\58\7b\6f\da\48\10\ff\df\9f\62\7b\95\6a\fb\42\08\36\38\40\94\44\4a\9b\dc"
   "\5d\a4\de\43\4d\4e\3a\89\5a\96\c1\4b\70\0b\6b\64\9b\96\5c\2e\f7\d9\6f\66"
   "\f6\e1\35\90\f6\24\03\de\9d\99\df\bc\f7\c1\eb\57\27\9b\aa\3c\99\e6\e2\84"
   "\8b\2f\6c\fd\58\2f\0a\e1\38\f9\6a\5d\94\35\4b\cb\87\75\5a\56\5c\8f\ab\c7"
@@ -104,9 +95,111 @@
   "\f1\49\40\37\9a\2b\25\dd\8e\82\68\d1\a0\24\5d\fa\97\c4\53\44\b0\2f\c7\4b"
   "\39\5e\ae\92\04\d3\e2\26\09\86\28\49\5c\8c\4f\f5\58\c1\d9\32\af\3d\0a\1b"
   "\8e\c0\e6\2f\93\00\17\3f\e7\3f\00\05\f6\fa\c3\14\00\00"
+
+  ;; addr: 3000  output
 )
 
-(func $inflate (export "inflate")
+(func $memcpy (param $dst i32) (param $src i32) (param $dstend i32) (result i32)
+  ;; don't write anything if dst >= dstend
+  (local.get $dstend)
+  (br_if 0 (i32.ge_u (local.get $dst) (local.get $dstend)))
+  (loop $copy
+    (i32.store8 (local.get $dst) (i32.load8_u (local.get $src)))
+    (local.set $src (i32.add (local.get $src) (i32.const 1)))
+    (br_if $copy
+      (i32.lt_u
+        (local.tee $dst (i32.add (local.get $dst) (i32.const 1)))
+        (local.get $dstend))))
+)
+
+(func $memset (param $val i32) (param $dst i32) (param $dstend i32) (result i32)
+  ;; always write at least one byte!
+  (i32.store8 (local.get $dst) (local.get $val))
+  (call $memcpy
+    (i32.add (local.get $dst) (i32.const 1))
+    (local.get $dst)
+    (local.get $dstend)))
+
+;; Length is a code in range [257,285]. The final length uses the
+;; base length from the table below, along with [0,5] extra bits.
+;; This is described in RFC1951 using the following table for the
+;; extra bits:
+;;
+;;   [0, 0, 0, 0, 0, 0, 0, 0, 1, 1,
+;;    1, 1, 2, 2, 2, 2, 3, 3, 3, 3,
+;;    4, 4, 4, 4, 5, 5, 5, 5, 0]
+;;
+;; And the following table for the base:
+;;
+;;   [3,   4,  5,   6,   7,   8,   9,  10,  11, 13,
+;;    15, 17, 19,  23,  27,  31,  35,  43,  51, 59,
+;;    67, 83, 99, 115, 131, 163, 195, 227, 258]
+;;
+;; If we normalize the code [257,285] to [0,29], then we can
+;; determine the extra bits programmatically via:
+;;
+;;         code <= 3    =>  0
+;;    4 <= code <= 28   =>  (code >> 2) - 1
+;;         code == 29   =>  0
+;;
+;; Then the length base can be calculated programmatically via:
+;;
+;;         code <= 3    =>  3 + code
+;;    4 <= code <= 28   =>  3 + ((4 + (code & 3)) << extra_bits)
+;;         code == 29   =>  3 + 255
+
+;; Distance is a code in range [0,31]. The final distance uses the base
+;; distance from the table below, along with [0,13] extra bits. This is
+;; described in RFC1951 using the following table for the extra bits:
+;;
+;;   [0, 0,  0,  0,  1,  1,  2,  2,  3,  3,
+;;    4, 4,  5,  5,  6,  6,  7,  7,  8,  8,
+;;    9, 9, 10, 10, 11, 11, 12, 12, 13, 13]
+;;
+;; And the following table for the base:
+;;
+;;   [   1,    2,    3,    4,    5,    7,    9,    13,    17,    25,
+;;      33,   49,   65,   97,  129,  193,  257,   385,   513,   769,
+;;    1025, 1537, 2049, 3073, 4097, 6145, 8193, 12289, 16385, 24577]
+;;
+;; Like length above, we can determine the extra bits programmatically
+;; via:
+;;
+;;         code <= 1    =>  0
+;;    2 <= code <= 30   =>  (code >> 1) - 1
+;;
+;; Then the distance base can be calculated programmatically via:
+;;
+;;         code <= 1    =>  1 + code
+;;    2 <= code <= 30   =>  1 + ((2 + (code & 1)) << extra_bits)
+(func $extra-bits
+    (param $code i32) (param $min i32) (param $max i32) (param $shift i32)
+    (result i32)
+  (select
+    (i32.sub (i32.shr_u (local.get $code) (local.get $shift))
+             (i32.const 1))
+    (i32.const 0)
+    (i32.and (i32.ge_u (local.get $code) (local.get $min))
+             (i32.lt_u (local.get $code) (local.get $max)))))
+
+(func $base-value
+    (param $code i32) (param $min i32) (param $max i32) (param $extra-bits i32)
+    (result i32)
+  (i32.add
+    (local.get $min)
+    (select
+      (select
+        (i32.shl
+          (i32.add
+            (i32.add (local.get $min) (i32.const 1))
+            (i32.and (local.get $code) (local.get $min)))
+          (local.get $extra-bits))
+        (i32.const 255)
+        (i32.lt_u (local.get $code) (local.get $max)))
+      (local.get $code)
+      (i32.gt_u (local.get $code) (local.get $min)))))
+
+(func $inflate (export "inflate") (result i32)
   (local $bfinal i32)
   (local $state i32)
   (local $bit-idx i32)
@@ -114,178 +207,364 @@
   (local $read-bits i32)
   (local $i i32)
   (local $hlit i32)
-  (local $hdist i32)
+  (local $hlit-plus-hdist i32)
   (local $hclen i32)
   (local $huffman-len i32)
-  (local $len i32)
+  (local $hcend i32)
   (local $addr i32)
   (local $val i32)
+  (local $read-code-index i32)
+  (local $read-code i32)
+  (local $dst-addr i32)
+  (local $copy-len i32)
+  (local $copy-dist i32)
 
-  (local.set $bit-idx (i32.shl (i32.const 1139) (i32.const 3)))
-  (local.set $read-bit-count (i32.const 1))
+  (local.set $bit-idx (i32.shl (i32.const 1072) (i32.const 3)))
+  (local.set $dst-addr (i32.const 3000))
+  (local.set $read-bit-count (i32.const 3))
 
   loop $main-loop
     block $inc-state
-    block $dynamic-read-hlits
-    block $build-huffman
+    block $next-code (result i32)
+    block $extra-dist-bits
+    block $final-read-dist
+    block $extra-length-bits
+    block $final-read-lit
+    block $build-huffman (result i32)
     block $dynamic-read-codelen
-    block $dynamic-hclen
-    block $dynamic-hdist
-    block $dynamic-hlit
+    block $dynamic-repeat-loop (result i32)
+    block $dynamic-repeat-value
+    block $dynamic-read-table
+    block $read-code
+    block $dynamic-header
     block $dynamic
     block $fixed
     block $stored
-    block $btype
-    block $bfinal
+    block $bfinal-btype
 
       ;; read n bits
       (local.set $read-bits
         (i32.and
           (i32.shr_u
-            (i32.load (i32.shr_u (local.get $bit-idx) (i32.const 8)))
+            (i32.load (i32.shr_u (local.get $bit-idx) (i32.const 3)))
             (i32.and (local.get $bit-idx) (i32.const 7)))
-          (local.get $read-bit-count)))
+          (i32.sub
+            (i32.shl (i32.const 1) (local.get $read-bit-count))
+            (i32.const 1))))
       (local.set $bit-idx (i32.add (local.get $bit-idx) (local.get $read-bit-count)))
 
-      (br_table $bfinal                ;; 0
-                $btype                 ;; 1
-                $dynamic-hlit          ;; 2
-                $dynamic-hdist         ;; 3
-                $dynamic-hclen         ;; 4
-                $dynamic-read-codelen  ;; 5
-                $dynamic-read-hlits    ;; 6
+      (br_table $bfinal-btype           ;; 0
+                $dynamic-header         ;; 1
+                $dynamic-read-codelen   ;; 2
+                $read-code              ;; 3 (for temp huffman)
+                $dynamic-repeat-value   ;; 4
+                $read-code              ;; 5 (for final huffman literal/length)
+                $extra-length-bits      ;; 6
+                $read-code              ;; 7 (for final huffman dist)
+                $extra-dist-bits        ;; 8
         (local.get $state))
 
-    end $bfinal  ;; state 0
-      (local.set $bfinal (local.get $read-bits))
-      (local.set $read-bit-count (i32.const 2))
-      (br $inc-state)
-
-    end $btype  ;; state 1
+    end $bfinal-btype  ;; state 0
+      (local.set $bfinal (i32.and (local.get $read-bits) (i32.const 1)))
       ;; 0 => $stored, 1 => $fixed, 2 => $dynamic
-      (br_table $stored $fixed $dynamic (local.get $read-bits))
+      (br_table $stored $fixed $dynamic
+        (i32.shr_u (local.get $read-bits) (i32.const 1)))
 
     end $stored
       ;; TODO
+      (return (i32.const 0))
 
     end $fixed
-      (local.set $i (i32.const 0))
-      loop $lens
-        ;; Write [0,144) => 8  [144,256) => 7, [256,280) => 9, [280,288) => 8
-        (i32.store8
-          (local.get $i)
-          (select
-            (i32.const 8)
-            (select
-              (i32.const 7)
-              (select
-                (i32.const 9)
-                (i32.const 8)
-                (i32.lt_u (local.get $i) (i32.const 280)))
-              (i32.lt_u (local.get $i) (i32.const 256)))
-            (i32.lt_u (local.get $i) (i32.const 144))))
-
-        (br_if $lens
-          (i32.eq (local.tee $i (i32.add (local.get $i) (i32.const 1)))
-                  (i32.const 288)))
-      end
-      ;; TODO: Set state so dist huffman is built afterward
-      (local.set $huffman-len (i32.const 288))
-      (br $build-huffman)
+      (local.set $huffman-len
+        (call $memset (i32.const 21)
+          (call $memset (i32.const 8)
+            (call $memset (i32.const 9)
+              (call $memset (i32.const 7)
+                (call $memset (i32.const 8)
+                  (i32.const 0)
+                  (i32.const 144))
+                (i32.const 256))
+              (i32.const 280))
+            (i32.const 288))
+          (i32.const 318)))
+      (br $build-huffman (i32.const 5))
 
     end $dynamic
-      (local.set $read-bit-count (i32.const 5))
-      (br $inc-state)  ;; state 1->2
+      ;; read 5 + 5 + 4 == 14 bits
+      (local.set $read-bit-count (i32.const 14))
+      (br $inc-state)  ;; state 0->1
 
-    end $dynamic-hlit  ;; state 2
-      (local.set $hlit (i32.add (local.get $read-bits) (i32.const 257)))
-      (local.set $read-bit-count (i32.const 4))
-      (br $inc-state)
-
-    end $dynamic-hdist  ;; state 3
-      (local.set $hlit (i32.add (local.get $read-bits) (i32.const 1)))
-      (br $inc-state)
-
-    end $dynamic-hclen  ;; state 4
-      (local.set $huffman-len
-        (local.tee $hclen (i32.add (local.get $read-bits) (i32.const 4))))
+    end $dynamic-header  ;; state 1
+      ;; hlit  = 257 + getBits(5)
+      ;; hdist =   1 + getBits(5)
+      ;; hclen =   4 + getBits(4)
+      (local.set $hlit-plus-hdist
+        (i32.add
+          (i32.add
+            (i32.and
+              (i32.shr_u (local.get $read-bits) (i32.const 5))
+              (i32.const 31))
+            (local.tee $hlit
+              (i32.add
+                (i32.and (local.get $read-bits) (i32.const 31))
+                (i32.const 257))))
+          (i32.const 1)))
+      (local.set $hclen
+        (i32.add
+          (i32.shr_u (local.get $read-bits) (i32.const 10))
+          (i32.const 4)))
+      (local.set $huffman-len (i32.const 19))
+      ;; read 3 bits * hclen
       (local.set $read-bit-count (i32.const 3))
       (local.set $i (i32.const 0))
       (br $inc-state)
 
-    end $dynamic-read-codelen  ;; state 5
+    end $read-code           ;; state 3,5,7
+      ;; If we subtract and the code goes negative, then we've found which
+      ;; range it belongs to. Otherwise we need to read another bit.
+      (br_if $main-loop
+        (i32.ge_s
+          (local.tee $read-code
+            (i32.sub
+              ;; shift in lowest bit
+              (i32.or
+                (i32.shl (local.get $read-code) (i32.const 1))
+                (local.get $read-bits))
+              ;; read count[++i]
+              (i32.load8_u offset=382
+                (local.tee $read-code-index
+                  (i32.add (local.get $read-code-index) (i32.const 1))))))
+          (i32.const 0)))
+
+      ;; add in the offset, and read the code symbol.
+      (local.set $read-code
+        (i32.load16_u offset=414
+          (i32.add
+            (i32.load16_u offset=318
+              (i32.shl (local.get $read-code-index) (i32.const 1)))
+            (i32.shl (local.get $read-code) (i32.const 1)))))
+
+      ;; go to $final-read-lit if state == 5
+      ;; go to $final-read-dist if state == 7
+      ;; TODO: optimize
+      (br_if $final-read-lit (i32.eq (local.get $state) (i32.const 5)))
+      (br_if $final-read-dist (i32.eq (local.get $state) (i32.const 7)))
+
+      ;; fallthrough if state == 3
+    end $dynamic-read-table
+      (if (i32.lt_u (local.get $read-code) (i32.const 16))
+        (then
+          ;; write literal value to lens. When writing distance values, add 16
+          ;; to the length so they are stored in the other tree.
+          (local.set $val
+            (i32.add
+              (local.get $read-code)
+              (i32.shl
+                (i32.ge_u (local.get $i) (local.get $hlit))
+                (i32.const 4))))
+          (br $dynamic-repeat-loop (i32.add (local.get $i) (i32.const 1))))
+        (else
+          ;; 16 => repeat last length, 3 + getBits(2) times
+          ;; 17 => put zero length, 3 + getBits(3) times
+          ;; 18 => put zero length, 11 + getBits(7) times
+          (local.set $val
+            (i32.mul
+              (i32.eq (local.get $read-code) (i32.const 16))
+              (local.get $val)))
+          ;; set length to 8 if $read-code==18 (additional +3 happens below)
+          (local.set $hcend
+            (i32.add
+              (local.get $i)
+              (i32.shl
+                (i32.eq (local.get $read-code) (i32.const 18))
+                (i32.const 3))))
+          (local.set $read-bit-count
+            (i32.load8_u offset=1053 (local.get $read-code))) ;; 1069-16
+          (br $inc-state)))  ;; state 3->4
+
+    end $dynamic-repeat-value ;; state 4
+      (local.set $read-bit-count (i32.const 1))
+      (local.set $state (i32.const 3))
+
+      ;; set hcend (see below)
+      (i32.add
+        (i32.add (local.get $read-bits) (local.get $hcend))
+        (i32.const 3))
+
+      ;; fallthrough
+    end $dynamic-repeat-loop
+      (local.set $hcend (; (result i32) ;))
+      (local.set $i
+        (call $memset (local.get $val) (local.get $i) (local.get $hcend)))
+      (local.set $read-code-index
+        (local.tee $read-code (i32.const 0)))
+      (br_if $main-loop (i32.lt_u (local.get $i) (local.get $hlit-plus-hdist)))
+
+      ;; final huffman table is decompressed, so build it.
+      (local.set $huffman-len (local.get $hlit-plus-hdist))
+      (br $build-huffman (i32.const 5))
+
+    end $dynamic-read-codelen  ;; state 2
       ;; write each length in the order specified by "codelen literals"
-      (i32.store16 offset=0
-        (i32.load8_u offset=972 (local.get $i)) (local.get $read-bits))
+      (i32.store8 offset=0
+        (i32.load8_u offset=1050 (local.get $i))
+        (local.get $read-bits))
       (br_if $main-loop
         (i32.lt_u
           (local.tee $i (i32.add (local.get $i) (i32.const 1)))
           (local.get $hclen)))
 
+      (i32.const 3) ;; go to state 3 after building huffman
       ;; fallthrough
     end $build-huffman
+      (local.set $state (; (result i32) ;))
+      ;; clear offs + count
+      (drop (call $memset (i32.const 0) (i32.const 318) (i32.const 414)))
+
       (local.set $i (i32.const 0))
       loop $loop
         ;; count[len[i]] += 1
-        (i32.store8 offset=304
+        (i32.store8 offset=382
           (local.tee $addr (i32.load8_u offset=0 (local.get $i)))
           (i32.add
-            (i32.load8_u offset=304 (local.get $addr))
+            (i32.load8_u offset=382 (local.get $addr))
             (i32.const 1)))
 
         (br_if $loop
-          (i32.eq (local.tee $i (i32.add (local.get $i) (i32.const 1)))
-                  (local.get $huffman-len)))
+          (i32.lt_u (local.tee $i (i32.add (local.get $i) (i32.const 1)))
+                    (local.get $huffman-len)))
       end
 
-      ;; count[0] = 0
-      ;; offs[0] = 0
-      (i32.store8 offset=304 (i32.const 0) (i32.const 0))
-      (i32.store16 offset=288 (i32.const 0) (i32.const 0))
+      ;; set offs values
       (local.set $i (i32.const 0))
       loop $loop
-        ;; offs[i+1] = offs[i] + count[i]*2   // *2 because value is u16
-        (i32.store16 offset=290
+        ;; offs[i+1] = offs[i] + 2*count[i/2]
+        ;;  2* so that the offset is an offset into syms (u16)
+        ;;  i/2 because i is a u16 index, but count is u8 array
+        (i32.store16 offset=320
           (local.get $i)
           (i32.add
-            (i32.load16_u offset=288 (local.get $i))
+            (i32.load16_u offset=318 (local.get $i))
             (i32.shl
-              (i32.load8_u offset=304 (i32.shr_u (local.get $i) (i32.const 1)))
+              (i32.load8_u offset=382 (i32.shr_u (local.get $i) (i32.const 1)))
               (i32.const 1))))
 
         (br_if $loop
-          (i32.eq (local.tee $i (i32.add (local.get $i) (i32.const 2)))
-                  (i32.const 32)))
+          (i32.lt_u (local.tee $i (i32.add (local.get $i) (i32.const 2)))
+                    (i32.const 62)))
       end
 
+      ;; set syms values
       (local.set $i (i32.const 0))
       loop $loop
-        ;; skip if len == 0
-        (if (local.tee $len (i32.load8_u offset=0 (local.get $i)))
-          (then
-            ;; syms[offs[val]] = i
-            (i32.store16 offset=320
-              (local.tee $val
-                (i32.load16_u offset=288
-                  (local.tee $addr (i32.shl (local.get $len) (i32.const 1)))))
-              (local.get $i))
+        ;; syms[offs[len[i]]] = i
+        (i32.store16 offset=414
+          (local.tee $val
+            (i32.load16_u offset=318
+              (local.tee $addr
+                (i32.shl
+                  (i32.load8_u offset=0 (local.get $i))
+                  (i32.const 1)))))
+          (local.get $i))
 
-            ;; offs[val] += 1
-            (i32.store16 offset=288
-              (local.get $addr)
-              (i32.add (local.get $val) (i32.const 1)))))
+        ;; offs[len[i]] += 2
+        (i32.store16 offset=318
+          (local.get $addr)
+          (i32.add (local.get $val) (i32.const 2)))
 
         (br_if $loop
-          (i32.eq (local.tee $i (i32.add (local.get $i) (i32.const 1)))
-                  (local.get $huffman-len)))
+          (i32.lt_u (local.tee $i (i32.add (local.get $i) (i32.const 1)))
+                    (local.get $huffman-len)))
       end
-      (local.set $read-bit-count (i32.const 1))
-      (br $inc-state)
+      (br $next-code (local.tee $i (i32.const 0)))
 
-    end $dynamic-read-hlits  ;; state 6
+    end $final-read-lit  ;; state 5
+      (if (i32.lt_u (local.get $read-code) (i32.const 256))
+        (then
+          ;; write literal data
+          (i32.store8
+            (local.get $dst-addr)
+            (local.get $read-code))
+          (local.set $dst-addr (i32.add (local.get $dst-addr) (i32.const 1)))
+          (br $next-code (i32.const 0)))
+        (else
+          (if (i32.eq (local.get $read-code) (i32.const 256))
+            (then
+              ;; if bfinal, we're done. Otherwise, read another block.
+              (br_if 8 (local.get $dst-addr) (local.get $bfinal))
+              (local.set $read-bit-count (i32.const 3))
+              (local.set $state (i32.const 0))
+              (br $main-loop))
+            (else
+              ;; write back-reference...
+              ;; First, calculate the length.
+              (local.set $copy-len
+                (call $base-value
+                  (local.tee $read-code
+                    (i32.sub (local.get $read-code) (i32.const 257)))
+                  (i32.const 3)
+                  (i32.const 29)
+                  (local.tee $read-bit-count
+                    (call $extra-bits
+                      (local.get $read-code)
+                      (i32.const 4)
+                      (i32.const 29)
+                      (i32.const 2)))))
+
+              ;; if the extra bits != 0, then read them in state 6
+              (br_if $inc-state (local.get $read-bit-count))
+              ;; otherwise fallthrough with additional value of 0
+              (local.set $read-bits (i32.const 0))))))
+
+      ;; fallthrough
+    end $extra-length-bits  ;; state 6
+      (local.set $copy-len
+        (i32.add (local.get $copy-len) (local.get $read-bits)))
+      (local.set $state (i32.const 7))
+      (br $next-code (i32.const 16))  ;; read from the distance tree
+
+    end $final-read-dist  ;; state 7
+      ;; Now calculate the distance.
+      (local.set $copy-dist
+        (call $base-value
+          (local.tee $read-code (i32.sub (local.get $read-code) (local.get $hlit)))
+          (i32.const 1)
+          (i32.const 31)
+          (local.tee $read-bit-count
+            (call $extra-bits
+              (local.get $read-code)
+              (i32.const 2)
+              (i32.const 31)
+              (i32.const 1)))))
+
+      ;; if the extra bits != 0, then read them in state 8
+      (br_if $inc-state (local.get $read-bit-count))
+      ;; otherwise fallthrough with additional value of 0
+      (local.set $read-bits (i32.const 0))
+
+    end $extra-dist-bits  ;; state 8
+      (local.set $copy-dist
+        (i32.add (local.get $copy-dist) (local.get $read-bits)))
+
+      ;; copy from [dst-dist,dst-dist+len] to [dst,dst+len]
+      (local.set $dst-addr
+        (call $memcpy
+          (local.get $dst-addr)
+          (i32.sub (local.get $dst-addr) (local.get $copy-dist))
+          (i32.add (local.get $dst-addr) (local.get $copy-len))))
+
+      (local.set $state (i32.const 5))
+      (i32.const 0)
+      ;; fallthrough
+    end $next-code
+      (local.set $read-code-index (; (result i32) ;))
+      (local.set $read-bit-count (i32.const 1))
+      (local.tee $read-code (i32.const 0))
+      (br $main-loop)
 
     end $inc-state
       (local.set $state (i32.add (local.get $state) (i32.const 1)))
       (br $main-loop)
   end
+  unreachable
 )
