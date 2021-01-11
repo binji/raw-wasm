@@ -6,10 +6,8 @@ const instance = new WebAssembly.Instance(mod);
 const arrbuf = instance.exports.mem.buffer;
 const u8arr = new Uint8Array(arrbuf);
 
-// const gzip = fs.readFileSync('alice.gz');
-// const skip = 16;  // skip gzip header
-const gzip = fs.readFileSync('inflate.py.gz');
-const skip = 21;  // skip gzip header
+const gzip = fs.readFileSync('inflate.wat.gz');
+const skip = 22;  // skip gzip header
 const src = 2000;
 const dst = 2000 + gzip.byteLength;
 
