@@ -172,32 +172,6 @@
 ;;
 ;;         code <= 1    =>  1 + code
 ;;    2 <= code <= 30   =>  1 + ((2 + (code & 1)) << extra_bits)
-(func $extra-bits
-    (param $code i32) (param $min i32) (param $max i32) (param $shift i32)
-    (result i32)
-  (select
-    (i32.sub (i32.shr_u (local.get $code) (local.get $shift))
-             (i32.const 1))
-    (i32.const 0)
-    (i32.and (i32.ge_u (local.get $code) (local.get $min))
-             (i32.lt_u (local.get $code) (local.get $max)))))
-
-(func $base-value
-    (param $code i32) (param $min i32) (param $max i32) (param $extra-bits i32)
-    (result i32)
-  (i32.add
-    (local.get $min)
-    (select
-      (select
-        (i32.shl
-          (i32.add
-            (i32.add (local.get $min) (i32.const 1))
-            (i32.and (local.get $code) (local.get $min)))
-          (local.get $extra-bits))
-        (i32.const 255)
-        (i32.lt_u (local.get $code) (local.get $max)))
-      (local.get $code)
-      (i32.gt_u (local.get $code) (local.get $min)))))
 
 (func $inflate (export "inflate") (result i32)
   (local $bfinal i32)
@@ -216,8 +190,13 @@
   (local $read-code-index i32)
   (local $read-code i32)
   (local $dst-addr i32)
+
+  (local $length-dist i32)
+  (local $min i32)
+  (local $max i32)
+  (local $shift i32)
+
   (local $copy-len i32)
-  (local $copy-dist i32)
 
   (local.set $bit-idx (i32.shl (i32.const 1072) (i32.const 3)))
   (local.set $dst-addr (i32.const 3000))
@@ -226,9 +205,9 @@
   loop $main-loop
     block $inc-state
     block $next-code (result i32)
-    block $extra-dist-bits
+    block $extra-length-dist-bits
+    block $calc-length-dist
     block $final-read-dist
-    block $extra-length-bits
     block $final-read-lit
     block $build-huffman (result i32)
     block $dynamic-read-codelen
@@ -253,15 +232,15 @@
             (i32.const 1))))
       (local.set $bit-idx (i32.add (local.get $bit-idx) (local.get $read-bit-count)))
 
-      (br_table $bfinal-btype           ;; 0
-                $dynamic-header         ;; 1
-                $dynamic-read-codelen   ;; 2
-                $read-code              ;; 3 (for temp huffman)
-                $dynamic-repeat-value   ;; 4
-                $read-code              ;; 5 (for final huffman literal/length)
-                $extra-length-bits      ;; 6
-                $read-code              ;; 7 (for final huffman dist)
-                $extra-dist-bits        ;; 8
+      (br_table $bfinal-btype            ;; 0
+                $dynamic-header          ;; 1
+                $dynamic-read-codelen    ;; 2
+                $read-code               ;; 3 (for temp huffman)
+                $dynamic-repeat-value    ;; 4
+                $read-code               ;; 5 (for final huffman literal/length)
+                $extra-length-dist-bits  ;; 6
+                $read-code               ;; 7 (for final huffman dist)
+                $extra-length-dist-bits  ;; 8
         (local.get $state))
 
     end $bfinal-btype  ;; state 0
@@ -344,13 +323,12 @@
               (i32.shl (local.get $read-code-index) (i32.const 1)))
             (i32.shl (local.get $read-code) (i32.const 1)))))
 
-      ;; go to $final-read-lit if state == 5
-      ;; go to $final-read-dist if state == 7
-      ;; TODO: optimize
-      (br_if $final-read-lit (i32.eq (local.get $state) (i32.const 5)))
-      (br_if $final-read-dist (i32.eq (local.get $state) (i32.const 7)))
+      ;; state == 3  => $dynamic-read-table
+      ;; state == 5  => $final-read-lit
+      ;; state == 7  => $final-read-dist
+      (br_table $dynamic-read-table $final-read-lit $final-read-dist
+        (i32.shr_u (i32.sub (local.get $state) (i32.const 3)) (i32.const 1)))
 
-      ;; fallthrough if state == 3
     end $dynamic-read-table
       (if (i32.lt_u (local.get $read-code) (i32.const 16))
         (then
@@ -498,63 +476,71 @@
             (else
               ;; write back-reference...
               ;; First, calculate the length.
-              (local.set $copy-len
-                (call $base-value
-                  (local.tee $read-code
-                    (i32.sub (local.get $read-code) (i32.const 257)))
-                  (i32.const 3)
-                  (i32.const 29)
-                  (local.tee $read-bit-count
-                    (call $extra-bits
-                      (local.get $read-code)
-                      (i32.const 4)
-                      (i32.const 29)
-                      (i32.const 2)))))
-
-              ;; if the extra bits != 0, then read them in state 6
-              (br_if $inc-state (local.get $read-bit-count))
-              ;; otherwise fallthrough with additional value of 0
-              (local.set $read-bits (i32.const 0))))))
-
-      ;; fallthrough
-    end $extra-length-bits  ;; state 6
-      (local.set $copy-len
-        (i32.add (local.get $copy-len) (local.get $read-bits)))
-      (local.set $state (i32.const 7))
-      (br $next-code (i32.const 16))  ;; read from the distance tree
+              (local.set $min (i32.const 3))
+              (local.set $max (i32.const 29))
+              (local.set $shift (i32.const 2))
+              (local.set $read-code
+                (i32.sub (local.get $read-code) (i32.const 257)))
+              (br $calc-length-dist)))))
 
     end $final-read-dist  ;; state 7
-      ;; Now calculate the distance.
-      (local.set $copy-dist
-        (call $base-value
-          (local.tee $read-code (i32.sub (local.get $read-code) (local.get $hlit)))
-          (i32.const 1)
-          (i32.const 31)
-          (local.tee $read-bit-count
-            (call $extra-bits
-              (local.get $read-code)
-              (i32.const 2)
-              (i32.const 31)
-              (i32.const 1)))))
+      (local.set $min (i32.const 1))
+      (local.set $max (i32.const 31))
+      (local.set $shift (i32.const 1))
+      (local.set $read-code
+        (i32.sub (local.get $read-code) (local.get $hlit)))
 
-      ;; if the extra bits != 0, then read them in state 8
+      ;; fallthrough
+    end $calc-length-dist  ;; state 5,7
+      (local.set $read-bit-count
+        (select
+            (i32.sub (i32.shr_u (local.get $read-code) (local.get $shift))
+                     (i32.const 1))
+            (i32.const 0)
+            (i32.and (i32.gt_u (local.get $read-code) (local.get $min))
+                     (i32.lt_u (local.get $read-code) (local.get $max)))))
+
+      (local.set $length-dist
+        (i32.add
+            (local.get $min)
+            (select
+              (select
+                (i32.shl
+                  (i32.add
+                    (i32.add (local.get $min) (i32.const 1))
+                    (i32.and (local.get $read-code) (local.get $min)))
+                  (local.get $read-bit-count))
+                (i32.const 255)
+                (i32.lt_u (local.get $read-code) (local.get $max)))
+              (local.get $read-code)
+              (i32.gt_u (local.get $read-code) (local.get $min)))))
+
+      ;; if the extra bits != 0, then read them, then go to state 6/8
       (br_if $inc-state (local.get $read-bit-count))
       ;; otherwise fallthrough with additional value of 0
       (local.set $read-bits (i32.const 0))
 
-    end $extra-dist-bits  ;; state 8
-      (local.set $copy-dist
-        (i32.add (local.get $copy-dist) (local.get $read-bits)))
+      ;; fallthrough
+    end $extra-length-dist-bits  ;; state 5,6,7,8
+      (local.set $length-dist
+        (i32.add (local.get $length-dist) (local.get $read-bits)))
 
-      ;; copy from [dst-dist,dst-dist+len] to [dst,dst+len]
-      (local.set $dst-addr
-        (call $memcpy
-          (local.get $dst-addr)
-          (i32.sub (local.get $dst-addr) (local.get $copy-dist))
-          (i32.add (local.get $dst-addr) (local.get $copy-len))))
+      (if (result i32) (i32.lt_u (local.get $state) (i32.const 7))
+        (then
+          (local.set $copy-len (local.get $length-dist))
+          (local.set $state (i32.const 7))
+          (i32.const 16))  ;; read from the distance tree
+        (else
+          ;; copy from [dst-dist,dst-dist+len] to [dst,dst+len]
+          (local.set $dst-addr
+            (call $memcpy
+              (local.get $dst-addr)
+              (i32.sub (local.get $dst-addr) (local.get $length-dist))
+              (i32.add (local.get $dst-addr) (local.get $copy-len))))
 
-      (local.set $state (i32.const 5))
-      (i32.const 0)
+          (local.set $state (i32.const 5))
+          (i32.const 0)))  ;; read from the lit/len tree
+
       ;; fallthrough
     end $next-code
       (local.set $read-code-index (; (result i32) ;))
