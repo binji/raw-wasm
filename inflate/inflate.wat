@@ -177,14 +177,14 @@
       (local.set $huffman-len
         (call $memset (i32.const 21)  ;; 5 + 16
           (call $memset (i32.const 8)
-            (call $memset (i32.const 9)
-              (call $memset (i32.const 7)
+            (call $memset (i32.const 7)
+              (call $memset (i32.const 9)
                 (call $memset (i32.const 8)
                   (i32.const 0)
                   (i32.const 144))
                 (i32.const 256))
               (i32.const 280))
-            (i32.const 288))
+            (local.tee $hlit (i32.const 288)))
           (i32.const 320)))
       (br $build-huffman (i32.const 5))
 

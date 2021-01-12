@@ -1,2 +1,97 @@
-<script src="inf6502.js">
-</script>
+<!DOCTYPE html>
+<head>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <style>
+    @media (max-width: 480px) {
+      #output { font-size: 8px; }
+    }
+    body {
+      position: absolute;
+      box-sizing: border-box;
+      display: flex;
+      margin: 0;
+      width: 100%;
+      height: 100%;
+      flex-direction: column;
+      padding: 0 12.5px;
+    }
+    #info { font-size: 75%; }
+  </style>
+</head>
+<body>
+  <div id="main">
+    <p>Choose a file to inflate:</p>
+    <select id="file">
+    </select>
+    <p id="info"></p>
+    <pre id="output"></pre>
+  </div>
+  <script>
+    let instance, u8mem;
+    fetch('inflate.wasm')
+      .then(response => response.arrayBuffer())
+      .then(bytes => WebAssembly.instantiate(bytes))
+      .then(source => {
+        instance = source.instance;
+        u8mem = new Uint8Array(instance.exports.mem.buffer);
+      });
+
+    const examples = [
+      {name:'---'},
+      {name:'Alice\'s Adventures in Wonderland', file:'alice.gz', skip:16, type:'ascii'},
+      {name:'The Time Machine', file:'tm.txt.gz', skip:17, type:'utf8'},
+      {name:'inflate.wat', file:'inflate.wat.gz', skip:22, type:'ascii'},
+      {name:'Makefile', file:'fixed.gz', skip:19, type:'ascii'},
+    ];
+
+    const selectEl = document.querySelector('select');
+    const outputEl = document.querySelector('#output');
+    const infoEl = document.querySelector('#info');
+
+    for (let i = 0; i < examples.length; ++i) {
+      const optionEl = document.createElement('option');
+      optionEl.setAttribute('value', i);
+      optionEl.textContent = examples[i].name;
+      selectEl.appendChild(optionEl);
+    }
+
+    selectEl.addEventListener('change', async event => {
+      const example = examples[event.target.value];
+      if (example.name == '---') {
+        outputEl.textContent = '';
+        return;
+      }
+
+      const response = await fetch(example.file);
+      const buffer = await response.arrayBuffer();
+      const u8buffer = new Uint8Array(buffer);
+      const srcAddr = 2000;
+      const oldSize = buffer.byteLength;
+      const dstAddr = 2000 + oldSize;
+
+      // Skip the gzip header.
+      u8mem.set(u8buffer.slice(example.skip), srcAddr);
+      const startTime = performance.now();
+      const dstEndAddr = instance.exports.inflate(srcAddr, dstAddr);
+      const endTime = performance.now();
+      const newSize = dstEndAddr - dstAddr;
+      const output = u8mem.slice(dstAddr, dstEndAddr);
+
+      let result;
+      switch (example.type) {
+        case 'ascii':
+          result = output.reduce((p,c)=>p+String.fromCharCode(c),'');
+          break;
+        case 'utf8':
+          result = (new TextDecoder()).decode(output);
+          break;
+      }
+
+      const msec = (endTime - startTime).toFixed(2);
+      const miBPerSec = ((newSize * 1000) / ((endTime - startTime) * (1024 * 1024))).toFixed(2);
+
+      outputEl.textContent = result;
+      infoEl.textContent = `size=${oldSize} -> ${newSize} bytes (${msec} msec, ${miBPerSec} MiB/sec)`;
+    });
+  </script>
+</body>
