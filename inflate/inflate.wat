@@ -38,13 +38,18 @@
   ;;
   ;; The `codelen literals` array stores a permutation of the symbol lengths
   ;; for the temporary huffman table (which is used to decode the final huffman
-  ;; table).
+  ;; table). RFC1951 uses 18 instead of 21 below, but it's convenient to use 21
+  ;; here so we can easily convert from code [16,17,18] to the number of
+  ;; additional bits they need to read [2,3,7].
   ;;
   ;;     addr:1056   codelen literals  (size: 1b x 19 = 19)
   ;;
   (i8 16 17 21 0 8 7 9 6 10 5 11 4 12 3 13 2 14 1 15)
 )
 
+;; Copy from ($dstend-$dst) bytes from $src to $dst. This deliberately does not
+;; handle overlap, so it can be used to duplicate bytes (as required by
+;; RFC1951).
 (func $memcpy (param $dst i32) (param $src i32) (param $dstend i32) (result i32)
   ;; don't write anything if dst >= dstend
   (local.get $dstend)
@@ -58,8 +63,9 @@
         (local.get $dstend))))
 )
 
+;; Set at ($dstend-$dst) bytes to $val. This will always write at least one
+;; byte!
 (func $memset (param $val i32) (param $dst i32) (param $dstend i32) (result i32)
-  ;; always write at least one byte!
   (i32.store8 (local.get $dst) (local.get $val))
   (call $memcpy
     (i32.add (local.get $dst) (i32.const 1))
@@ -67,33 +73,35 @@
     (local.get $dstend))
 )
 
+;; Inflate a "raw" (i.e. no-gzip/zip header) DEFLATE encoded stream at $src,
+;; and write the output to $dst. Returns the address of the end of output.
 (func $inflate (export "inflate")
       (param $src i32) (param $dst i32) (result i32)
-  (local $state i32)
-  (local $bfinal i32)
-  (local $src-bit i32)
-  (local $bits-to-read i32)
-  (local $bits i32)
-  (local $code i32)
-  (local $src+4 i32)
-  (local $i i32)
-  (local $hlit i32)
-  (local $hlit+hdist i32)
-  (local $hclen i32)
-  (local $huffman-len i32)
-  (local $hcend i32)
-  (local $temp-addr i32)
-  (local $val i32)
-  (local $code-index i32)
+  (local $state i32)   ;; Current state of the decoder. See the br_table below.
+  (local $bfinal i32)  ;; Non-zero if this is the final block to decode.
+  (local $src-bit i32) ;; Current source location, as a bit index.
+  (local $bits-to-read i32)  ;; Number of source bits to read (must be <25)
+  (local $bits i32)          ;; Current bits that were read.
+  (local $code i32)          ;; Current code that was decoded.
+  (local $src+4 i32)         ;; Temp. memory to store $src + 4.
+  (local $i i32)             ;; Temp. index, used when building huffman tables.
+  (local $hlit i32)          ;; Number of huffman literals.
+  (local $hlit+hdist i32)    ;; Number of huffman literals and distances.
+  (local $hclen i32)         ;; Number of huffman code lengths codes.
+  (local $huffman-len i32)   ;; Size of the huffman array.
+  (local $hcend i32)         ;; Ending index when writing repeated huffman codes.
+  (local $temp-addr i32)     ;; Temp. address used when building huffman tables.
+  (local $val i32)           ;; Temp. value used when building huffman tables.
+  (local $code-index i32)    ;; Current length index when decoding $code.
 
-  (local $length-dist i32)
-  (local $min i32)
-  (local $max i32)
-  (local $shift i32)
-  (local $code>min i32)
-  (local $code<max i32)
+  (local $length-dist i32)   ;; Decoded length/distance value.
+  (local $min i32)           ;; Minimum code used for length/dist calculation.
+  (local $max i32)           ;; Maximum code used for length/dist calculation.
+  (local $shift i32)         ;; Shift value used for length/dist calculation.
+  (local $code>min i32)      ;; Temp. value storing whether $code > $min.
+  (local $code<max i32)      ;; Temp. value storing whether $code < $max.
 
-  (local $copy-len i32)
+  (local $copy-len i32)      ;; Number of bytes to copy in back-reference.
 
   (local.set $src-bit
     (i32.shl
@@ -119,7 +127,7 @@
     block $fixed
     block $stored
     block $bfinal-btype
-      ;; read n bits
+      ;; Read $bits-to-read bits, and store them in $bits.
       (local.set $bits
         (i32.and
           (i32.shr_u
@@ -143,19 +151,24 @@
         (local.get $state))
 
     end $bfinal-btype  ;; state 0
+      ;; $bits contains 3 bits; the low bit is bfinal, and the top two bits are
+      ;; btype.
       (local.set $bfinal (i32.and (local.get $bits) (i32.const 1)))
       ;; 0 => $stored, 1 => $fixed, 2 => $dynamic
       (br_table $stored $fixed $dynamic
         (i32.shr_u (local.get $bits) (i32.const 1)))
 
     end $stored
-      ;; copy uncompressed data
+      ;; btype==0; copy uncompressed data. The source address is first aligned
+      ;; to the nearest byte. It is then followed by two 16-bit values: LEN and
+      ;; NLEN. LEN is the length of the uncompressed data in bytes, and NLEN is
+      ;; LEN's one's complement.
       (local.set $dst
         (call $memcpy
           (local.get $dst)
           (local.tee $src+4
             (i32.add
-              ;; align src-bit to nearest byte boundary
+              ;; Align src-bit to nearest byte boundary.
               (local.tee $src
                 (i32.shr_u (i32.add (local.get $src-bit) (i32.const 7))
                            (i32.const 3)))
@@ -164,7 +177,7 @@
             (local.get $dst)
             (local.tee $copy-len (i32.load16_u (local.get $src))))))
 
-      ;; skip over uncompressed data
+      ;; Skip over uncompressed data.
       (local.set $src-bit
         (i32.shl
           (i32.add (local.get $src+4) (local.get $copy-len))
@@ -173,7 +186,20 @@
       (br $next-block)
 
     end $fixed
-      ;; use fixed huffman tree
+      ;; btype==1; use fixed huffman tree. The lengths are encoded as follows:
+      ;;
+      ;;   range    len
+      ;;   ============
+      ;;   [  0,144)  8
+      ;;   [144,256)  9
+      ;;   [256,280)  7
+      ;;   [280,288)  8
+      ;;   [288,320)  5 + 16
+      ;;
+      ;; The codes from 288 through 320 are used for the distance codes, and
+      ;; have 16 added to their length so they can be encoded in the same
+      ;; huffman table.
+
       (local.set $huffman-len
         (call $memset (i32.const 21)  ;; 5 + 16
           (call $memset (i32.const 8)
@@ -189,13 +215,13 @@
       (br $build-huffman (i32.const 5))
 
     end $dynamic
-      ;; read 5 + 5 + 4 == 14 bits
+      ;; Read 5 + 5 + 4 == 14 bits (see $dynamic-header below).
       (br $inc-state (i32.const 14))  ;; state 0->1
 
     end $dynamic-header  ;; state 1
-      ;; hlit  = 257 + getBits(5)
-      ;; hdist =   1 + getBits(5)
-      ;; hclen =   4 + getBits(4)
+      ;; hlit  = 257 + getBits(5)   Number of literal codes used
+      ;; hdist =   1 + getBits(5)   Number of distance codes used
+      ;; hclen =   4 + getBits(4)   Number of code length codes used
       (local.set $hlit+hdist
         (i32.add
           (i32.add
@@ -235,7 +261,7 @@
                   (i32.add (local.get $code-index) (i32.const 1))))))
           (i32.const 0)))
 
-      ;; add in the offset, and read the code symbol.
+      ;; Add in the offset, and read the code symbol.
       (local.set $code
         (i32.load16_u offset=416
           (i32.add
@@ -250,10 +276,12 @@
         (i32.shr_u (i32.sub (local.get $state) (i32.const 3)) (i32.const 1)))
 
     end $dynamic-read-table
+      ;; Values 0..15 are encoded as a literal length.
       (if (i32.lt_u (local.get $code) (i32.const 16))
         (then
-          ;; write literal value to lens. When writing distance values, add 16
-          ;; to the length so they are stored in the other tree.
+          ;; When writing distance values, add 16 to the length so they are
+          ;; stored in the "distance" tree instead of the "literal/length"
+          ;; tree.
           (local.set $val
             (i32.add
               (local.get $code)
@@ -269,21 +297,23 @@
         (i32.mul
           (i32.eq (local.get $code) (i32.const 16))
           (local.get $val)))
-      ;; set length to 8 if $code==18 (additional +3 happens below)
+      ;; set length to 8 if $code==21 (the additional +3 happens below)
       (local.set $hcend
         (i32.add
           (local.get $i)
           (i32.shl
             (i32.eq (local.get $code) (i32.const 21))
             (i32.const 3))))
-      ;; set $bits-to-read to code - 14; see table above.
+      ;; Set $bits-to-read to code - 14; see table above.
       (br $inc-state (i32.sub (local.get $code) (i32.const 14)))  ;; state 3->4
 
     end $dynamic-repeat-value ;; state 4
+      ;; Set up to read another code in state 3.
       (local.set $bits-to-read (i32.const 1))
       (local.set $state (i32.const 3))
 
-      ;; set hcend (see below)
+      ;; Set hcend (see below). All repeated codes add +3 (and code 21 adds
+      ;; +11, and +8 has already been added above).
       (i32.add
         (i32.add (local.get $bits) (local.get $hcend))
         (i32.const 3))
@@ -298,12 +328,13 @@
         (i32.lt_u (local.get $i) (local.get $hlit+hdist)))
       ;; (drop)
 
-      ;; final huffman table is decompressed, so build it.
+      ;; Final huffman table lengths have now been decoded, so build final
+      ;; huffman table.
       (local.set $huffman-len (local.get $hlit+hdist))
       (br $build-huffman (i32.const 5))
 
     end $dynamic-read-codelen  ;; state 2
-      ;; write each length in the order specified by "codelen literals"
+      ;; Write each length in the order specified by "codelen literals".
       (i32.store8 offset=0
         (i32.load8_u offset=1056 (local.get $i))
         (local.get $bits))
@@ -320,6 +351,8 @@
       (call $memset (i32.const 0) (i32.const 320) (i32.const 416))
       ;; (drop)
 
+      ;; Calculate the number of codes with a given bit length, and store them
+      ;; in the count array.
       (local.set $i (local.get $huffman-len))
       loop $loop
         ;; count[len[i]] += 1
@@ -334,7 +367,9 @@
         (br_if $loop (local.get $i))
       end
 
-      ;; set offs values
+      ;; Calculate the offsets into the final symbol table of codes of a given
+      ;; bit length.
+
       ;; (local.set $i (i32.const 0))
       loop $loop
         ;; offs[i+1] = offs[i] + 2*count[i/2]
@@ -353,7 +388,7 @@
                     (i32.const 62)))
       end
 
-      ;; set syms values
+      ;; Fill in the symbols array, given the offsets calculated above.
       (local.set $i (i32.const 0))
       loop $loop
         ;; syms[offs[len[i]]] = i
@@ -378,6 +413,8 @@
       (br $next-code (local.tee $i (i32.const 0)))
 
     end $final-read-lit  ;; state 5
+      ;; $code has the currently decoded code. If it is < 256, then it is a
+      ;; literal value and can be written directly to the output.
       (if (i32.lt_u (local.get $code) (i32.const 256))
         (then
           ;; Write literal data
@@ -387,10 +424,10 @@
           (local.set $dst (i32.add (local.get $dst) (i32.const 1)))
           (br $next-code (i32.const 0))))
 
-      ;; Finish block if code == 256
+      ;; Finish the block if $code == 256
       (br_if $next-block (i32.eq (local.get $code) (i32.const 256)))
 
-      ;; Otherwise write back-reference...
+      ;; Otherwise the code is a back-reference...
       ;; First, calculate the length.
       (local.set $min (i32.const 3))
       (local.set $max (i32.const 29))
@@ -465,13 +502,16 @@
       (local.set $length-dist
         (i32.add (local.get $length-dist) (local.get $bits)))
 
+      ;; If state is 5 or 6, then we just calculated the length. If state is 7
+      ;; or 8, then we just calculated the distance.
       (if (result i32) (i32.lt_u (local.get $state) (i32.const 7))
         (then
+          ;; Store the length in $copy-len, and read the distance code.
           (local.set $copy-len (local.get $length-dist))
           (local.set $state (i32.const 7))
           (i32.const 16))  ;; read from the distance tree
         (else
-          ;; copy from [dst-dist,dst-dist+len] to [dst,dst+len]
+          ;; Copy from [dst-dist,dst-dist+len] to [dst,dst+len]
           (local.set $dst
             (call $memcpy
               (local.get $dst)
@@ -489,7 +529,7 @@
       (br $main-loop)
 
     end $next-block
-      ;; if this is the final block, we're done. Otherwise, read another block.
+      ;; If this is the final block, we're done. Otherwise, read another block.
       (br_if 2 (local.get $dst) (local.get $bfinal))
       (local.set $bits-to-read (i32.const 3))
       (local.set $state (i32.const 0))

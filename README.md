@@ -22,6 +22,15 @@ just updates every pixel. [**452 bytes**]
 
 [Demo!][4]
 
+## Inflate
+
+An implementation of the INFLATE algorithm, as specified in [RFC1951][17]. It
+uses some tricks from [Piotr Fusik's 6502 implementation][18], such as storing
+the literal and distance huffman trees in the same array, and programmatically
+calculating the length/distance encoding rather than using tables. [**991 bytes**]
+
+[Demo!][19]
+
 ## Chip-8
 
 A [CHIP-8 interpreter][11], with support for the original chip-8 instruction
@@ -76,3 +85,6 @@ up of 120-levels of brightness, which fade into black in the distance. [**2047 b
 [14]: https://binji.github.io/raw-wasm/chip8
 [15]: http://johnearnest.github.io/Octo
 [16]: https://binji.github.io/raw-wasm/dino
+[17]: https://tools.ietf.org/html/rfc1951
+[18]: https://github.com/pfusik/zlib6502
+[19]: https://binji.github.io/raw-wasm/inflate
