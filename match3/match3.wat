@@ -9,20 +9,21 @@
 (memory (export "mem") 3)
 
 (func (export "run")
+  (local $size i32)
   (call $clear-screen (i32.const 0)) ;; transparent black
 
-  (call $draw-sprite
-    (i32.const 0) (i32.const 0)
-    (i32.const 16) (i32.const 16)
-    (i32.const 0x100)
-  )
+  (local.set $size
+    (select
+      (i32.const 32)
+      (i32.const 16)
+      (i32.load8_u (i32.const 2))))
 
   (call $draw-sprite
     (i32.load8_u (i32.const 0))  ;; X
     (i32.load8_u (i32.const 1))  ;; Y
-    (i32.const 16)
-    (i32.const 16)
     (i32.const 0x100)
+    (i32.const 16) (i32.const 16)
+    (local.get $size) (local.get $size)
   )
 )
 
@@ -60,23 +61,44 @@
 )
 
 (func $draw-sprite (param $x i32) (param $y i32)
-                   (param $w i32) (param $h i32)
                    (param $src i32)
+                   (param $sw i32) (param $sh i32)
+                   (param $dw i32) (param $dh i32)
   (local $i i32)
   (local $j i32)
   (local $palidx i32)
-  ;; for (j = 0; j < h; j++)
+  (local $dx f32)
+  (local $dy f32)
+
+  ;; dx = sw / dw
+  (local.set $dx
+    (f32.div (f32.convert_i32_s (local.get $sw))
+             (f32.convert_i32_s (local.get $dw))))
+  ;; dy = sh / dh
+  (local.set $dy
+    (f32.div (f32.convert_i32_s (local.get $sh))
+             (f32.convert_i32_s (local.get $dh))))
+
+  ;; for (j = 0; j < dh; j++)
   (loop $y-loop
     (local.set $i (i32.const 0))
-    ;; for (i = 0; i < w; i++)
+    ;; for (i = 0; i < dw; i++)
     (loop $x-loop
-      ;; palidx = mem[src + (w * j + i)]
+      ;; pixel = mem[src + (sw * j * dy + i * dx)]
       (local.set $palidx
         (i32.load8_u
           (i32.add
             (i32.add
-              (i32.mul (local.get $w) (local.get $j))
-              (local.get $i))
+              (i32.mul
+                (local.get $sw)
+                (i32.trunc_f32_s
+                  (f32.mul
+                    (f32.convert_i32_s (local.get $j))
+                    (local.get $dy))))
+              (i32.trunc_f32_s
+                (f32.mul
+                  (f32.convert_i32_s (local.get $i))
+                  (local.get $dx))))
             (local.get $src))))
 
       ;; if (palidx != 0)
@@ -92,13 +114,13 @@
       (local.set $i (i32.add (local.get $i) (i32.const 1)))
 
       ;; loop if i < w
-      (br_if $x-loop (i32.lt_s (local.get $i) (local.get $w)))
+      (br_if $x-loop (i32.lt_s (local.get $i) (local.get $dw)))
     )
     ;; j += 1
     (local.set $j (i32.add (local.get $j) (i32.const 1)))
 
     ;; loop if j < h
-    (br_if $y-loop (i32.lt_s (local.get $j) (local.get $h)))
+    (br_if $y-loop (i32.lt_s (local.get $j) (local.get $dh)))
   )
 )
 
