@@ -11,6 +11,12 @@
   (call $clear-screen (i32.const 0)) ;; transparent black
 
   (call $draw-sprite
+    (i32.const 0) (i32.const 0)
+    (i32.const 16) (i32.const 16)
+    (i32.const 0x100)
+  )
+
+  (call $draw-sprite
     (i32.load8_u (i32.const 0))  ;; X
     (i32.load8_u (i32.const 1))  ;; Y
     (i32.const 16)
@@ -49,15 +55,14 @@
                    (param $src i32)
   (local $i i32)
   (local $j i32)
+  (local $pixel i32)
   ;; for (j = 0; j < h; j++)
   (loop $y-loop
     (local.set $i (i32.const 0))
     ;; for (i = 0; i < w; i++)
     (loop $x-loop
-      ;; put-pixel(x + i, y + j, mem[src + (w * j + i) * 4])
-      (call $put-pixel
-        (i32.add (local.get $x) (local.get $i))
-        (i32.add (local.get $y) (local.get $j))
+      ;; pixel = mem[src + (w * j + i) * 4]
+      (local.set $pixel
         (i32.load
           (i32.add
             (i32.mul
@@ -66,6 +71,15 @@
                 (local.get $i))
               (i32.const 4))
             (local.get $src))))
+
+      ;; if (pixel != 0)
+      (if (local.get $pixel)
+        (then
+          ;; put-pixel(x + i, y + j, pixel)
+          (call $put-pixel
+            (i32.add (local.get $x) (local.get $i))
+            (i32.add (local.get $y) (local.get $j))
+            (local.get $pixel))))
 
       ;; i += 1
       (local.set $i (i32.add (local.get $i) (i32.const 1)))
