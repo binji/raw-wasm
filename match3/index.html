@@ -28,13 +28,40 @@
     const context = canvas.getContext('2d');
     const imageData = context.createImageData(w, h);
 
+    function clamp(min, x, max) {
+      return Math.min(Math.max(x, min), max);
+    }
+
     (async function start() {
       const response = await fetch('match3.wasm');
       const moduleBytes = await response.arrayBuffer();
       const {module, instance} = await WebAssembly.instantiate(moduleBytes);
       const exports = instance.exports;
 
+      const input = new Uint8Array(exports.mem.buffer, 0x0000, 3);
       const canvasData = new Uint8Array(exports.mem.buffer, 0x10000, w*h*4);
+
+      function mouseEventHandler(event) {
+        const target = event.target;
+        const cw = target.clientWidth, ch = target.clientHeight;
+        let size, ow, oh;
+        if (cw < ch) {
+          size = cw;
+          ow = 0;
+          oh = (ch - cw) / 2;
+        } else {
+          size = ch;
+          ow = (cw - ch) / 2;
+          oh = 0;
+        }
+        input[0] = clamp(0, w * (event.offsetX - ow) / size, w - 1);
+        input[1] = clamp(0, h * (event.offsetY - oh) / size, h - 1);
+        input[2] = event.buttons;
+      }
+
+      canvas.addEventListener('mousemove', mouseEventHandler);
+      canvas.addEventListener('mousedown', mouseEventHandler);
+      canvas.addEventListener('mouseup', mouseEventHandler);
 
       (function update() {
         requestAnimationFrame(update);
