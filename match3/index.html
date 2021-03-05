@@ -21,4 +21,27 @@
 </head>
 <body>
   <canvas width="150" height="150"></canvas>
+  <script>
+    const w = 150, h = 150;
+
+    const canvas = document.querySelector('canvas');
+    const context = canvas.getContext('2d');
+    const imageData = context.createImageData(w, h);
+
+    (async function start() {
+      const response = await fetch('match3.wasm');
+      const moduleBytes = await response.arrayBuffer();
+      const {module, instance} = await WebAssembly.instantiate(moduleBytes);
+      const exports = instance.exports;
+
+      const canvasData = new Uint8Array(exports.mem.buffer, 0x10000, w*h*4);
+
+      (function update() {
+        requestAnimationFrame(update);
+        exports.run();
+        imageData.data.set(canvasData);
+        context.putImageData(imageData, 0, 0);
+      })();
+    })();
+  </script>
 </body>
