@@ -6,6 +6,10 @@
 ;; [0x000c0 .. 0x00100]  16 RGBA colors       u32[16]
 ;; [0x00100 .. 0x01100]  16x16x1 Bpp sprites  u8[8][256]
 ;; [0x03000 .. 0x03040]  8x8 grid bitmap  u64[8]
+;; [0x03200 .. 0x03300]  current offset  {s8 x, s8 y, s8 w, s8 h}[64]
+;; [0x03300 .. 0x03400]  start offset    {s8 x, s8 y, s8 w, s8 h}[64]
+;; [0x03400 .. 0x03500]  end offset      {s8 x, s8 y, s8 w, s8 h}[64]
+;; [0x03500 .. 0x03600]  time [0..1)     f32[64]
 ;; [0x10000 .. 0x25f90]  150x150xRGBA data (4 bytes per pixel)
 (memory (export "mem") 3)
 
@@ -21,6 +25,83 @@
     0x4080010202018040   ;; cells 6
     0x8001020404020180   ;; cells 7
     )
+)
+
+(data (i32.const 0x3300)
+  ;; x,y,w,h
+  (i8
+    0 -128 0 0
+    0 -128 0 0
+    0 -128 0 0
+    0 -128 0 0
+    0 -128 0 0
+    0 -128 0 0
+    0 -128 0 0
+    0 -128 0 0
+
+    0 -128 0 0
+    0 -128 0 0
+    0 -128 0 0
+    0 -128 0 0
+    0 -128 0 0
+    0 -128 0 0
+    0 -128 0 0
+    0 -128 0 0
+
+    0 -128 0 0
+    0 -128 0 0
+    0 -128 0 0
+    0 -128 0 0
+    0 -128 0 0
+    0 -128 0 0
+    0 -128 0 0
+    0 -128 0 0
+
+    0 -128 0 0
+    0 -128 0 0
+    0 -128 0 0
+    0 -128 0 0
+    0 -128 0 0
+    0 -128 0 0
+    0 -128 0 0
+    0 -128 0 0
+
+    0 -128 0 0
+    0 -128 0 0
+    0 -128 0 0
+    0 -128 0 0
+    0 -128 0 0
+    0 -128 0 0
+    0 -128 0 0
+    0 -128 0 0
+
+    0 -128 0 0
+    0 -128 0 0
+    0 -128 0 0
+    0 -128 0 0
+    0 -128 0 0
+    0 -128 0 0
+    0 -128 0 0
+    0 -128 0 0
+
+    0 -128 0 0
+    0 -128 0 0
+    0 -128 0 0
+    0 -128 0 0
+    0 -128 0 0
+    0 -128 0 0
+    0 -128 0 0
+    0 -128 0 0
+
+    0 -128 0 0
+    0 -128 0 0
+    0 -128 0 0
+    0 -128 0 0
+    0 -128 0 0
+    0 -128 0 0
+    0 -128 0 0
+    0 -128 0 0
+  )
 )
 
 (func (export "run")
@@ -41,6 +122,7 @@
           (i64.load (i32.const 0x3038))
           (local.get $mouse-bit)))))
 
+  (call $animate)
   (call $draw-grids)
 )
 
@@ -126,13 +208,21 @@
 
 (func $draw-cell (param $x i32) (param $y i32) (param $i i32) (param $src i32) 
   (call $draw-sprite
-    (local.get $x)
-    (local.get $y)
+    (i32.add
+      (local.get $x)  ;; base x
+      (i32.load8_s offset=0x3200 (local.get $i))) ;; x offset
+    (i32.add
+      (local.get $y)  ;; base y
+      (i32.load8_s offset=0x3201 (local.get $i))) ;; y offset
     (local.get $src)
     (i32.const 16)  ;; sw
     (i32.const 16)  ;; sh
-    (i32.const 16)  ;; dw
-    (i32.const 16)) ;; dh
+    (i32.add
+      (i32.const 16)   ;; base w
+      (i32.load8_s offset=0x3202 (local.get $i)))  ;; w offset
+    (i32.add
+      (i32.const 16)   ;; base h
+      (i32.load8_s offset=0x3203 (local.get $i)))) ;; h offset
 )
 
 (func $clear-screen (param $color i32)
@@ -230,6 +320,59 @@
     ;; loop if j < h
     (br_if $y-loop (i32.lt_s (local.get $j) (local.get $dh)))
   )
+)
+
+(func $animate
+  (local $t-addr i32)
+  (local $i-addr i32)
+  (local $t f32)
+
+  (loop $loop
+    ;; t = Math.min(t[i] + speed, 1)
+    (local.set $t
+      (f32.min
+        (f32.add
+          (f32.load offset=0x3500 (local.get $t-addr))
+          (f32.const 0.005))
+        (f32.const 1)))
+
+    ;; current[i] = ilerp(start[i], end[i], easeOutCubic(t))
+    (i32.store8 offset=0x3200
+      (local.get $i-addr)
+      (call $ilerp
+        (i32.load8_s offset=0x3300 (local.get $i-addr))
+        (i32.load8_s offset=0x3400 (local.get $i-addr))
+        (call $ease-out-cubic (local.get $t))))
+    ;; t[i] = t
+    (f32.store offset=0x3500 (local.get $t-addr) (local.get $t))
+
+    ;; i-addr += 1
+    (local.set $i-addr (i32.add (local.get $i-addr) (i32.const 1)))
+    ;; t-addr = i-addr & ~3
+    (local.set $t-addr (i32.and (local.get $i-addr) (i32.const 0xfc)))
+    (br_if $loop (i32.lt_s (local.get $i-addr) (i32.const 256)))
+  )
+)
+
+(func $ease-out-cubic (param $t f32) (result f32)
+  ;; return t * (3 + t * (t - 3))
+  (f32.mul
+    (local.get $t)
+    (f32.add
+      (f32.const 3)
+      (f32.mul
+        (local.get $t)
+        (f32.sub (local.get $t) (f32.const 3)))))
+)
+
+(func $ilerp (param $a i32) (param $b i32) (param $t f32) (result i32)
+  ;; return a + (b - a) * t
+  (i32.add
+    (local.get $a)
+    (i32.trunc_f32_s
+      (f32.mul
+        (f32.convert_i32_s (i32.sub (local.get $b) (local.get $a)))
+        (local.get $t))))
 )
 
 (data (i32.const 0xc0)
