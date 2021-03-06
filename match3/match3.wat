@@ -40,6 +40,12 @@
 )
 
 (func $put-pixel (param $x i32) (param $y i32) (param $color i32)
+  ;; return if the x/y coordinate is out of bounds
+  (br_if 0
+    (i32.or
+      (i32.ge_u (local.get $x) (i32.const 150))
+      (i32.ge_u (local.get $y) (i32.const 150))))
+
   ;; mem[0x10000 + (y * 150 + x) * 4] = color
   (i32.store offset=0x10000
     (i32.mul
