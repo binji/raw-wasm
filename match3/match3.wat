@@ -5,26 +5,77 @@
 ;; [0x00002 .. 0x00002]  mouse buttons
 ;; [0x000c0 .. 0x00100]  16 RGBA colors       u32[16]
 ;; [0x00100 .. 0x01100]  16x16x1 Bpp sprites  u8[8][256]
+;; [0x03000 .. 0x03040]  8x8 grid bitmap  u64[8]
 ;; [0x10000 .. 0x25f90]  150x150xRGBA data (4 bytes per pixel)
 (memory (export "mem") 3)
 
+(data (i32.const 0x3000)
+  ;; bitmap grid
+  (i64
+    0x55aa55aa55aa55aa   ;; cells 0
+    0xaa55aa55aa55aa55   ;; cells 1
+    0
+    0
+    0
+    0
+    0
+    0)
+)
+
 (func (export "run")
-  (local $size i32)
   (call $clear-screen (i32.const 0)) ;; transparent black
 
-  (local.set $size
-    (select
-      (i32.const 32)
-      (i32.const 16)
-      (i32.load8_u (i32.const 2))))
+  (call $draw-grid (i64.load (i32.const 0x3000)) (i32.const 0x100))
+  (call $draw-grid (i64.load (i32.const 0x3008)) (i32.const 0x400))
+)
 
-  (call $draw-sprite
-    (i32.load8_u (i32.const 0))  ;; X
-    (i32.load8_u (i32.const 1))  ;; Y
-    (i32.const 0x100)
-    (i32.const 16) (i32.const 16)
-    (local.get $size) (local.get $size)
+(func $draw-grid (param $bits i64) (param $gfx-src i32)
+  (local $idx i32)
+  (loop $loop
+    ;; Exit the function if bits == 0
+    (br_if 1 (i64.eqz (local.get $bits)))
+
+    ;; Get the index of the lowest set bit
+    (local.set $idx (i32.wrap_i64 (i64.ctz (local.get $bits))))
+
+    ;; Draw the cell at that index
+    (call $draw-cell
+      ;; x-coordinate: 7 + (idx & 7) * 17
+      (i32.add
+        (i32.const 7)
+        (i32.mul
+          (i32.and (local.get $idx) (i32.const 7))
+          (i32.const 17)))
+      ;; y-coordinate: (150 - 17 - 7) - (idx >> 3) * 17
+      (i32.sub
+        (i32.const 126)
+        (i32.mul
+          (i32.shr_u (local.get $idx) (i32.const 3))
+          (i32.const 17)))
+      ;; src => idx >> 2
+      (i32.shl (local.get $idx) (i32.const 2))
+      (local.get $gfx-src))
+
+    ;; Clear the lowest set bit: bits &= bits - 1
+    (local.set $bits
+      (i64.and
+        (local.get $bits)
+        (i64.sub (local.get $bits) (i64.const 1))))
+
+    ;; Always loop
+    (br $loop)
   )
+)
+
+(func $draw-cell (param $x i32) (param $y i32) (param $i i32) (param $src i32) 
+  (call $draw-sprite
+    (local.get $x)
+    (local.get $y)
+    (local.get $src)
+    (i32.const 16)  ;; sw
+    (i32.const 16)  ;; sh
+    (i32.const 16)  ;; dw
+    (i32.const 16)) ;; dh
 )
 
 (func $clear-screen (param $color i32)
