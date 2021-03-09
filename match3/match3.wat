@@ -24,9 +24,49 @@
 )
 
 (func (export "run")
+  (local $mouse-bit i64)
+
   (call $clear-screen (i32.const 0)) ;; transparent black
 
+  (local.set $mouse-bit
+    (call $get-mouse-bit
+      (i32.load8_u (i32.const 0))   ;; mousex
+      (i32.load8_u (i32.const 1)))) ;; mousey
+
+  (if (i64.ne (local.get $mouse-bit) (i64.const 0))
+    (then
+      ;; Set the bit in grid 7
+      (i64.store (i32.const 0x3038)
+        (i64.or
+          (i64.load (i32.const 0x3038))
+          (local.get $mouse-bit)))))
+
   (call $draw-grids)
+)
+
+(func $get-mouse-bit (param $x i32) (param $y i32) (result i64)
+  ;; x -= 7
+  (local.set $x (i32.sub (local.get $x) (i32.const 7)))
+  ;; y = 142 - y
+  (local.set $y (i32.sub (i32.const 142) (local.get $y)))
+
+  ;; return ...
+  (select
+    ;; 1 << ((y / 17) * 8 + (x / 17))
+    (i64.shl
+      (i64.const 1)
+      (i64.extend_i32_u
+        (i32.add
+          (i32.mul
+            (i32.div_s (local.get $y) (i32.const 17))
+            (i32.const 8))
+          (i32.div_s (local.get $x) (i32.const 17)))))
+    ;; -1
+    (i64.const 0)
+    ;; if (x < 136) && (y < 136)
+    (i32.and
+      (i32.lt_s (local.get $x) (i32.const 136))
+      (i32.lt_s (local.get $y) (i32.const 136))))
 )
 
 (func $draw-grids
@@ -47,6 +87,7 @@
 
 (func $draw-grid (param $bits i64) (param $gfx-src i32)
   (local $idx i32)
+  ;; Loop over all cells 0 to 63
   (loop $loop
     ;; Exit the function if bits == 0
     (br_if 1 (i64.eqz (local.get $bits)))
