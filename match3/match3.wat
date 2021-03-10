@@ -1,8 +1,8 @@
 ;; Memory map:
 ;;
-;; [0x00000 .. 0x00000]  X mouse position
-;; [0x00001 .. 0x00001]  Y mouse position
+;; [0x00000 .. 0x00001]  x, y mouse position
 ;; [0x00002 .. 0x00002]  mouse buttons
+;; [0x00003 .. 0x00004]  x, y mouse click position
 ;; [0x000c0 .. 0x00100]  16 RGBA colors       u32[16]
 ;; [0x00100 .. 0x01100]  16x16x1 Bpp sprites  u8[8][256]
 ;; [0x03000 .. 0x03040]  8x8 grid bitmap  u64[8]
@@ -44,6 +44,7 @@
 (start $start)
 
 
+(global $state (mut i32) (i32.const 0))
 (global $prev-mouse-bit (mut i64) (i64.const 0))
 
 (func (export "run")
@@ -51,21 +52,63 @@
 
   (call $clear-screen (i32.const 0)) ;; transparent black
 
-  (local.set $mouse-bit
-    (call $get-mouse-bit
-      (i32.load8_u (i32.const 0))   ;; mousex
-      (i32.load8_u (i32.const 1)))) ;; mousey
+  block $done
+  block $mouse-down
+  block $idle
+    (br_table $idle $mouse-down (global.get $state))
 
-  ;; If the mouse cell changed...
-  (if (i64.ne (local.get $mouse-bit) (global.get $prev-mouse-bit))
-    (then
-      ;; If the new position is valid, then animate the cell.
-      (call $animate-cell (local.get $mouse-bit) (i32.const 0x08_08_fc_fc))
+  end $idle
 
-      ;; If the old position is valid, then animate the cell.
-      (call $animate-cell (global.get $prev-mouse-bit) (i32.const 0))
+    (local.set $mouse-bit
+      (call $get-mouse-bit
+        (i32.load8_u (i32.const 0))   ;; mousex
+        (i32.load8_u (i32.const 1)))) ;; mousey
 
-      (global.set $prev-mouse-bit (local.get $mouse-bit))))
+    ;; If the mouse grid position changed...
+    (if (i64.ne (local.get $mouse-bit) (global.get $prev-mouse-bit))
+      (then
+        ;; If the new position is valid, then animate the bit
+        (call $animate-cell (local.get $mouse-bit) (i32.const 0x08_08_fc_fc))
+
+        ;; If the old position is valid, then animate the bit
+        (call $animate-cell (global.get $prev-mouse-bit) (i32.const 0))
+
+        (global.set $prev-mouse-bit (local.get $mouse-bit))))
+
+    ;; If the mouse was clicked, and it is on a valid cell...
+    (if (i32.and
+          (i32.load8_u (i32.const 2))
+          (i64.ne (local.get $mouse-bit) (i64.const 0)))
+      (then
+        ;; Save the current mouse x/y.
+        (i32.store16 (i32.const 3) (i32.load16_u (i32.const 0)))
+
+        ;; Set the current state to $mouse-down.
+        (global.set $state (i32.const 1))))
+
+    (br $done)
+
+  end $mouse-down
+
+    ;; Use the grid mouse position when the mouse was clicked (i.e. don't
+    ;; update as the mouse moves)
+    (local.set $mouse-bit (global.get $prev-mouse-bit))
+
+    ;; end[mouse-bit].x = mouse.x - click-mouse.x
+    (i32.store8 offset=0x3400
+      (call $bit-to-src*4 (local.get $mouse-bit))
+      (i32.sub (i32.load8_u (i32.const 0)) (i32.load8_u (i32.const 3))))
+    ;; end[mouse-bit].y = mouse.y - click-mouse.y
+    (i32.store8 offset=0x3401
+      (call $bit-to-src*4 (local.get $mouse-bit))
+      (i32.sub (i32.load8_u (i32.const 1)) (i32.load8_u (i32.const 4))))
+
+    ;; If the button is no longer pressed, go back to idle.
+    (if (i32.eqz (i32.load8_u (i32.const 2)))
+      (then
+        (global.set $state (i32.const 0))))
+
+  end $done
 
   (call $animate)
   (call $draw-grids (i64.const -1))  ;; Mask with all 1s
