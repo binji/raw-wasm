@@ -43,6 +43,9 @@
 )
 (start $start)
 
+
+(global $prev-mouse-bit (mut i64) (i64.const 0))
+
 (func (export "run")
   (local $mouse-bit i64)
 
@@ -53,13 +56,16 @@
       (i32.load8_u (i32.const 0))   ;; mousex
       (i32.load8_u (i32.const 1)))) ;; mousey
 
-  (if (i64.ne (local.get $mouse-bit) (i64.const 0))
+  ;; If the mouse cell changed...
+  (if (i64.ne (local.get $mouse-bit) (global.get $prev-mouse-bit))
     (then
-      ;; Set the bit in grid 7
-      (i64.store (i32.const 0x3038)
-        (i64.or
-          (i64.load (i32.const 0x3038))
-          (local.get $mouse-bit)))))
+      ;; If the new position is valid, then animate the cell.
+      (call $animate-cell (local.get $mouse-bit) (i32.const 0x08_08_fc_fc))
+
+      ;; If the old position is valid, then animate the cell.
+      (call $animate-cell (global.get $prev-mouse-bit) (i32.const 0))
+
+      (global.set $prev-mouse-bit (local.get $mouse-bit))))
 
   (call $animate)
   (call $draw-grids)
@@ -88,6 +94,34 @@
     (i32.and
       (i32.lt_s (local.get $x) (i32.const 136))
       (i32.lt_s (local.get $y) (i32.const 136))))
+)
+
+(func $animate-cell (param $bit i64) (param $h_w_y_x i32)
+  (local $src*4 i32)
+
+  ;; return if $src == 0
+  (br_if 0 (i64.eqz (local.get $bit)))
+
+  (local.set $src*4 (call $bit-to-src*4 (local.get $bit)))
+
+  ;; Set the start x/y/w/h to the current x/y/w/h.
+  (i32.store offset=0x3300
+    (local.get $src*4)
+    (i32.load offset=0x3200 (local.get $src*4)))
+
+  ;; Set the destination x/y/w/h
+  (i32.store offset=0x3400 (local.get $src*4) (local.get $h_w_y_x))
+
+  ;; Set the time value to 1 - time.
+  (f32.store offset=0x3500
+    (local.get $src*4)
+    (f32.sub
+      (f32.const 1)
+      (f32.load offset=0x3500 (local.get $src*4))))
+)
+
+(func $bit-to-src*4 (param $bit i64) (result i32)
+  (i32.shl (i32.wrap_i64 (i64.ctz (local.get $bit))) (i32.const 2))
 )
 
 (func $draw-grids
