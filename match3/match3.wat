@@ -49,6 +49,8 @@
 
 (func (export "run")
   (local $mouse-bit i64)
+  (local $mouse-dx f32)
+  (local $mouse-dy f32)
 
   (call $clear-screen (i32.const 0)) ;; transparent black
 
@@ -90,18 +92,46 @@
 
   end $mouse-down
 
+    ;; mouse-dx = mouse-x - mouse-click-x
+    (local.set $mouse-dx
+      (f32.convert_i32_s
+        (i32.sub (i32.load8_u (i32.const 0)) (i32.load8_u (i32.const 3)))))
+    ;; mouse-dy = mouse-y - mouse-click-y
+    (local.set $mouse-dy
+      (f32.convert_i32_s
+        (i32.sub (i32.load8_u (i32.const 1)) (i32.load8_u (i32.const 4)))))
+
+    ;; if abs(mouse-dx) < abs(mouse-dy) ...
+    (if (f32.lt (f32.abs (local.get $mouse-dx)) (f32.abs (local.get $mouse-dy)))
+      (then
+        ;; mouse-dx = 0
+        (local.set $mouse-dx (f32.const 0))
+        ;; mouse-dy = copysign(min(abs(mouse-dy), 17), mouse-dy)
+        (local.set $mouse-dy
+          (f32.copysign
+            (f32.min (f32.abs (local.get $mouse-dy)) (f32.const 17))
+            (local.get $mouse-dy))))
+      (else
+        ;; mouse-dy = 0
+        (local.set $mouse-dy (f32.const 0))
+        ;; mouse-dx = copysign(min(abs(mouse-dx), 17), mouse-dx)
+        (local.set $mouse-dx
+          (f32.copysign
+            (f32.min (f32.abs (local.get $mouse-dx)) (f32.const 17))
+            (local.get $mouse-dx)))))
+
     ;; Use the grid mouse position when the mouse was clicked (i.e. don't
     ;; update as the mouse moves)
     (local.set $mouse-bit (global.get $prev-mouse-bit))
 
-    ;; end[mouse-bit].x = mouse.x - click-mouse.x
+    ;; end[mouse-cell].x = mouse-dx
     (i32.store8 offset=0x3400
       (call $bit-to-src*4 (local.get $mouse-bit))
-      (i32.sub (i32.load8_u (i32.const 0)) (i32.load8_u (i32.const 3))))
-    ;; end[mouse-bit].y = mouse.y - click-mouse.y
+      (i32.trunc_f32_s (local.get $mouse-dx)))
+    ;; end[mouse-cell].y = mouse-dy
     (i32.store8 offset=0x3401
       (call $bit-to-src*4 (local.get $mouse-bit))
-      (i32.sub (i32.load8_u (i32.const 1)) (i32.load8_u (i32.const 4))))
+      (i32.trunc_f32_s (local.get $mouse-dy)))
 
     ;; If the button is no longer pressed, go back to idle.
     (if (i32.eqz (i32.load8_u (i32.const 2)))
