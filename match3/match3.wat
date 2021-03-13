@@ -45,7 +45,9 @@
 
 
 (global $state (mut i32) (i32.const 0))
+
 (global $prev-mouse-bit (mut i64) (i64.const 0))
+(global $click-mouse-bit (mut i64) (i64.const 0))
 
 (func (export "run")
   (local $mouse-bit i64)
@@ -86,7 +88,8 @@
         (i32.store16 (i32.const 3) (i32.load16_u (i32.const 0)))
 
         ;; Set the current state to $mouse-down.
-        (global.set $state (i32.const 1))))
+        (global.set $state (i32.const 1))
+        (global.set $click-mouse-bit (local.get $mouse-bit))))
 
     (br $done)
 
@@ -120,23 +123,53 @@
             (f32.min (f32.abs (local.get $mouse-dx)) (f32.const 17))
             (local.get $mouse-dx)))))
 
-    ;; Use the grid mouse position when the mouse was clicked (i.e. don't
-    ;; update as the mouse moves)
-    (local.set $mouse-bit (global.get $prev-mouse-bit))
+    (local.set $mouse-bit
+      (call $get-mouse-bit
+        (i32.add (i32.trunc_f32_s (local.get $mouse-dx))
+                 (i32.load8_u (i32.const 3)))
+        (i32.add (i32.trunc_f32_s (local.get $mouse-dy))
+                 (i32.load8_u (i32.const 4)))))
 
-    ;; end[mouse-cell].x = mouse-dx
+    ;; end[click-mouse-bit].x = mouse-dx
     (i32.store8 offset=0x3400
-      (call $bit-to-src*4 (local.get $mouse-bit))
+      (call $bit-to-src*4 (global.get $click-mouse-bit))
       (i32.trunc_f32_s (local.get $mouse-dx)))
-    ;; end[mouse-cell].y = mouse-dy
+    ;; end[click-mouse-bit].y = mouse-dy
     (i32.store8 offset=0x3401
-      (call $bit-to-src*4 (local.get $mouse-bit))
+      (call $bit-to-src*4 (global.get $click-mouse-bit))
       (i32.trunc_f32_s (local.get $mouse-dy)))
+
+    ;; If mouse-bit != 0 && mouse-bit != click-mouse-bit
+    (if (i32.and
+          (i64.ne (local.get $mouse-bit) (i64.const 0))
+          (i64.ne (global.get $click-mouse-bit) (local.get $mouse-bit)))
+      (then
+        ;; end[mouse-bit].x = -mouse-dx
+        (i32.store8 offset=0x3400
+          (call $bit-to-src*4 (local.get $mouse-bit))
+          (i32.trunc_f32_s (f32.neg (local.get $mouse-dx))))
+        ;; end[mouse-bit].y = -mouse-dy
+        (i32.store8 offset=0x3401
+          (call $bit-to-src*4 (local.get $mouse-bit))
+          (i32.trunc_f32_s (f32.neg (local.get $mouse-dy))))))
+
+    (if (i64.ne (global.get $prev-mouse-bit) (local.get $mouse-bit))
+      (then
+        ;; If the old position is valid, then animate the cell.
+        (call $animate-cell (global.get $prev-mouse-bit) (i32.const 0))
+
+        (global.set $prev-mouse-bit (local.get $mouse-bit))))
 
     ;; If the button is no longer pressed, go back to idle.
     (if (i32.eqz (i32.load8_u (i32.const 2)))
       (then
-        (global.set $state (i32.const 0))))
+        (global.set $state (i32.const 0))
+        (call $animate-cell (global.get $prev-mouse-bit) (i32.const 0))
+        (call $animate-cell (global.get $click-mouse-bit) (i32.const 0))))
+
+    ;; Use the grid mouse position when the mouse was clicked for drawing below
+    (local.set $mouse-bit (global.get $click-mouse-bit))
+
 
   end $done
 
