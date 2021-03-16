@@ -12,21 +12,37 @@
 (data (i32.const 0x3000)
   ;; bitmap grid
   (i64
-    0x55aa55aa55aa55aa   ;; cells 0
-    0xaa55aa55aa55aa55   ;; cells 1
-    0
-    0
-    0
-    0
-    0
-    0)
+    0x0102040808040201   ;; cells 0
+    0x0204081010080402   ;; cells 1
+    0x0408102020100804   ;; cells 2
+    0x0810204040201008   ;; cells 3
+    0x1020408080402010   ;; cells 4
+    0x2040800101804020   ;; cells 5
+    0x4080010202018040   ;; cells 6
+    0x8001020404020180   ;; cells 7
+    )
 )
 
 (func (export "run")
   (call $clear-screen (i32.const 0)) ;; transparent black
 
-  (call $draw-grid (i64.load (i32.const 0x3000)) (i32.const 0x100))
-  (call $draw-grid (i64.load (i32.const 0x3008)) (i32.const 0x400))
+  (call $draw-grids)
+)
+
+(func $draw-grids
+  (local $i i32)
+  (loop $loop
+
+    (call $draw-grid
+      (i64.load offset=0x3000 (i32.shl (local.get $i) (i32.const 3)))
+      (i32.add (i32.const 0x100) (i32.shl (local.get $i) (i32.const 8))))
+
+    ;; i += 1
+    (local.set $i (i32.add (local.get $i) (i32.const 1)))
+
+    ;; loop if i < 8
+    (br_if $loop (i32.lt_s (local.get $i) (i32.const 8)))
+  )
 )
 
 (func $draw-grid (param $bits i64) (param $gfx-src i32)
