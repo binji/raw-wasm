@@ -189,15 +189,28 @@
               (local.get $mouse-bit)
               (global.get $click-mouse-bit))
 
-            ;; force the cells back to 0,0
-            (i32.store16 offset=0x3400
-              (call $bit-to-src*4 (local.get $mouse-bit))
-              (i32.const 0))
-            (i32.store16 offset=0x3400
-              (call $bit-to-src*4 (global.get $click-mouse-bit))
-              (i32.const 0))
+            ;; Try to find matches. If none, then reset the swap.
+            (if (i64.ne
+                  (call $clear-pattern (call $match-all-grids-patterns))
+                  (i64.const 0))
+              (then
+                ;; force the cells back to 0,0
+                (i32.store16 offset=0x3400
+                  (call $bit-to-src*4 (local.get $mouse-bit))
+                  (i32.const 0))
+                (i32.store16 offset=0x3400
+                  (call $bit-to-src*4 (global.get $click-mouse-bit))
+                  (i32.const 0)))
+              (else
+                ;; Swap back
+                (call $swap-all-grids-bits
+                  (local.get $mouse-bit)
+                  (global.get $click-mouse-bit))
 
-            (call $clear-pattern (call $match-all-grids-patterns))
+                ;; And animate them back to their original place
+                (call $animate-cells (local.get $mouse-bit) (i32.const 0))
+                (call $animate-cells (global.get $click-mouse-bit) (i32.const 0))))
+
           ))
         ))
 
@@ -220,8 +233,9 @@
   (call $draw-grids (local.get $mouse-bit))
 )
 
-(func $clear-pattern (param $pattern i64)
+(func $clear-pattern (param $pattern i64) (result i64)
   (local $grid-offset i32)
+
   (loop $loop
     ;; grid-bitmap[grid-offset] &= ~pattern
     (i64.store offset=0x3000
@@ -236,6 +250,8 @@
     ;; loop if grid-offset < 64
     (br_if $loop (i32.lt_u (local.get $grid-offset) (i32.const 64)))
   )
+
+  (local.get $pattern)
 )
 
 (func $match-all-grids-patterns (result i64)
