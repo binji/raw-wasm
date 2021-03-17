@@ -6,6 +6,8 @@
 ;; [0x000c0 .. 0x00100]  16 RGBA colors       u32[16]
 ;; [0x00100 .. 0x01100]  16x16x1 Bpp sprites  u8[8][256]
 ;; [0x03000 .. 0x03040]  8x8 grid bitmap  u64[8]
+;; [0x03040 .. 0x03048]  2 match patterns u32[2]
+;; [0x03048 .. 0x03050]  2 shift masks    u64[2]
 ;; [0x03200 .. 0x03300]  current offset  {s8 x, s8 y, s8 w, s8 h}[64]
 ;; [0x03300 .. 0x03400]  start offset    {s8 x, s8 y, s8 w, s8 h}[64]
 ;; [0x03400 .. 0x03500]  end offset      {s8 x, s8 y, s8 w, s8 h}[64]
@@ -25,6 +27,28 @@
     0x4080010202018040   ;; cells 6
     0x8001020404020180   ;; cells 7
     )
+
+  ;; match patterns
+  (i32
+    ;; ........    ........
+    ;; ........    .......x
+    ;; ........    .......x
+    ;; .....xxx    .......x
+     0x00000007  0x00010101
+  )
+
+  ;; match shifts
+  (i64
+    ;;    ..xxxxxx            ........
+    ;;    ..xxxxxx            ........
+    ;;    ..xxxxxx            xxxxxxxx
+    ;;    ..xxxxxx            xxxxxxxx
+    ;;    ..xxxxxx            xxxxxxxx
+    ;;    ..xxxxxx            xxxxxxxx
+    ;;    ..xxxxxx            xxxxxxxx
+    ;;    ..xxxxxx            xxxxxxxx
+    0x3f3f3f3f3f3f3f3f  0x0000ffffffffffff
+  )
 )
 
 ;; Initialize all y-coordinates to -128
@@ -173,7 +197,7 @@
               (call $bit-to-src*4 (global.get $click-mouse-bit))
               (i32.const 0))
 
-            ;; TODO: check for removal
+            (call $clear-pattern (call $match-all-grids-patterns))
           ))
         ))
 
@@ -194,6 +218,99 @@
 
   ;; Draw the moused-over cell again, so they're on top
   (call $draw-grids (local.get $mouse-bit))
+)
+
+(func $clear-pattern (param $pattern i64)
+  (local $grid-offset i32)
+  (loop $loop
+    ;; grid-bitmap[grid-offset] &= ~pattern
+    (i64.store offset=0x3000
+      (local.get $grid-offset)
+      (i64.and
+        (i64.load offset=0x3000 (local.get $grid-offset))
+        (i64.xor (local.get $pattern) (i64.const -1))))
+
+    ;; grid-offset += 8
+    (local.set $grid-offset (i32.add (local.get $grid-offset) (i32.const 8)))
+
+    ;; loop if grid-offset < 64
+    (br_if $loop (i32.lt_u (local.get $grid-offset) (i32.const 64)))
+  )
+)
+
+(func $match-all-grids-patterns (result i64)
+  (local $result i64)
+  (local $grid-offset i32)
+
+  (loop $loop
+    ;; matched = match-patterns(grid)
+    (local.set $result
+      (i64.or
+        (local.get $result)
+        (call $match-patterns
+          (i64.load offset=0x3000 (local.get $grid-offset)))))
+
+    ;; grid-offset += 8
+    (local.set $grid-offset (i32.add (local.get $grid-offset) (i32.const 8)))
+
+    ;; loop if grid-offset < 64
+    (br_if $loop (i32.lt_u (local.get $grid-offset) (i32.const 64)))
+  )
+
+  ;; return result
+  (local.get $result)
+)
+
+(func $match-patterns (param $grid i64) (result i64)
+  (local $result i64)
+  (local $i i32)
+
+  (loop $loop
+    ;; result |= match-pattern(grid, match-patterns[i], match-shifts[i])
+    (local.set $result
+      (i64.or
+        (local.get $result)
+        (call $match-pattern
+          (local.get $grid)
+          (i64.load32_u offset=0x3040 (local.get $i))
+          (i64.load offset=0x3048 (i32.shl (local.get $i) (i32.const 1))))))
+
+    ;; i += 4
+    (local.set $i (i32.add (local.get $i) (i32.const 4)))
+
+    ;; loop if i < 8
+    (br_if $loop (i32.lt_u (local.get $i) (i32.const 8)))
+  )
+
+  ;; return result
+  (local.get $result)
+)
+
+(func $match-pattern (param $grid i64) (param $pattern i64) (param $shifts i64)
+                     (result i64)
+  (local $result i64)
+  (loop $loop
+    ;; if ((shifts & 1) && ((grid & pattern) == pattern)) ...
+    (if (i32.and
+          (i32.wrap_i64 (i64.and (local.get $shifts) (i64.const 1)))
+          (i64.eq (i64.and (local.get $grid) (local.get $pattern))
+                  (local.get $pattern)))
+      (then
+        ;; result |= pattern
+        (local.set $result (i64.or (local.get $result) (local.get $pattern)))))
+
+    ;; pattern <<= 1
+    (local.set $pattern (i64.shl (local.get $pattern) (i64.const 1)))
+
+    ;; shifts >>= 1
+    (local.set $shifts (i64.shr_u (local.get $shifts) (i64.const 1)))
+
+    ;; loop if shifts != 0
+    (br_if $loop (i64.ne (local.get $shifts) (i64.const 0)))
+  )
+
+  ;; return result
+  (local.get $result)
 )
 
 (func $swap-all-grids-bits (param $a i64) (param $b i64)
