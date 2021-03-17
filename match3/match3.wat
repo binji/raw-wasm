@@ -68,7 +68,10 @@
       (global.set $prev-mouse-bit (local.get $mouse-bit))))
 
   (call $animate)
-  (call $draw-grids)
+  (call $draw-grids (i64.const -1))  ;; Mask with all 1s
+
+  ;; Draw the moused-over cell again, so they're on top
+  (call $draw-grids (local.get $mouse-bit))
 )
 
 (func $get-mouse-bit (param $x i32) (param $y i32) (result i64)
@@ -96,6 +99,10 @@
       (i32.lt_s (local.get $y) (i32.const 136))))
 )
 
+(func $bit-to-src*4 (param $bit i64) (result i32)
+  (i32.shl (i32.wrap_i64 (i64.ctz (local.get $bit))) (i32.const 2))
+)
+
 (func $animate-cell (param $bit i64) (param $h_w_y_x i32)
   (local $src*4 i32)
 
@@ -120,16 +127,14 @@
       (f32.load offset=0x3500 (local.get $src*4))))
 )
 
-(func $bit-to-src*4 (param $bit i64) (result i32)
-  (i32.shl (i32.wrap_i64 (i64.ctz (local.get $bit))) (i32.const 2))
-)
-
-(func $draw-grids
+(func $draw-grids (param $mask i64)
   (local $i i32)
   (loop $loop
 
     (call $draw-grid
-      (i64.load offset=0x3000 (i32.shl (local.get $i) (i32.const 3)))
+      (i64.and
+        (i64.load offset=0x3000 (i32.shl (local.get $i) (i32.const 3)))
+        (local.get $mask))
       (i32.add (i32.const 0x100) (i32.shl (local.get $i) (i32.const 8))))
 
     ;; i += 1
