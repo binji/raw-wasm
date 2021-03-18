@@ -17,19 +17,7 @@
 ;; [0x10000 .. 0x25f90]  150x150xRGBA data (4 bytes per pixel)
 (memory (export "mem") 3)
 
-(data (i32.const 0x3000)
-  ;; bitmap grid
-  (i64
-    0x0102040808040201   ;; cells 0
-    0x0204081010080402   ;; cells 1
-    0x0408102020100804   ;; cells 2
-    0x0810204040201008   ;; cells 3
-    0x1020408080402010   ;; cells 4
-    0x2040800101804020   ;; cells 5
-    0x4080010202018040   ;; cells 6
-    0x8001020404020180   ;; cells 7
-    )
-
+(data (i32.const 0x3040)
   ;; match patterns
   (i32
     ;; ........    ........
@@ -56,9 +44,11 @@
 ;; Initialize all y-coordinates to -128
 (func $start
   (local $i i32)
+  ;; Initialize all time values to 1 (so that move-down will animate them when
+  ;; it sets them 1 - time)
   (loop $loop
     ;; mem[0x3301 + i] = -128
-    (i32.store8 offset=0x3301 (local.get $i) (i32.const -128))
+    (f32.store offset=0x3500 (local.get $i) (f32.const 1))
 
     ;; i += 4
     (local.set $i (i32.add (local.get $i) (i32.const 4)))
@@ -66,6 +56,8 @@
     ;; loop if i < 256
     (br_if $loop (i32.lt_s (local.get $i) (i32.const 256)))
   )
+
+  (call $move-down (i64.const -1))
 )
 (start $start)
 
