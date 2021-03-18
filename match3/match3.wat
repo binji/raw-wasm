@@ -41,44 +41,26 @@
   )
 )
 
-;; Initialize all y-coordinates to -128
-(func $start
-  (local $i i32)
-  ;; Initialize all time values to 1 (so that move-down will animate them when
-  ;; it sets them 1 - time)
-  (loop $loop
-    ;; mem[0x3301 + i] = -128
-    (f32.store offset=0x3500 (local.get $i) (f32.const 1))
-
-    ;; i += 4
-    (local.set $i (i32.add (local.get $i) (i32.const 4)))
-
-    ;; loop if i < 256
-    (br_if $loop (i32.lt_s (local.get $i) (i32.const 256)))
-  )
-
-  (call $move-down (i64.const -1))
-)
-(start $start)
-
-
-(global $state (mut i32) (i32.const 0))
+(global $matched (mut i64) (i64.const -1))
+(global $state (mut i32) (i32.const 2))  ;; removing
+(global $animating (mut i32) (i32.const 1))
 
 (global $prev-mouse-bit (mut i64) (i64.const 0))
 (global $click-mouse-bit (mut i64) (i64.const 0))
 
 (func (export "run")
   (local $mouse-bit i64)
-  (local $matched i64)
   (local $mouse-dx f32)
   (local $mouse-dy f32)
 
   (call $clear-screen (i32.const 0)) ;; transparent black
 
   block $done
+  block $falling
+  block $removing
   block $mouse-down
   block $idle
-    (br_table $idle $mouse-down (global.get $state))
+    (br_table $idle $mouse-down $removing $falling (global.get $state))
 
   end $idle
 
@@ -184,13 +166,14 @@
               (local.get $mouse-bit)
               (global.get $click-mouse-bit))
 
-            (local.set $matched
+            (global.set $matched
               (call $clear-pattern (call $match-all-grids-patterns)))
 
             ;; Try to find matches. If none, then reset the swap.
-            (if (i64.ne (local.get $matched) (i64.const 0))
+            (if (i64.ne (global.get $matched) (i64.const 0))
               (then
-                (call $move-down (local.get $matched))
+                ;; Set the current state to $removing
+                (global.set $state (i32.const 2))
 
                 ;; force the cells back to 0,0
                 (i32.store16 offset=0x3400
@@ -206,11 +189,36 @@
                   (global.get $click-mouse-bit))
 
                 ;; And animate them back to their original place
-                (call $animate-cells (local.get $mouse-bit) (i32.const 0))
-                (call $animate-cells (global.get $click-mouse-bit) (i32.const 0))))
+                (call $animate-cells
+                  (i64.or (local.get $mouse-bit) (global.get $click-mouse-bit))
+                  (i32.const 0))))
 
           ))
         ))
+
+    (br $done)
+
+  end $removing
+
+    (br_if $done (global.get $animating))
+
+    (call $move-down (global.get $matched))
+
+    ;; Set state to $falling
+    (global.set $state (i32.const 3))
+
+    (br $done)
+
+  end $falling
+
+    (br_if $done (global.get $animating))
+
+    ;; Check whether any new matches occurred
+    (global.set $matched (call $clear-pattern (call $match-all-grids-patterns)))
+
+    ;; If there are new matches, then remove them, otherwise go back to $idle
+    (global.set $state
+      (select (i32.const 0) (i32.const 2) (i64.eqz (global.get $matched))))
 
   end $done
 
@@ -697,6 +705,10 @@
   (local $t-addr i32)
   (local $i-addr i32)
   (local $t f32)
+  (local $mul-t f32)
+
+  ;; mul-t = 1
+  (local.set $mul-t (f32.const 1))
 
   (loop $loop
     ;; t = Math.min(t[i] + speed, 1)
@@ -717,12 +729,19 @@
     ;; t[i] = t
     (f32.store offset=0x3500 (local.get $t-addr) (local.get $t))
 
+    ;; mul-t *= t
+    (local.set $mul-t (f32.mul (local.get $mul-t) (local.get $t)))
+
     ;; i-addr += 1
     (local.set $i-addr (i32.add (local.get $i-addr) (i32.const 1)))
     ;; t-addr = i-addr & ~3
     (local.set $t-addr (i32.and (local.get $i-addr) (i32.const 0xfc)))
     (br_if $loop (i32.lt_s (local.get $i-addr) (i32.const 256)))
   )
+
+  ;; If all t values are 1 (i.e. all animations are finished), then multiplying
+  ;; them together will also be 1.
+  (global.set $animating (f32.ne (local.get $mul-t) (f32.const 1)))
 )
 
 (func $ease-out-cubic (param $t f32) (result f32)
