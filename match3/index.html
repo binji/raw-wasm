@@ -35,7 +35,7 @@
     (async function start() {
       const response = await fetch('match3.wasm');
       const moduleBytes = await response.arrayBuffer();
-      const {module, instance} = await WebAssembly.instantiate(moduleBytes);
+      const {module, instance} = await WebAssembly.instantiate(moduleBytes, {Math});
       const exports = instance.exports;
 
       const input = new Uint8Array(exports.mem.buffer, 0x0000, 3);

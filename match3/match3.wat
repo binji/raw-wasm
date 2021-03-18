@@ -1,3 +1,5 @@
+(import "Math" "random" (func $random (result f32)))
+
 ;; Memory map:
 ;;
 ;; [0x00000 .. 0x00001]  x, y mouse position
@@ -75,6 +77,7 @@
 
 (func (export "run")
   (local $mouse-bit i64)
+  (local $matched i64)
   (local $mouse-dx f32)
   (local $mouse-dy f32)
 
@@ -189,11 +192,14 @@
               (local.get $mouse-bit)
               (global.get $click-mouse-bit))
 
+            (local.set $matched
+              (call $clear-pattern (call $match-all-grids-patterns)))
+
             ;; Try to find matches. If none, then reset the swap.
-            (if (i64.ne
-                  (call $clear-pattern (call $match-all-grids-patterns))
-                  (i64.const 0))
+            (if (i64.ne (local.get $matched) (i64.const 0))
               (then
+                (call $move-down (local.get $matched))
+
                 ;; force the cells back to 0,0
                 (i32.store16 offset=0x3400
                   (call $bit-to-src*4 (local.get $mouse-bit))
@@ -231,6 +237,92 @@
 
   ;; Draw the moused-over cell again, so they're on top
   (call $draw-grids (local.get $mouse-bit))
+)
+
+(func $move-down (param $empty i64)
+  (local $idx*4 i32)
+  (local $random-grid i32)
+  (local $idx i64)
+  (local $above-bits i64)
+  (local $above-idx i64)
+
+  ;; Loop over all set bits.
+  (loop $loop
+    ;; Exit the function if there are no further bits.
+    (br_if 1 (i64.eqz (local.get $empty)))
+
+    ;; Get the index of the lowest set bit
+    (local.set $idx (i64.ctz (local.get $empty)))
+
+    (local.set $idx*4
+      (i32.wrap_i64 (i64.shl (local.get $idx) (i64.const 2))))
+
+    ;; Find the next cell above that is not empty: invert the empty pattern
+    ;; and mask it with a column, shifted by idx.
+    (local.set $above-bits
+      (i64.and
+        (i64.xor (local.get $empty) (i64.const -1))
+        (i64.shl (i64.const 0x0101010101010101) (local.get $idx))))
+
+    ;; Now find the lowest set bit
+    (local.set $above-idx (i64.ctz (local.get $above-bits)))
+
+    ;; If there is a cell above this one...
+    (if (i64.ne (local.get $above-bits) (i64.const 0))
+      (then
+        ;; Move the cell above down
+        (call $swap-all-grids-bits
+          (i64.shl (i64.const 1) (local.get $above-idx))
+          (i64.shl (i64.const 1) (local.get $idx)))
+
+        ;; Set above-bit in empty so we will fill it.
+        (local.set $empty
+          (i64.or (local.get $empty)
+                  (i64.shl (i64.const 1) (local.get $above-idx)))))
+      (else
+        ;; If there is no bit above, then we need to fill with a new random
+        ;; cell.
+        (local.set $random-grid
+          (i32.shl
+            (i32.trunc_f32_u (f32.mul (call $random) (f32.const 8)))
+            (i32.const 3)))
+
+        ;; grid-bitmap[random-grid] |= (1 << idx)
+        (i64.store offset=0x3000
+          (local.get $random-grid)
+          (i64.or
+            (i64.load offset=0x3000 (local.get $random-grid))
+            (i64.shl (i64.const 1) (local.get $idx))))
+
+        ;; Set above-idx so it is always the maximum value (used below)
+        (local.set $above-idx (i64.add (local.get $idx) (i64.const 56)))))
+
+    ;; Set x offset to 0. TODO: optimize
+    (i32.store8 offset=0x3200 (local.get $idx*4) (i32.const 0))
+
+    ;; First, set the y pixel offset to the y cell difference * 17.
+    (i64.store8 offset=0x3201
+      (local.get $idx*4)
+      (i64.mul
+        (i64.shr_s
+          (i64.sub (local.get $idx) (local.get $above-idx))
+          (i64.const 3))
+        (i64.const 17)))
+
+    ;; Now animate it back to 0.
+    (call $animate-cells
+      (i64.shl (i64.const 1) (local.get $idx))
+      (i32.const 0))
+
+    ;; Clear this bit (it has now been filled).
+    (local.set $empty
+      (i64.and
+        (local.get $empty)
+        (i64.sub (local.get $empty) (i64.const 1))))
+
+    ;; Always loop
+    (br $loop)
+  )
 )
 
 (func $clear-pattern (param $pattern i64) (result i64)
@@ -357,8 +449,9 @@
   ;; temp = bits & (a | b)
   (local.set $temp (i64.and (local.get $bits) (local.get $a|b)))
 
-  ;; return if bits are both 0 (can't be both 1)
-  (br_if 0 (i64.eqz (local.get $temp)))
+  ;; return if bits are both 0 or both 1
+  (br_if 0 (i32.or (i64.eqz (local.get $temp))
+                   (i64.eq (local.get $temp) (local.get $a|b))))
 
   ;; mem[grid-idx] = bits ^ (a | b)
   (i64.store offset=0x3000
