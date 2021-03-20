@@ -58,6 +58,7 @@
   block $done
   block $falling
   block $removing
+  block $reset-prev-mouse
   block $mouse-down
   block $idle
     (br_table $idle $mouse-down $removing $falling (global.get $state))
@@ -89,7 +90,7 @@
         (global.set $state (i32.const 1))))
 
     (global.set $click-mouse-bit (local.get $mouse-bit))
-    (br $done)
+    (br $reset-prev-mouse)
 
   end $mouse-down
 
@@ -166,22 +167,32 @@
               (local.get $mouse-bit)
               (global.get $click-mouse-bit))
 
-            (global.set $matched
-              (call $clear-pattern (call $match-all-grids-patterns)))
+            (global.set $matched (call $match-all-grids-patterns))
 
             ;; Try to find matches. If none, then reset the swap.
             (if (i64.ne (global.get $matched) (i64.const 0))
               (then
-                ;; Set the current state to $removing
-                (global.set $state (i32.const 2))
-
                 ;; force the cells back to 0,0
+                (i32.store16 offset=0x3200
+                  (call $bit-to-src*4 (local.get $mouse-bit))
+                  (i32.const 0))
+                (i32.store16 offset=0x3200
+                  (call $bit-to-src*4 (global.get $click-mouse-bit))
+                  (i32.const 0))
                 (i32.store16 offset=0x3400
                   (call $bit-to-src*4 (local.get $mouse-bit))
                   (i32.const 0))
                 (i32.store16 offset=0x3400
                   (call $bit-to-src*4 (global.get $click-mouse-bit))
-                  (i32.const 0)))
+                  (i32.const 0))
+
+                ;; Animate the matched cells
+                (call $animate-cells
+                  (global.get $matched)
+                  (i32.const 0xf1_f1_08_08))
+
+                ;; Set the current state to $removing
+                (global.set $state (i32.const 2)))
               (else
                 ;; Swap back
                 (call $swap-all-grids-bits
@@ -196,12 +207,27 @@
           ))
         ))
 
+  end $reset-prev-mouse
+
+    ;; Reset prev-mouse-bit, as long as it isn't the same as mouse-bit:
+    ;; prev-mouse-bit & ~mouse-bit
+    (call $animate-cells
+      (i64.and
+        (global.get $prev-mouse-bit)
+        (i64.xor (local.get $mouse-bit) (i64.const -1)))
+      (i32.const 0))
+
+    (global.set $prev-mouse-bit (local.get $mouse-bit))
     (br $done)
 
   end $removing
 
     (br_if $done (global.get $animating))
 
+    ;; Remove the matched cells...
+    (call $clear-pattern (global.get $matched))
+
+    ;; And move down cells to fill the holes
     (call $move-down (global.get $matched))
 
     ;; Set state to $falling
@@ -214,23 +240,16 @@
     (br_if $done (global.get $animating))
 
     ;; Check whether any new matches occurred
-    (global.set $matched (call $clear-pattern (call $match-all-grids-patterns)))
+    (global.set $matched (call $match-all-grids-patterns))
+
+    ;; Animate the matched cells
+    (call $animate-cells (global.get $matched) (i32.const 0xf1_f1_08_08))
 
     ;; If there are new matches, then remove them, otherwise go back to $idle
     (global.set $state
       (select (i32.const 0) (i32.const 2) (i64.eqz (global.get $matched))))
 
   end $done
-
-  ;; Reset prev-mouse-bit, as long as it isn't the same as mouse-bit:
-  ;; prev-mouse-bit & ~mouse-bit
-  (call $animate-cells
-    (i64.and
-      (global.get $prev-mouse-bit)
-      (i64.xor (local.get $mouse-bit) (i64.const -1)))
-    (i32.const 0))
-
-  (global.set $prev-mouse-bit (local.get $mouse-bit))
 
   (call $animate)
   (call $draw-grids (i64.const -1))  ;; Mask with all 1s
@@ -297,10 +316,10 @@
         ;; Set above-idx so it is always the maximum value (used below)
         (local.set $above-idx (i64.add (local.get $idx) (i64.const 56)))))
 
-    ;; Set x offset to 0. TODO: optimize
-    (i32.store8 offset=0x3200 (local.get $idx*4) (i32.const 0))
+    ;; Reset the x,y,w,h to 0
+    (i32.store offset=0x3200 (local.get $idx*4) (i32.const 0))
 
-    ;; First, set the y pixel offset to the y cell difference * 17.
+    ;; Then set the y pixel offset to the y cell difference * 17.
     (i64.store8 offset=0x3201
       (local.get $idx*4)
       (i64.mul
@@ -325,7 +344,7 @@
   )
 )
 
-(func $clear-pattern (param $pattern i64) (result i64)
+(func $clear-pattern (param $pattern i64)
   (local $grid-offset i32)
 
   (loop $loop
@@ -342,8 +361,6 @@
     ;; loop if grid-offset < 64
     (br_if $loop (i32.lt_u (local.get $grid-offset) (i32.const 64)))
   )
-
-  (local.get $pattern)
 )
 
 (func $match-all-grids-patterns (result i64)
