@@ -68,16 +68,13 @@
         (i32.load8_u (i32.const 0))   ;; mousex
         (i32.load8_u (i32.const 1)))) ;; mousey
 
-    ;; If the mouse grid position changed...
-    (if (i64.ne (local.get $mouse-bit) (global.get $prev-mouse-bit))
-      (then
-        ;; If the new position is valid, then animate the bit
-        (call $animate-cells (local.get $mouse-bit) (i32.const 0x08_08_fc_fc))
-
-        ;; If the old position is valid, then animate the bit
-        (call $animate-cells (global.get $prev-mouse-bit) (i32.const 0))
-
-        (global.set $prev-mouse-bit (local.get $mouse-bit))))
+    ;; Animate mouse-bit scaling up, as long as it isn't the same as
+    ;; prev-mouse-bit: mouse-bit & ~prev-mouse-bit
+    (call $animate-cells
+      (i64.and
+        (local.get $mouse-bit)
+        (i64.xor (global.get $prev-mouse-bit) (i64.const -1)))
+      (i32.const 0x08_08_fc_fc))
 
     ;; If the mouse was clicked, and it is on a valid cell...
     (if (i32.and
@@ -88,9 +85,9 @@
         (i32.store16 (i32.const 3) (i32.load16_u (i32.const 0)))
 
         ;; Set the current state to $mouse-down.
-        (global.set $state (i32.const 1))
-        (global.set $click-mouse-bit (local.get $mouse-bit))))
+        (global.set $state (i32.const 1))))
 
+    (global.set $click-mouse-bit (local.get $mouse-bit))
     (br $done)
 
   end $mouse-down
@@ -153,13 +150,6 @@
           (call $bit-to-src*4 (local.get $mouse-bit))
           (i32.trunc_f32_s (f32.neg (local.get $mouse-dy))))))
 
-    (if (i64.ne (global.get $prev-mouse-bit) (local.get $mouse-bit))
-      (then
-        ;; If the old position is valid, then animate the cell.
-        (call $animate-cells (global.get $prev-mouse-bit) (i32.const 0))
-
-        (global.set $prev-mouse-bit (local.get $mouse-bit))))
-
     ;; If the button is no longer pressed, go back to idle.
     (if (i32.eqz (i32.load8_u (i32.const 2)))
       (then
@@ -168,11 +158,17 @@
           (i64.or (global.get $prev-mouse-bit) (global.get $click-mouse-bit))
           (i32.const 0))))
 
-    ;; Use the grid mouse position when the mouse was clicked for drawing below
-    (local.set $mouse-bit (global.get $click-mouse-bit))
-
-
   end $done
+
+  ;; Reset prev-mouse-bit, as long as it isn't the same as mouse-bit:
+  ;; prev-mouse-bit & ~mouse-bit
+  (call $animate-cells
+    (i64.and
+      (global.get $prev-mouse-bit)
+      (i64.xor (local.get $mouse-bit) (i64.const -1)))
+    (i32.const 0))
+
+  (global.set $prev-mouse-bit (local.get $mouse-bit))
 
   (call $animate)
   (call $draw-grids (i64.const -1))  ;; Mask with all 1s
