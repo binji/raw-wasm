@@ -72,10 +72,10 @@
     (if (i64.ne (local.get $mouse-bit) (global.get $prev-mouse-bit))
       (then
         ;; If the new position is valid, then animate the bit
-        (call $animate-cell (local.get $mouse-bit) (i32.const 0x08_08_fc_fc))
+        (call $animate-cells (local.get $mouse-bit) (i32.const 0x08_08_fc_fc))
 
         ;; If the old position is valid, then animate the bit
-        (call $animate-cell (global.get $prev-mouse-bit) (i32.const 0))
+        (call $animate-cells (global.get $prev-mouse-bit) (i32.const 0))
 
         (global.set $prev-mouse-bit (local.get $mouse-bit))))
 
@@ -156,7 +156,7 @@
     (if (i64.ne (global.get $prev-mouse-bit) (local.get $mouse-bit))
       (then
         ;; If the old position is valid, then animate the cell.
-        (call $animate-cell (global.get $prev-mouse-bit) (i32.const 0))
+        (call $animate-cells (global.get $prev-mouse-bit) (i32.const 0))
 
         (global.set $prev-mouse-bit (local.get $mouse-bit))))
 
@@ -164,8 +164,9 @@
     (if (i32.eqz (i32.load8_u (i32.const 2)))
       (then
         (global.set $state (i32.const 0))
-        (call $animate-cell (global.get $prev-mouse-bit) (i32.const 0))
-        (call $animate-cell (global.get $click-mouse-bit) (i32.const 0))))
+        (call $animate-cells
+          (i64.or (global.get $prev-mouse-bit) (global.get $click-mouse-bit))
+          (i32.const 0))))
 
     ;; Use the grid mouse position when the mouse was clicked for drawing below
     (local.set $mouse-bit (global.get $click-mouse-bit))
@@ -209,28 +210,44 @@
   (i32.shl (i32.wrap_i64 (i64.ctz (local.get $bit))) (i32.const 2))
 )
 
-(func $animate-cell (param $bit i64) (param $h_w_y_x i32)
+(func $animate-cells (param $bits i64) (param $h_w_y_x i32)
+  (local $bit i64)
   (local $src*4 i32)
 
-  ;; return if $src == 0
-  (br_if 0 (i64.eqz (local.get $bit)))
+  (loop $loop
+    ;; Exit the function if there are no further bits.
+    (br_if 1 (i64.eqz (local.get $bits)))
 
-  (local.set $src*4 (call $bit-to-src*4 (local.get $bit)))
+    ;; Get the lowest set bit
+    (local.set $bit
+      (i64.and (local.get $bits) (i64.sub (i64.const 0) (local.get $bits))))
 
-  ;; Set the start x/y/w/h to the current x/y/w/h.
-  (i32.store offset=0x3300
-    (local.get $src*4)
-    (i32.load offset=0x3200 (local.get $src*4)))
+    (local.set $src*4 (call $bit-to-src*4 (local.get $bit)))
 
-  ;; Set the destination x/y/w/h
-  (i32.store offset=0x3400 (local.get $src*4) (local.get $h_w_y_x))
+    ;; Set the start x/y/w/h to the current x/y/w/h.
+    (i32.store offset=0x3300
+      (local.get $src*4)
+      (i32.load offset=0x3200 (local.get $src*4)))
 
-  ;; Set the time value to 1 - time.
-  (f32.store offset=0x3500
-    (local.get $src*4)
-    (f32.sub
-      (f32.const 1)
-      (f32.load offset=0x3500 (local.get $src*4))))
+    ;; Set the destination x/y/w/h
+    (i32.store offset=0x3400 (local.get $src*4) (local.get $h_w_y_x))
+
+    ;; Set the time value to 1 - time.
+    (f32.store offset=0x3500
+      (local.get $src*4)
+      (f32.sub
+        (f32.const 1)
+        (f32.load offset=0x3500 (local.get $src*4))))
+
+    ;; Clear the lowest set bit: bits &= bits - 1
+    (local.set $bits
+      (i64.and
+        (local.get $bits)
+        (i64.sub (local.get $bits) (i64.const 1))))
+
+    ;; Always loop
+    (br $loop)
+  )
 )
 
 (func $draw-grids (param $mask i64)
