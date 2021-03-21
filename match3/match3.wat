@@ -7,9 +7,9 @@
 ;; [0x00003 .. 0x00004]  x, y mouse click position
 ;; [0x000c0 .. 0x00100]  16 RGBA colors       u32[16]
 ;; [0x00100 .. 0x01100]  16x16x1 Bpp sprites  u8[8][256]
-;; [0x03000 .. 0x03040]  8x8 grid bitmap  u64[8]
-;; [0x03040 .. 0x03048]  2 match patterns u32[2]
-;; [0x03048 .. 0x03050]  2 shift masks    u64[2]
+;; [0x03000 .. 0x03040]  8x8 grid bitmap   u64[8]
+;; [0x03040 .. 0x03088]  18 match patterns u32[18]
+;; [0x03088 .. 0x03118]  18 shift masks    u64[18]
 ;; [0x03200 .. 0x03300]  current offset  {s8 x, s8 y, s8 w, s8 h}[64]
 ;; [0x03300 .. 0x03400]  start offset    {s8 x, s8 y, s8 w, s8 h}[64]
 ;; [0x03400 .. 0x03500]  end offset      {s8 x, s8 y, s8 w, s8 h}[64]
@@ -25,6 +25,42 @@
     ;; ........    .......x
     ;; .....xxx    .......x
      0x00000007  0x00010101
+
+    ;; ........    ........    ........
+    ;; ........    ........    ........
+    ;; .....x..    ......x.    .......x
+    ;; ......xx    .....x.x    .....xx.
+     0x00000403  0x00000205  0x00000106
+
+    ;; ........    ........    ........
+    ;; ........    ........    ........
+    ;; ......xx    .....x.x    .....xx.
+    ;; .....x..    ......x.    .......x
+     0x00000304  0x00000502  0x00000601
+
+    ;; ........    ........
+    ;; ........    ........
+    ;; ........    ........
+    ;; ....x.xx    ....xx.x
+     0x0000000b  0x0000000d
+
+    ;; ........    ........    ........
+    ;; ......x.    .......x    .......x
+    ;; .......x    ......x.    .......x
+    ;; .......x    .......x    ......x.
+     0x00020101  0x00010201  0x00010102
+
+    ;; ........    ........    ........
+    ;; .......x    ......x.    ......x.
+    ;; ......x.    .......x    ......x.
+    ;; ......x.    ......x.    .......x
+     0x00010202  0x00020102  0x00020201
+
+    ;; .......x    .......x
+    ;; ........    .......x
+    ;; .......x    ........
+    ;; .......x    .......x
+     0x01000101  0x01010001
   )
 
   ;; match shifts
@@ -38,6 +74,66 @@
     ;;    ..xxxxxx            xxxxxxxx
     ;;    ..xxxxxx            xxxxxxxx
     0x3f3f3f3f3f3f3f3f  0x0000ffffffffffff
+
+    ;;    ........            ........            ........
+    ;;    ..xxxxxx            ..xxxxxx            ..xxxxxx
+    ;;    ..xxxxxx            ..xxxxxx            ..xxxxxx
+    ;;    ..xxxxxx            ..xxxxxx            ..xxxxxx
+    ;;    ..xxxxxx            ..xxxxxx            ..xxxxxx
+    ;;    ..xxxxxx            ..xxxxxx            ..xxxxxx
+    ;;    ..xxxxxx            ..xxxxxx            ..xxxxxx
+    ;;    ..xxxxxx            ..xxxxxx            ..xxxxxx
+    0x003f3f3f3f3f3f3f  0x003f3f3f3f3f3f3f  0x003f3f3f3f3f3f3f
+
+    ;;    ........            ........            ........
+    ;;    ..xxxxxx            ..xxxxxx            ..xxxxxx
+    ;;    ..xxxxxx            ..xxxxxx            ..xxxxxx
+    ;;    ..xxxxxx            ..xxxxxx            ..xxxxxx
+    ;;    ..xxxxxx            ..xxxxxx            ..xxxxxx
+    ;;    ..xxxxxx            ..xxxxxx            ..xxxxxx
+    ;;    ..xxxxxx            ..xxxxxx            ..xxxxxx
+    ;;    ..xxxxxx            ..xxxxxx            ..xxxxxx
+    0x003f3f3f3f3f3f3f  0x003f3f3f3f3f3f3f  0x003f3f3f3f3f3f3f
+
+    ;;    ...xxxxx            ...xxxxx
+    ;;    ...xxxxx            ...xxxxx
+    ;;    ...xxxxx            ...xxxxx
+    ;;    ...xxxxx            ...xxxxx
+    ;;    ...xxxxx            ...xxxxx
+    ;;    ...xxxxx            ...xxxxx
+    ;;    ...xxxxx            ...xxxxx
+    ;;    ...xxxxx            ...xxxxx
+    0x1f1f1f1f1f1f1f1f  0x1f1f1f1f1f1f1f1f
+
+    ;;    ........            ........            ........
+    ;;    ........            ........            ........
+    ;;    .xxxxxxx            .xxxxxxx            .xxxxxxx
+    ;;    .xxxxxxx            .xxxxxxx            .xxxxxxx
+    ;;    .xxxxxxx            .xxxxxxx            .xxxxxxx
+    ;;    .xxxxxxx            .xxxxxxx            .xxxxxxx
+    ;;    .xxxxxxx            .xxxxxxx            .xxxxxxx
+    ;;    .xxxxxxx            .xxxxxxx            .xxxxxxx
+    0x00007f7f7f7f7f7f  0x00007f7f7f7f7f7f  0x00007f7f7f7f7f7f
+
+    ;;    ........            ........            ........
+    ;;    ........            ........            ........
+    ;;    .xxxxxxx            .xxxxxxx            .xxxxxxx
+    ;;    .xxxxxxx            .xxxxxxx            .xxxxxxx
+    ;;    .xxxxxxx            .xxxxxxx            .xxxxxxx
+    ;;    .xxxxxxx            .xxxxxxx            .xxxxxxx
+    ;;    .xxxxxxx            .xxxxxxx            .xxxxxxx
+    ;;    .xxxxxxx            .xxxxxxx            .xxxxxxx
+    0x00007f7f7f7f7f7f  0x00007f7f7f7f7f7f  0x00007f7f7f7f7f7f
+
+    ;;    ........            ........
+    ;;    ........            ........
+    ;;    ........            ........
+    ;;    xxxxxxxx            xxxxxxxx
+    ;;    xxxxxxxx            xxxxxxxx
+    ;;    xxxxxxxx            xxxxxxxx
+    ;;    xxxxxxxx            xxxxxxxx
+    ;;    xxxxxxxx            xxxxxxxx
+    0x000000ffffffffff  0x000000ffffffffff
   )
 )
 
@@ -167,7 +263,7 @@
               (local.get $mouse-bit)
               (global.get $click-mouse-bit))
 
-            (global.set $matched (call $match-all-grids-patterns))
+            (global.set $matched (call $match-all-grids-patterns (i32.const 8)))
 
             ;; Try to find matches. If none, then reset the swap.
             (if (i64.ne (global.get $matched) (i64.const 0))
@@ -239,15 +335,21 @@
 
     (br_if $done (global.get $animating))
 
-    ;; Check whether any new matches occurred
-    (global.set $matched (call $match-all-grids-patterns))
+    ;; If there are no matches (including swaps)...
+    (if (i64.eqz (call $match-all-grids-patterns (i32.const 72)))
+      (then
+        ;; ... then reset the entire board.
+        (global.set $matched (i64.const -1)))
+      (else
+        ;; Otherwise, check whether any new matches (without swaps) occurred.
+        (global.set $matched (call $match-all-grids-patterns (i32.const 8)))))
 
-    ;; Animate the matched cells
-    (call $animate-cells (global.get $matched) (i32.const 0xf1_f1_08_08))
+  ;; Animate the matched cells
+  (call $animate-cells (global.get $matched) (i32.const 0xf1_f1_08_08))
 
-    ;; If there are new matches, then remove them, otherwise go back to $idle
-    (global.set $state
-      (select (i32.const 0) (i32.const 2) (i64.eqz (global.get $matched))))
+  ;; If there are new matches, then remove them, otherwise go back to $idle
+  (global.set $state
+    (select (i32.const 0) (i32.const 2) (i64.eqz (global.get $matched))))
 
   end $done
 
@@ -363,7 +465,7 @@
   )
 )
 
-(func $match-all-grids-patterns (result i64)
+(func $match-all-grids-patterns (param $last-pattern i32) (result i64)
   (local $result i64)
   (local $grid-offset i32)
 
@@ -373,7 +475,8 @@
       (i64.or
         (local.get $result)
         (call $match-patterns
-          (i64.load offset=0x3000 (local.get $grid-offset)))))
+          (i64.load offset=0x3000 (local.get $grid-offset))
+          (local.get $last-pattern))))
 
     ;; grid-offset += 8
     (local.set $grid-offset (i32.add (local.get $grid-offset) (i32.const 8)))
@@ -386,7 +489,7 @@
   (local.get $result)
 )
 
-(func $match-patterns (param $grid i64) (result i64)
+(func $match-patterns (param $grid i64) (param $last-pattern i32) (result i64)
   (local $result i64)
   (local $i i32)
 
@@ -398,13 +501,13 @@
         (call $match-pattern
           (local.get $grid)
           (i64.load32_u offset=0x3040 (local.get $i))
-          (i64.load offset=0x3048 (i32.shl (local.get $i) (i32.const 1))))))
+          (i64.load offset=0x3088 (i32.shl (local.get $i) (i32.const 1))))))
 
     ;; i += 4
     (local.set $i (i32.add (local.get $i) (i32.const 4)))
 
-    ;; loop if i < 8
-    (br_if $loop (i32.lt_u (local.get $i) (i32.const 8)))
+    ;; loop if i < last-pattern
+    (br_if $loop (i32.lt_u (local.get $i) (local.get $last-pattern)))
   )
 
   ;; return result
