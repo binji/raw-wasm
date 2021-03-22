@@ -7,6 +7,7 @@
 ;; [0x00003 .. 0x00004]  x, y mouse click position
 ;; [0x000c0 .. 0x00100]  16 RGBA colors       u32[16]
 ;; [0x00100 .. 0x01100]  16x16x1 Bpp sprites  u8[8][256]
+;; [0x01100 .. 0x01380]  8x8 digits           u8[10][64]
 ;; [0x03000 .. 0x03040]  8x8 grid bitmap   u64[8]
 ;; [0x03040 .. 0x03088]  18 match patterns u32[18]
 ;; [0x03088 .. 0x03118]  18 shift masks    u64[18]
@@ -137,6 +138,7 @@
   )
 )
 
+(global $score (mut i32) (i32.const 0))
 (global $matched (mut i64) (i64.const -1))
 (global $state (mut i32) (i32.const 2))  ;; removing
 (global $animating (mut i32) (i32.const 1))
@@ -265,6 +267,12 @@
 
             (global.set $matched (call $match-all-grids-patterns (i32.const 8)))
 
+            ;; Add score
+            (global.set $score
+              (i32.add
+                (global.get $score)
+                (i32.wrap_i64 (i64.popcnt (global.get $matched)))))
+
             ;; Try to find matches. If none, then reset the swap.
             (if (i64.ne (global.get $matched) (i64.const 0))
               (then
@@ -339,10 +347,20 @@
     (if (i64.eqz (call $match-all-grids-patterns (i32.const 72)))
       (then
         ;; ... then reset the entire board.
-        (global.set $matched (i64.const -1)))
+        (global.set $matched (i64.const -1))
+
+        ;; Reset the score
+        (global.set $score (i32.const 0)))
       (else
         ;; Otherwise, check whether any new matches (without swaps) occurred.
-        (global.set $matched (call $match-all-grids-patterns (i32.const 8)))))
+        (global.set $matched (call $match-all-grids-patterns (i32.const 8)))
+
+        ;; Add score
+        (global.set $score
+          (i32.add
+            (global.get $score)
+            (i32.wrap_i64 (i64.popcnt (global.get $matched)))))
+        ))
 
   ;; Animate the matched cells
   (call $animate-cells (global.get $matched) (i32.const 0xf1_f1_08_08))
@@ -358,6 +376,11 @@
 
   ;; Draw the moused-over cell again, so they're on top
   (call $draw-grids (local.get $mouse-bit))
+
+  ;; Draw score
+  (call $draw-digit (i32.const 135) (i32.const 1))
+  (call $draw-digit (i32.const 127) (i32.const 10))
+  (call $draw-digit (i32.const 119) (i32.const 100))
 )
 
 (func $move-down (param $empty i64)
@@ -885,6 +908,22 @@
         (local.get $t))))
 )
 
+(func $draw-digit (param $x i32) (param $divisor i32)
+  (local $i i32)
+  (call $draw-sprite
+    (local.get $x) (i32.const 1)
+    (i32.add
+      (i32.const 0x900)
+      (i32.shl
+        (i32.rem_u
+          (i32.div_u (global.get $score) (local.get $divisor))
+          (i32.const 10))
+        (i32.const 6)))
+    (i32.const 8) (i32.const 8)
+    (i32.const 8) (i32.const 8)
+  )
+)
+
 (data (i32.const 0xc0)
   ;; 16 palette entries
   "\00\00\00\00\df\71\26\ff\fb\f2\36\ff\66\39\31\ff"
@@ -1021,4 +1060,86 @@
   "\00\03\03\0a\0a\0a\0a\0a\0a\0a\0a\0a\0a\0a\0a\0a"
   "\00\00\00\03\03\03\03\03\03\03\03\03\03\03\03\00"
   "\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00"
+
+  ;; 012345789
+  "\00\0a\0a\0a\0a\0a\00\00"
+  "\0a\0a\0a\0a\0a\0a\0a\00"
+  "\0a\0a\00\00\00\0a\0a\00"
+  "\0a\0a\00\00\00\0a\0a\00"
+  "\0a\0a\00\00\00\0a\0a\00"
+  "\0a\0a\00\00\00\0a\0a\00"
+  "\0a\0a\0a\0a\0a\0a\0a\00"
+  "\00\0a\0a\0a\0a\0a\00\00"
+  "\00\00\00\00\0a\0a\00\00"
+  "\00\00\0a\0a\0a\0a\00\00"
+  "\00\00\0a\0a\0a\0a\00\00"
+  "\00\00\00\00\0a\0a\00\00"
+  "\00\00\00\00\0a\0a\00\00"
+  "\00\00\00\00\0a\0a\00\00"
+  "\00\0a\0a\0a\0a\0a\0a\00"
+  "\00\0a\0a\0a\0a\0a\0a\00"
+  "\00\0a\0a\0a\0a\0a\00\00"
+  "\00\0a\0a\0a\0a\0a\0a\00"
+  "\00\00\00\00\00\0a\0a\00"
+  "\00\0a\0a\0a\0a\0a\0a\00"
+  "\0a\0a\0a\0a\0a\0a\00\00"
+  "\0a\0a\00\00\00\00\00\00"
+  "\0a\0a\0a\0a\0a\0a\0a\00"
+  "\0a\0a\0a\0a\0a\0a\0a\00"
+  "\00\0a\0a\0a\0a\0a\00\00"
+  "\0a\0a\0a\0a\0a\0a\0a\00"
+  "\0a\0a\00\00\00\0a\0a\00"
+  "\00\00\00\0a\0a\0a\0a\00"
+  "\00\00\00\0a\0a\0a\00\00"
+  "\0a\0a\00\00\00\0a\0a\00"
+  "\0a\0a\0a\0a\0a\0a\0a\00"
+  "\00\0a\0a\0a\0a\0a\0a\00"
+  "\00\0a\0a\00\00\0a\0a\00"
+  "\0a\0a\0a\00\00\0a\0a\00"
+  "\0a\0a\00\00\00\0a\0a\00"
+  "\0a\0a\0a\0a\0a\0a\0a\00"
+  "\0a\0a\0a\0a\0a\0a\0a\00"
+  "\00\00\00\00\00\0a\0a\00"
+  "\00\00\00\00\00\0a\0a\00"
+  "\00\00\00\00\00\0a\0a\00"
+  "\0a\0a\0a\0a\0a\0a\0a\00"
+  "\0a\0a\0a\0a\0a\0a\0a\00"
+  "\0a\0a\00\00\00\00\00\00"
+  "\0a\0a\0a\0a\0a\0a\00\00"
+  "\0a\0a\0a\0a\0a\0a\0a\00"
+  "\00\00\00\00\00\0a\0a\00"
+  "\0a\0a\0a\0a\0a\0a\0a\00"
+  "\0a\0a\0a\0a\0a\0a\00\00"
+  "\00\00\0a\0a\0a\0a\00\00"
+  "\00\0a\0a\0a\0a\0a\00\00"
+  "\0a\0a\0a\00\00\00\00\00"
+  "\0a\0a\0a\0a\0a\0a\00\00"
+  "\0a\0a\0a\0a\0a\0a\0a\00"
+  "\0a\0a\00\00\00\0a\0a\00"
+  "\0a\0a\0a\0a\0a\0a\0a\00"
+  "\00\0a\0a\0a\0a\0a\00\00"
+  "\0a\0a\0a\0a\0a\0a\0a\00"
+  "\0a\0a\0a\0a\0a\0a\0a\00"
+  "\00\00\00\00\0a\0a\00\00"
+  "\00\00\00\0a\0a\00\00\00"
+  "\00\00\00\0a\0a\00\00\00"
+  "\00\00\0a\0a\00\00\00\00"
+  "\00\00\0a\0a\00\00\00\00"
+  "\00\00\0a\0a\00\00\00\00"
+  "\00\00\0a\0a\0a\00\00\00"
+  "\00\0a\0a\0a\0a\0a\00\00"
+  "\0a\0a\00\00\00\0a\0a\00"
+  "\0a\0a\0a\0a\0a\0a\0a\00"
+  "\00\0a\0a\0a\0a\0a\00\00"
+  "\0a\0a\00\00\00\0a\0a\00"
+  "\0a\0a\0a\0a\0a\0a\0a\00"
+  "\00\0a\0a\0a\0a\0a\00\00"
+  "\00\0a\0a\0a\0a\0a\00\00"
+  "\0a\0a\0a\0a\0a\0a\0a\00"
+  "\0a\0a\00\00\00\0a\0a\00"
+  "\0a\0a\0a\0a\0a\0a\0a\00"
+  "\00\0a\0a\0a\0a\0a\0a\00"
+  "\00\00\00\00\0a\0a\00\00"
+  "\00\0a\0a\0a\0a\0a\00\00"
+  "\00\0a\0a\0a\0a\00\00\00"
 )
