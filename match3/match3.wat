@@ -370,75 +370,60 @@
 
 (func $match-all-grids-patterns (param $last-pattern i32) (result i64)
   (local $result i64)
+  (local $grid i64)
+  (local $pattern i64)
+  (local $shifts i64)
   (local $grid-offset i32)
+  (local $i i32)
 
-  (loop $loop
-    ;; matched = match-patterns(grid)
-    (local.set $result
-      (i64.or
-        (local.get $result)
-        (call $match-patterns
-          (i64.load offset=0x3000 (local.get $grid-offset))
+  (loop $grid-loop
+    ;; grid = grids[i]
+    (local.set $grid (i64.load offset=0x3000 (local.get $grid-offset)))
+
+    ;; i = 0;
+    (local.set $i (i32.const 0))
+
+    (loop $pattern-loop
+      ;; pattern = match-patterns[i]
+      (local.set $pattern (i64.load32_u offset=0x550 (local.get $i)))
+
+      ;; shifts = match-shifts[i]
+      (local.set $shifts
+        (i64.load offset=0x598 (i32.shl (local.get $i) (i32.const 1))))
+
+      (loop $bit-loop
+        ;; if ((shifts & 1) && ((grid & pattern) == pattern)) ...
+        (if (i32.and
+              (i32.wrap_i64 (i64.and (local.get $shifts) (i64.const 1)))
+              (i64.eq (i64.and (local.get $grid) (local.get $pattern))
+                      (local.get $pattern)))
+          (then
+            ;; result |= pattern
+            (local.set $result (i64.or (local.get $result) (local.get $pattern)))))
+
+        ;; pattern <<= 1
+        (local.set $pattern (i64.shl (local.get $pattern) (i64.const 1)))
+
+        ;; shifts >>= 1
+        ;; loop if shifts != 0
+        (br_if $bit-loop
+          (i64.ne
+            (local.tee $shifts (i64.shr_u (local.get $shifts) (i64.const 1)))
+            (i64.const 0))))
+
+      ;; i += 4
+      ;; loop if i < last-pattern
+      (br_if $pattern-loop
+        (i32.lt_u
+          (local.tee $i (i32.add (local.get $i) (i32.const 4)))
           (local.get $last-pattern))))
 
     ;; grid-offset += 8
-    (local.set $grid-offset (i32.add (local.get $grid-offset) (i32.const 8)))
-
     ;; loop if grid-offset < 64
-    (br_if $loop (i32.lt_u (local.get $grid-offset) (i32.const 64)))
-  )
-
-  ;; return result
-  (local.get $result)
-)
-
-(func $match-patterns (param $grid i64) (param $last-pattern i32) (result i64)
-  (local $result i64)
-  (local $i i32)
-
-  (loop $loop
-    ;; result |= match-pattern(grid, match-patterns[i], match-shifts[i])
-    (local.set $result
-      (i64.or
-        (local.get $result)
-        (call $match-pattern
-          (local.get $grid)
-          (i64.load32_u offset=0x550 (local.get $i))
-          (i64.load offset=0x598 (i32.shl (local.get $i) (i32.const 1))))))
-
-    ;; i += 4
-    (local.set $i (i32.add (local.get $i) (i32.const 4)))
-
-    ;; loop if i < last-pattern
-    (br_if $loop (i32.lt_u (local.get $i) (local.get $last-pattern)))
-  )
-
-  ;; return result
-  (local.get $result)
-)
-
-(func $match-pattern (param $grid i64) (param $pattern i64) (param $shifts i64)
-                     (result i64)
-  (local $result i64)
-  (loop $loop
-    ;; if ((shifts & 1) && ((grid & pattern) == pattern)) ...
-    (if (i32.and
-          (i32.wrap_i64 (i64.and (local.get $shifts) (i64.const 1)))
-          (i64.eq (i64.and (local.get $grid) (local.get $pattern))
-                  (local.get $pattern)))
-      (then
-        ;; result |= pattern
-        (local.set $result (i64.or (local.get $result) (local.get $pattern)))))
-
-    ;; pattern <<= 1
-    (local.set $pattern (i64.shl (local.get $pattern) (i64.const 1)))
-
-    ;; shifts >>= 1
-    (local.set $shifts (i64.shr_u (local.get $shifts) (i64.const 1)))
-
-    ;; loop if shifts != 0
-    (br_if $loop (i64.ne (local.get $shifts) (i64.const 0)))
-  )
+    (br_if $grid-loop
+      (i32.lt_u
+        (local.tee $grid-offset (i32.add (local.get $grid-offset) (i32.const 8)))
+        (i32.const 64))))
 
   ;; return result
   (local.get $result)
