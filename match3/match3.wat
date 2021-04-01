@@ -27,11 +27,22 @@
 (global $click-mouse-bit (mut i64) (i64.const 0))
 
 (func (export "run")
+  (local $i i32)
   (local $mouse-bit i64)
   (local $mouse-dx f32)
   (local $mouse-dy f32)
 
-  (call $clear-screen (i32.const 0)) ;; transparent black
+  ;; clear screen to transparent black
+  (loop $loop
+    ;; mem[0x10000 + i] = 0
+    (i32.store offset=0x10000 (local.get $i) (i32.const 0))
+
+    ;; i += 4
+    ;; loop if i < 90000
+    (br_if $loop
+      (i32.lt_s
+        (local.tee $i (i32.add (local.get $i) (i32.const 4)))
+        (i32.const 90000))))
 
   block $done
   block $falling
@@ -611,20 +622,6 @@
       (i32.lt_s
         (local.tee $grid-idx (i32.add (local.get $grid-idx) (i32.const 1)))
         (i32.const 8))))
-)
-
-(func $clear-screen (param $color i32)
-  (local $i i32)
-  (loop $loop
-    ;; mem[0x10000 + i] = color
-    (i32.store offset=0x10000 (local.get $i) (local.get $color))
-
-    ;; i += 4
-    (local.set $i (i32.add (local.get $i) (i32.const 4)))
-
-    ;; loop if i < 90000
-    (br_if $loop (i32.lt_s (local.get $i) (i32.const 90000)))
-  )
 )
 
 (func $draw-sprite (param $x i32) (param $y i32)
