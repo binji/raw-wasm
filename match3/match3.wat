@@ -28,6 +28,7 @@
 
 (func (export "run")
   (local $i i32)
+  (local $grid-offset i32)
   (local $mouse-bit i64)
   (local $mouse-dx f32)
   (local $mouse-dy f32)
@@ -220,7 +221,21 @@
     (br_if $done (global.get $animating))
 
     ;; Remove the matched cells...
-    (call $clear-pattern (global.get $matched))
+    (loop $loop
+      ;; grid-bitmap[grid-offset] &= ~pattern
+      (i64.store offset=0x3000
+        (local.get $grid-offset)
+        (i64.and
+          (i64.load offset=0x3000 (local.get $grid-offset))
+          (i64.xor (global.get $matched) (i64.const -1))))
+
+      ;; grid-offset += 8
+      ;; loop if grid-offset < 64
+      (br_if $loop
+        (i32.lt_u
+          (local.tee $grid-offset
+            (i32.add (local.get $grid-offset) (i32.const 8)))
+          (i32.const 64))))
 
     ;; And move down cells to fill the holes
     (call $move-down (global.get $matched))
@@ -357,25 +372,6 @@
 
     ;; Always loop
     (br $loop)
-  )
-)
-
-(func $clear-pattern (param $pattern i64)
-  (local $grid-offset i32)
-
-  (loop $loop
-    ;; grid-bitmap[grid-offset] &= ~pattern
-    (i64.store offset=0x3000
-      (local.get $grid-offset)
-      (i64.and
-        (i64.load offset=0x3000 (local.get $grid-offset))
-        (i64.xor (local.get $pattern) (i64.const -1))))
-
-    ;; grid-offset += 8
-    (local.set $grid-offset (i32.add (local.get $grid-offset) (i32.const 8)))
-
-    ;; loop if grid-offset < 64
-    (br_if $loop (i32.lt_u (local.get $grid-offset) (i32.const 64)))
   )
 )
 
