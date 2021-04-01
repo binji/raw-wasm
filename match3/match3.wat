@@ -533,80 +533,84 @@
 )
 
 (func $draw-grids (param $mask i64)
-  (local $i i32)
-  (loop $loop
+  (local $grid-idx i32)
+  (local $cell-idx i32)
+  (local $anim-idx i32)
+  (local $bits i64)
 
-    (call $draw-grid
-      (i64.and
-        (i64.load offset=0x3000 (i32.shl (local.get $i) (i32.const 3)))
-        (local.get $mask))
-      (i32.add (i32.const 0x100) (i32.shl (local.get $i) (i32.const 7))))
-
-    ;; i += 1
-    (local.set $i (i32.add (local.get $i) (i32.const 1)))
-
-    ;; loop if i < 8
-    (br_if $loop (i32.lt_s (local.get $i) (i32.const 8)))
-  )
-)
-
-(func $draw-grid (param $bits i64) (param $gfx-src i32)
-  (local $idx i32)
-  ;; Loop over all cells 0 to 63
-  (loop $loop
-    ;; Exit the function if bits == 0
-    (br_if 1 (i64.eqz (local.get $bits)))
-
-    ;; Get the index of the lowest set bit
-    (local.set $idx (i32.wrap_i64 (i64.ctz (local.get $bits))))
-
-    ;; Draw the cell at that index
-    (call $draw-cell
-      ;; x-coordinate: 7 + (idx & 7) * 17
-      (i32.add
-        (i32.const 7)
-        (i32.mul
-          (i32.and (local.get $idx) (i32.const 7))
-          (i32.const 17)))
-      ;; y-coordinate: (150 - 17 - 7) - (idx >> 3) * 17
-      (i32.sub
-        (i32.const 126)
-        (i32.mul
-          (i32.shr_u (local.get $idx) (i32.const 3))
-          (i32.const 17)))
-      ;; src => idx >> 2
-      (i32.shl (local.get $idx) (i32.const 2))
-      (local.get $gfx-src))
-
-    ;; Clear the lowest set bit: bits &= bits - 1
+  (loop $grid-loop
+    ;; bits = grid[grid-idx] & mask
     (local.set $bits
       (i64.and
-        (local.get $bits)
-        (i64.sub (local.get $bits) (i64.const 1))))
+        (i64.load offset=0x3000 (i32.shl (local.get $grid-idx) (i32.const 3)))
+        (local.get $mask)))
 
-    ;; Always loop
-    (br $loop)
-  )
-)
+    (block $cell-exit
+      (loop $cell-loop
+        ;; Break out of the loop if bits == 0
+        (br_if $cell-exit (i64.eqz (local.get $bits)))
 
-(func $draw-cell (param $x i32) (param $y i32) (param $i i32) (param $src i32) 
-  (call $draw-sprite
-    (i32.add
-      (local.get $x)  ;; base x
-      (i32.load8_s offset=0x3200 (local.get $i))) ;; x offset
-    (i32.add
-      (local.get $y)  ;; base y
-      (i32.load8_s offset=0x3201 (local.get $i))) ;; y offset
-    (local.get $src)
-    (i32.const 16)  ;; sw
-    (i32.const 16)  ;; sh
-    (i32.add
-      (i32.const 16)   ;; base w
-      (i32.load8_s offset=0x3202 (local.get $i)))  ;; w offset
-    (i32.add
-      (i32.const 16)   ;; base h
-      (i32.load8_s offset=0x3203 (local.get $i)))  ;; h offset
-    (i32.const 1) (i32.const 1) (i32.const 0xf))
+        ;; Draw the cell at that index
+        (call $draw-sprite
+          (i32.add
+            ;; base x-coordinate: 7 + (idx & 7) * 17
+            (i32.add
+              (i32.const 7)
+              (i32.mul
+                (i32.and
+                  ;; Get the index of the lowest set bit
+                  (local.tee $cell-idx
+                    (i32.wrap_i64 (i64.ctz (local.get $bits))))
+                  (i32.const 7))
+                (i32.const 17)))
+            ;; x offset
+            (i32.load8_s offset=0x3200
+              (local.tee $anim-idx
+                (i32.shl (local.get $cell-idx) (i32.const 2)))))
+          (i32.add
+            ;; base y-coordinate: (150 - 17 - 7) - (idx >> 3) * 17
+            (i32.sub
+              (i32.const 126)
+              (i32.mul
+                (i32.shr_u (local.get $cell-idx) (i32.const 3))
+                (i32.const 17)))
+             ;; y offset
+            (i32.load8_s offset=0x3201 (local.get $anim-idx)))
+          ;; src
+          (i32.add
+            (i32.const 0x100)
+            (i32.shl (local.get $grid-idx) (i32.const 7)))
+          ;; sw / sh
+          (i32.const 16) (i32.const 16)
+          ;; base w
+          (i32.add
+            (i32.const 16)
+            ;; w offset
+            (i32.load8_s offset=0x3202 (local.get $anim-idx)))
+          ;; base h
+          (i32.add
+            (i32.const 16)
+            ;; h offset
+            (i32.load8_s offset=0x3203 (local.get $anim-idx)))
+          (i32.const 1)
+          (i32.const 1)
+          (i32.const 0xf))
+
+        ;; Clear the lowest set bit: bits &= bits - 1
+        (local.set $bits
+          (i64.and
+            (local.get $bits)
+            (i64.sub (local.get $bits) (i64.const 1))))
+
+        ;; Always loop
+        (br $cell-loop)))
+
+    ;; grid-idx += 1
+    ;; loop if grid-idx < 8
+    (br_if $grid-loop
+      (i32.lt_s
+        (local.tee $grid-idx (i32.add (local.get $grid-idx) (i32.const 1)))
+        (i32.const 8))))
 )
 
 (func $clear-screen (param $color i32)
