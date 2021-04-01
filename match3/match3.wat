@@ -431,40 +431,36 @@
 
 (func $swap-all-grids-bits (param $a i64) (param $b i64)
   (local $grid-offset i32)
-  (loop $loop
-
-    ;; swap-bits(grid-offset, a, b)
-    (call $swap-grid-bits (local.get $grid-offset) (local.get $a) (local.get $b))
-
-    ;; grid-offset += 8
-    (local.set $grid-offset (i32.add (local.get $grid-offset) (i32.const 8)))
-
-    ;; loop if grid-offset < 64
-    (br_if $loop (i32.lt_s (local.get $grid-offset) (i32.const 64)))
-  )
-)
-
-(func $swap-grid-bits (param $grid-offset i32) (param $a i64) (param $b i64)
   (local $bits i64)
   (local $a|b i64)
   (local $temp i64)
 
-  ;; bits = mem[grid-idx]
-  (local.set $bits (i64.load offset=0x3000 (local.get $grid-offset)))
+  (loop $loop
+    ;; bits = mem[grid-idx]
+    ;; temp = bits & (a | b)
+    ;; if bits are different...
+    (if (i32.and
+          (i64.ne
+            (local.tee $temp
+              (i64.and
+                (local.tee $bits
+                  (i64.load offset=0x3000 (local.get $grid-offset)))
+                (local.tee $a|b (i64.or (local.get $a) (local.get $b)))))
+            (i64.const 0))
+          (i64.ne (local.get $temp) (local.get $a|b)))
+      (then
+        ;; mem[grid-idx] = bits ^ (a | b)
+        (i64.store offset=0x3000
+          (local.get $grid-offset)
+          (i64.xor (local.get $bits) (local.get $a|b)))))
 
-  (local.set $a|b (i64.or (local.get $a) (local.get $b)))
-
-  ;; temp = bits & (a | b)
-  (local.set $temp (i64.and (local.get $bits) (local.get $a|b)))
-
-  ;; return if bits are both 0 or both 1
-  (br_if 0 (i32.or (i64.eqz (local.get $temp))
-                   (i64.eq (local.get $temp) (local.get $a|b))))
-
-  ;; mem[grid-idx] = bits ^ (a | b)
-  (i64.store offset=0x3000
-    (local.get $grid-offset)
-    (i64.xor (local.get $bits) (local.get $a|b)))
+    ;; grid-offset += 8
+    ;; loop if grid-offset < 64
+    (br_if $loop
+      (i32.lt_s
+        (local.tee $grid-offset
+          (i32.add (local.get $grid-offset) (i32.const 8)))
+        (i32.const 64))))
 )
 
 (func $get-mouse-bit (param $x i32) (param $y i32) (result i64)
