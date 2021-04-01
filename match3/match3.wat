@@ -742,6 +742,7 @@
 (func $animate
   (local $t-addr i32)
   (local $i-addr i32)
+  (local $a i32)
   (local $t f32)
   (local $mul-t f32)
 
@@ -757,13 +758,26 @@
           (f32.const 0.005))
         (f32.const 1)))
 
+    ;; ilerp = (a,b,t) => return a + (b - a) * t
+    ;; easeOutCubic(t) = t => t * (3 + t * (t - 3))
     ;; current[i] = ilerp(start[i], end[i], easeOutCubic(t))
     (i32.store8 offset=0x3200
       (local.get $i-addr)
-      (call $ilerp
-        (i32.load8_s offset=0x3300 (local.get $i-addr))
-        (i32.load8_s offset=0x3400 (local.get $i-addr))
-        (call $ease-out-cubic (local.get $t))))
+      (i32.add
+        (local.tee $a (i32.load8_s offset=0x3300 (local.get $i-addr)))
+        (i32.trunc_f32_s
+          (f32.mul
+            (f32.convert_i32_s
+              (i32.sub
+                (i32.load8_s offset=0x3400 (local.get $i-addr))
+                (local.get $a)))
+            (f32.mul
+              (local.get $t)
+              (f32.add
+                (f32.const 3)
+                (f32.mul
+                  (local.get $t)
+                  (f32.sub (local.get $t) (f32.const 3)))))))))
     ;; t[i] = t
     (f32.store offset=0x3500 (local.get $t-addr) (local.get $t))
 
@@ -780,27 +794,6 @@
   ;; If all t values are 1 (i.e. all animations are finished), then multiplying
   ;; them together will also be 1.
   (global.set $animating (f32.ne (local.get $mul-t) (f32.const 1)))
-)
-
-(func $ease-out-cubic (param $t f32) (result f32)
-  ;; return t * (3 + t * (t - 3))
-  (f32.mul
-    (local.get $t)
-    (f32.add
-      (f32.const 3)
-      (f32.mul
-        (local.get $t)
-        (f32.sub (local.get $t) (f32.const 3)))))
-)
-
-(func $ilerp (param $a i32) (param $b i32) (param $t f32) (result i32)
-  ;; return a + (b - a) * t
-  (i32.add
-    (local.get $a)
-    (i32.trunc_f32_s
-      (f32.mul
-        (f32.convert_i32_s (i32.sub (local.get $b) (local.get $a)))
-        (local.get $t))))
 )
 
 (func $draw-digit (param $x i32) (param $divisor i32)
