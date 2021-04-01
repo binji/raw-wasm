@@ -642,25 +642,6 @@
   )
 )
 
-(func $put-pixel (param $x i32) (param $y i32) (param $palidx i32)
-  ;; return if the x/y coordinate is out of bounds
-  (br_if 0
-    (i32.or
-      (i32.ge_u (local.get $x) (i32.const 150))
-      (i32.ge_u (local.get $y) (i32.const 150))))
-
-  ;; color = mem[0xc0 + (palidx << 2)]
-  ;; mem[0x10000 + (y * 150 + x) * 4] = color
-  (i32.store offset=0x10000
-    (i32.mul
-      (i32.add
-        (i32.mul (local.get $y) (i32.const 150))
-        (local.get $x))
-      (i32.const 4))
-    (i32.load offset=0xc0
-      (i32.shl (local.get $palidx) (i32.const 2))))
-)
-
 (func $draw-sprite (param $x i32) (param $y i32)
                    (param $src i32)
                    (param $sw i32) (param $sh i32)
@@ -670,6 +651,8 @@
                    (param $palidx-mask i32)
   (local $i i32)
   (local $j i32)
+  (local $x+i i32)
+  (local $y+j i32)
   (local $src-offset i32)
   (local $palidx i32)
   (local $dx f32)
@@ -721,11 +704,26 @@
       ;; if (palidx != 0)
       (if (local.get $palidx)
         (then
-          ;; put-pixel(x + i, y + j, palidx)
-          (call $put-pixel
-            (i32.add (local.get $x) (local.get $i))
-            (i32.add (local.get $y) (local.get $j))
-            (local.get $palidx))))
+          ;; skip if the x/y coordinate is out of bounds
+          (br_if 0
+            (i32.or
+              (i32.ge_u
+                (local.tee $x+i (i32.add (local.get $x) (local.get $i)))
+                (i32.const 150))
+              (i32.ge_u
+                (local.tee $y+j (i32.add (local.get $y) (local.get $j)))
+                (i32.const 150))))
+
+          ;; color = mem[0xc0 + (palidx << 2)]
+          ;; mem[0x10000 + (y * 150 + x) * 4] = color
+          (i32.store offset=0x10000
+            (i32.mul
+              (i32.add
+                (i32.mul (local.get $y+j) (i32.const 150))
+                (local.get $x+i))
+              (i32.const 4))
+            (i32.load offset=0xc0
+              (i32.shl (local.get $palidx) (i32.const 2))))))
 
       ;; i += 1
       (local.set $i (i32.add (local.get $i) (i32.const 1)))
