@@ -29,7 +29,13 @@
 (func (export "run")
   (local $i i32)
   (local $grid-offset i32)
+  (local $idx*4 i32)
+  (local $random-grid i32)
   (local $mouse-bit i64)
+  (local $empty i64)
+  (local $idx i64)
+  (local $above-bits i64)
+  (local $above-idx i64)
   (local $mouse-dx f32)
   (local $mouse-dy f32)
 
@@ -237,8 +243,85 @@
             (i32.add (local.get $grid-offset) (i32.const 8)))
           (i32.const 64))))
 
-    ;; And move down cells to fill the holes
-    (call $move-down (global.get $matched))
+    ;; ... and move down cells to fill the holes
+    (local.set $empty (global.get $matched))
+    (block $move-down-exit
+      (loop $move-down-loop
+        ;; Exit the loop if there are no further bits.
+        (br_if $move-down-exit (i64.eqz (local.get $empty)))
+
+        (local.set $idx*4
+          (i32.wrap_i64
+            (i64.shl
+              ;; Get the index of the lowest set bit
+              (local.tee $idx (i64.ctz (local.get $empty)))
+              (i64.const 2))))
+
+        ;; Find the lowest set bit in $above-bits
+        (local.set $above-idx
+          (i64.ctz
+            ;; Find the next cell above that is not empty: invert the empty
+            ;; pattern and mask it with a column, shifted by idx.
+            (local.tee $above-bits
+              (i64.and
+                (i64.xor (local.get $empty) (i64.const -1))
+                (i64.shl (i64.const 0x0101010101010101) (local.get $idx))))))
+
+        ;; If there is a cell above this one...
+        (if (i64.ne (local.get $above-bits) (i64.const 0))
+          (then
+            ;; Move the cell above down
+            (call $swap-all-grids-bits
+              (i64.shl (i64.const 1) (local.get $above-idx))
+              (i64.shl (i64.const 1) (local.get $idx)))
+
+            ;; Set above-bit in empty so we will fill it.
+            (local.set $empty
+              (i64.or (local.get $empty)
+                      (i64.shl (i64.const 1) (local.get $above-idx)))))
+          (else
+            ;; If there is no bit above, then we need to fill with a new random
+            ;; cell.
+            ;;
+            ;; random-grid = int(random() * 8) << 3
+            ;; grid-bitmap[random-grid] |= (1 << idx)
+            (i64.store offset=0x3000
+              (local.tee $random-grid
+                (i32.shl
+                  (i32.trunc_f32_u (f32.mul (call $random) (f32.const 8)))
+                  (i32.const 3)))
+              (i64.or
+                (i64.load offset=0x3000 (local.get $random-grid))
+                (i64.shl (i64.const 1) (local.get $idx))))
+
+            ;; Set above-idx so it is always the maximum value (used below)
+            (local.set $above-idx (i64.add (local.get $idx) (i64.const 56)))))
+
+        ;; Reset the x,y,w,h to 0
+        (i32.store offset=0x3200 (local.get $idx*4) (i32.const 0))
+
+        ;; Then set the y pixel offset to the y cell difference * 17.
+        (i64.store8 offset=0x3201
+          (local.get $idx*4)
+          (i64.mul
+            (i64.shr_s
+              (i64.sub (local.get $idx) (local.get $above-idx))
+              (i64.const 3))
+            (i64.const 17)))
+
+        ;; Now animate it back to 0.
+        (call $animate-cells
+          (i64.shl (i64.const 1) (local.get $idx))
+          (i32.const 0))
+
+        ;; Clear this bit (it has now been filled).
+        (local.set $empty
+          (i64.and
+            (local.get $empty)
+            (i64.sub (local.get $empty) (i64.const 1))))
+
+        ;; Always loop
+        (br $move-down-loop)))
 
     ;; Set state to $falling
     (global.set $state (i32.const 3))
@@ -287,92 +370,6 @@
   (call $draw-digit (i32.const 135) (i32.const 1))
   (call $draw-digit (i32.const 127) (i32.const 10))
   (call $draw-digit (i32.const 119) (i32.const 100))
-)
-
-(func $move-down (param $empty i64)
-  (local $idx*4 i32)
-  (local $random-grid i32)
-  (local $idx i64)
-  (local $above-bits i64)
-  (local $above-idx i64)
-
-  ;; Loop over all set bits.
-  (loop $loop
-    ;; Exit the function if there are no further bits.
-    (br_if 1 (i64.eqz (local.get $empty)))
-
-    ;; Get the index of the lowest set bit
-    (local.set $idx (i64.ctz (local.get $empty)))
-
-    (local.set $idx*4
-      (i32.wrap_i64 (i64.shl (local.get $idx) (i64.const 2))))
-
-    ;; Find the next cell above that is not empty: invert the empty pattern
-    ;; and mask it with a column, shifted by idx.
-    (local.set $above-bits
-      (i64.and
-        (i64.xor (local.get $empty) (i64.const -1))
-        (i64.shl (i64.const 0x0101010101010101) (local.get $idx))))
-
-    ;; Now find the lowest set bit
-    (local.set $above-idx (i64.ctz (local.get $above-bits)))
-
-    ;; If there is a cell above this one...
-    (if (i64.ne (local.get $above-bits) (i64.const 0))
-      (then
-        ;; Move the cell above down
-        (call $swap-all-grids-bits
-          (i64.shl (i64.const 1) (local.get $above-idx))
-          (i64.shl (i64.const 1) (local.get $idx)))
-
-        ;; Set above-bit in empty so we will fill it.
-        (local.set $empty
-          (i64.or (local.get $empty)
-                  (i64.shl (i64.const 1) (local.get $above-idx)))))
-      (else
-        ;; If there is no bit above, then we need to fill with a new random
-        ;; cell.
-        (local.set $random-grid
-          (i32.shl
-            (i32.trunc_f32_u (f32.mul (call $random) (f32.const 8)))
-            (i32.const 3)))
-
-        ;; grid-bitmap[random-grid] |= (1 << idx)
-        (i64.store offset=0x3000
-          (local.get $random-grid)
-          (i64.or
-            (i64.load offset=0x3000 (local.get $random-grid))
-            (i64.shl (i64.const 1) (local.get $idx))))
-
-        ;; Set above-idx so it is always the maximum value (used below)
-        (local.set $above-idx (i64.add (local.get $idx) (i64.const 56)))))
-
-    ;; Reset the x,y,w,h to 0
-    (i32.store offset=0x3200 (local.get $idx*4) (i32.const 0))
-
-    ;; Then set the y pixel offset to the y cell difference * 17.
-    (i64.store8 offset=0x3201
-      (local.get $idx*4)
-      (i64.mul
-        (i64.shr_s
-          (i64.sub (local.get $idx) (local.get $above-idx))
-          (i64.const 3))
-        (i64.const 17)))
-
-    ;; Now animate it back to 0.
-    (call $animate-cells
-      (i64.shl (i64.const 1) (local.get $idx))
-      (i32.const 0))
-
-    ;; Clear this bit (it has now been filled).
-    (local.set $empty
-      (i64.and
-        (local.get $empty)
-        (i64.sub (local.get $empty) (i64.const 1))))
-
-    ;; Always loop
-    (br $loop)
-  )
 )
 
 (func $match-all-grids-patterns (param $last-pattern i32) (result i64)
