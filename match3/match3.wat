@@ -6,137 +6,17 @@
 ;; [0x00002 .. 0x00002]  mouse buttons
 ;; [0x00003 .. 0x00004]  x, y mouse click position
 ;; [0x000c0 .. 0x00100]  16 RGBA colors       u32[16]
-;; [0x00100 .. 0x00500]  16x16x1 4bpp sprites u8[8][128]
-;; [0x00500 .. 0x00640]  8x8 digits           u8[10][32]
+;; [0x00100 .. 0x00500]  16x16 emojis 4bpp    u8[8][128]
+;; [0x00500 .. 0x00550]  8x8 digits 1bpp      u8[10][8]
+;; [0x00550 .. 0x00598]  18 match patterns    u32[18]
+;; [0x00598 .. 0x00628]  18 shift masks       u64[18]
 ;; [0x03000 .. 0x03040]  8x8 grid bitmap   u64[8]
-;; [0x03040 .. 0x03088]  18 match patterns u32[18]
-;; [0x03088 .. 0x03118]  18 shift masks    u64[18]
 ;; [0x03200 .. 0x03300]  current offset  {s8 x, s8 y, s8 w, s8 h}[64]
 ;; [0x03300 .. 0x03400]  start offset    {s8 x, s8 y, s8 w, s8 h}[64]
 ;; [0x03400 .. 0x03500]  end offset      {s8 x, s8 y, s8 w, s8 h}[64]
 ;; [0x03500 .. 0x03600]  time [0..1)     f32[64]
 ;; [0x10000 .. 0x25f90]  150x150xRGBA data (4 bytes per pixel)
 (memory (export "mem") 3)
-
-(data (i32.const 0x3040)
-  ;; match patterns
-  (i32
-    ;; ........    ........
-    ;; ........    .......x
-    ;; ........    .......x
-    ;; .....xxx    .......x
-     0x00000007  0x00010101
-
-    ;; ........    ........    ........
-    ;; ........    ........    ........
-    ;; .....x..    ......x.    .......x
-    ;; ......xx    .....x.x    .....xx.
-     0x00000403  0x00000205  0x00000106
-
-    ;; ........    ........    ........
-    ;; ........    ........    ........
-    ;; ......xx    .....x.x    .....xx.
-    ;; .....x..    ......x.    .......x
-     0x00000304  0x00000502  0x00000601
-
-    ;; ........    ........
-    ;; ........    ........
-    ;; ........    ........
-    ;; ....x.xx    ....xx.x
-     0x0000000b  0x0000000d
-
-    ;; ........    ........    ........
-    ;; ......x.    .......x    .......x
-    ;; .......x    ......x.    .......x
-    ;; .......x    .......x    ......x.
-     0x00020101  0x00010201  0x00010102
-
-    ;; ........    ........    ........
-    ;; .......x    ......x.    ......x.
-    ;; ......x.    .......x    ......x.
-    ;; ......x.    ......x.    .......x
-     0x00010202  0x00020102  0x00020201
-
-    ;; .......x    .......x
-    ;; ........    .......x
-    ;; .......x    ........
-    ;; .......x    .......x
-     0x01000101  0x01010001
-  )
-
-  ;; match shifts
-  (i64
-    ;;    ..xxxxxx            ........
-    ;;    ..xxxxxx            ........
-    ;;    ..xxxxxx            xxxxxxxx
-    ;;    ..xxxxxx            xxxxxxxx
-    ;;    ..xxxxxx            xxxxxxxx
-    ;;    ..xxxxxx            xxxxxxxx
-    ;;    ..xxxxxx            xxxxxxxx
-    ;;    ..xxxxxx            xxxxxxxx
-    0x3f3f3f3f3f3f3f3f  0x0000ffffffffffff
-
-    ;;    ........            ........            ........
-    ;;    ..xxxxxx            ..xxxxxx            ..xxxxxx
-    ;;    ..xxxxxx            ..xxxxxx            ..xxxxxx
-    ;;    ..xxxxxx            ..xxxxxx            ..xxxxxx
-    ;;    ..xxxxxx            ..xxxxxx            ..xxxxxx
-    ;;    ..xxxxxx            ..xxxxxx            ..xxxxxx
-    ;;    ..xxxxxx            ..xxxxxx            ..xxxxxx
-    ;;    ..xxxxxx            ..xxxxxx            ..xxxxxx
-    0x003f3f3f3f3f3f3f  0x003f3f3f3f3f3f3f  0x003f3f3f3f3f3f3f
-
-    ;;    ........            ........            ........
-    ;;    ..xxxxxx            ..xxxxxx            ..xxxxxx
-    ;;    ..xxxxxx            ..xxxxxx            ..xxxxxx
-    ;;    ..xxxxxx            ..xxxxxx            ..xxxxxx
-    ;;    ..xxxxxx            ..xxxxxx            ..xxxxxx
-    ;;    ..xxxxxx            ..xxxxxx            ..xxxxxx
-    ;;    ..xxxxxx            ..xxxxxx            ..xxxxxx
-    ;;    ..xxxxxx            ..xxxxxx            ..xxxxxx
-    0x003f3f3f3f3f3f3f  0x003f3f3f3f3f3f3f  0x003f3f3f3f3f3f3f
-
-    ;;    ...xxxxx            ...xxxxx
-    ;;    ...xxxxx            ...xxxxx
-    ;;    ...xxxxx            ...xxxxx
-    ;;    ...xxxxx            ...xxxxx
-    ;;    ...xxxxx            ...xxxxx
-    ;;    ...xxxxx            ...xxxxx
-    ;;    ...xxxxx            ...xxxxx
-    ;;    ...xxxxx            ...xxxxx
-    0x1f1f1f1f1f1f1f1f  0x1f1f1f1f1f1f1f1f
-
-    ;;    ........            ........            ........
-    ;;    ........            ........            ........
-    ;;    .xxxxxxx            .xxxxxxx            .xxxxxxx
-    ;;    .xxxxxxx            .xxxxxxx            .xxxxxxx
-    ;;    .xxxxxxx            .xxxxxxx            .xxxxxxx
-    ;;    .xxxxxxx            .xxxxxxx            .xxxxxxx
-    ;;    .xxxxxxx            .xxxxxxx            .xxxxxxx
-    ;;    .xxxxxxx            .xxxxxxx            .xxxxxxx
-    0x00007f7f7f7f7f7f  0x00007f7f7f7f7f7f  0x00007f7f7f7f7f7f
-
-    ;;    ........            ........            ........
-    ;;    ........            ........            ........
-    ;;    .xxxxxxx            .xxxxxxx            .xxxxxxx
-    ;;    .xxxxxxx            .xxxxxxx            .xxxxxxx
-    ;;    .xxxxxxx            .xxxxxxx            .xxxxxxx
-    ;;    .xxxxxxx            .xxxxxxx            .xxxxxxx
-    ;;    .xxxxxxx            .xxxxxxx            .xxxxxxx
-    ;;    .xxxxxxx            .xxxxxxx            .xxxxxxx
-    0x00007f7f7f7f7f7f  0x00007f7f7f7f7f7f  0x00007f7f7f7f7f7f
-
-    ;;    ........            ........
-    ;;    ........            ........
-    ;;    ........            ........
-    ;;    xxxxxxxx            xxxxxxxx
-    ;;    xxxxxxxx            xxxxxxxx
-    ;;    xxxxxxxx            xxxxxxxx
-    ;;    xxxxxxxx            xxxxxxxx
-    ;;    xxxxxxxx            xxxxxxxx
-    0x000000ffffffffff  0x000000ffffffffff
-  )
-)
 
 (global $score (mut i32) (i32.const 0))
 (global $matched (mut i64) (i64.const -1))
@@ -523,8 +403,8 @@
         (local.get $result)
         (call $match-pattern
           (local.get $grid)
-          (i64.load32_u offset=0x3040 (local.get $i))
-          (i64.load offset=0x3088 (i32.shl (local.get $i) (i32.const 1))))))
+          (i64.load32_u offset=0x550 (local.get $i))
+          (i64.load offset=0x598 (i32.shl (local.get $i) (i32.const 1))))))
 
     ;; i += 4
     (local.set $i (i32.add (local.get $i) (i32.const 4)))
@@ -744,7 +624,8 @@
       (i32.load8_s offset=0x3202 (local.get $i)))  ;; w offset
     (i32.add
       (i32.const 16)   ;; base h
-      (i32.load8_s offset=0x3203 (local.get $i)))) ;; h offset
+      (i32.load8_s offset=0x3203 (local.get $i)))  ;; h offset
+    (i32.const 1) (i32.const 1) (i32.const 0xf))
 )
 
 (func $clear-screen (param $color i32)
@@ -784,6 +665,9 @@
                    (param $src i32)
                    (param $sw i32) (param $sh i32)
                    (param $dw i32) (param $dh i32)
+                   (param $pixels-per-byte i32)
+                   (param $src-offset-mask i32)
+                   (param $palidx-mask i32)
   (local $i i32)
   (local $j i32)
   (local $src-offset i32)
@@ -806,7 +690,9 @@
     ;; for (i = 0; i < dw; i++)
     (loop $x-loop
       ;; src-offset = (sw * j * dy) + i * dx
-      ;; palidx = (mem[src + (src-offset >> 1)] >> ((src-offset & 1) * 4)) & 0xf
+      ;; palidx = (mem[src + (src-offset >> pixels-per-byte)] >>
+      ;;           ((src-offset & src-offset-mask) << (3 - pixels-per-byte))) &
+      ;;          palidx-mask;
       (local.set $palidx
         (i32.and
           (i32.shr_u
@@ -826,13 +712,11 @@
                         (f32.mul
                           (f32.convert_i32_s (local.get $i))
                           (local.get $dx)))))
-                  (i32.const 1))))
+                  (local.get $pixels-per-byte))))
             (i32.shl
-              (i32.and
-                (local.get $src-offset)
-                (i32.const 1))
-              (i32.const 2)))
-          (i32.const 0xf)))
+              (i32.and (local.get $src-offset) (local.get $src-offset-mask))
+              (i32.sub (i32.const 3) (local.get $pixels-per-byte))))
+          (local.get $palidx-mask)))
 
       ;; if (palidx != 0)
       (if (local.get $palidx)
@@ -931,9 +815,10 @@
         (i32.rem_u
           (i32.div_u (global.get $score) (local.get $divisor))
           (i32.const 10))
-        (i32.const 5)))
+        (i32.const 3)))
     (i32.const 8) (i32.const 8)
     (i32.const 8) (i32.const 8)
+    (i32.const 3) (i32.const 7) (i32.const 1)
   )
 )
 
@@ -1074,85 +959,133 @@
   "\00\30\33\33\33\33\33\03"
   "\00\00\00\00\00\00\00\00"
 
-  ;; 012345789
-  "\a0\aa\aa\00"
-  "\aa\aa\aa\0a"
-  "\aa\00\a0\0a"
-  "\aa\00\a0\0a"
-  "\aa\00\a0\0a"
-  "\aa\00\a0\0a"
-  "\aa\aa\aa\0a"
-  "\a0\aa\aa\00"
-  "\00\00\aa\00"
-  "\00\aa\aa\00"
-  "\00\aa\aa\00"
-  "\00\00\aa\00"
-  "\00\00\aa\00"
-  "\00\00\aa\00"
-  "\a0\aa\aa\0a"
-  "\a0\aa\aa\0a"
-  "\a0\aa\aa\00"
-  "\a0\aa\aa\0a"
-  "\00\00\a0\0a"
-  "\a0\aa\aa\0a"
-  "\aa\aa\aa\00"
-  "\aa\00\00\00"
-  "\aa\aa\aa\0a"
-  "\aa\aa\aa\0a"
-  "\a0\aa\aa\00"
-  "\aa\aa\aa\0a"
-  "\aa\00\a0\0a"
-  "\00\a0\aa\0a"
-  "\00\a0\aa\00"
-  "\aa\00\a0\0a"
-  "\aa\aa\aa\0a"
-  "\a0\aa\aa\0a"
-  "\a0\0a\a0\0a"
-  "\aa\0a\a0\0a"
-  "\aa\00\a0\0a"
-  "\aa\aa\aa\0a"
-  "\aa\aa\aa\0a"
-  "\00\00\a0\0a"
-  "\00\00\a0\0a"
-  "\00\00\a0\0a"
-  "\aa\aa\aa\0a"
-  "\aa\aa\aa\0a"
-  "\aa\00\00\00"
-  "\aa\aa\aa\00"
-  "\aa\aa\aa\0a"
-  "\00\00\a0\0a"
-  "\aa\aa\aa\0a"
-  "\aa\aa\aa\00"
-  "\00\aa\aa\00"
-  "\a0\aa\aa\00"
-  "\aa\0a\00\00"
-  "\aa\aa\aa\00"
-  "\aa\aa\aa\0a"
-  "\aa\00\a0\0a"
-  "\aa\aa\aa\0a"
-  "\a0\aa\aa\00"
-  "\aa\aa\aa\0a"
-  "\aa\aa\aa\0a"
-  "\00\00\aa\00"
-  "\00\a0\0a\00"
-  "\00\a0\0a\00"
-  "\00\aa\00\00"
-  "\00\aa\00\00"
-  "\00\aa\00\00"
-  "\00\aa\0a\00"
-  "\a0\aa\aa\00"
-  "\aa\00\a0\0a"
-  "\aa\aa\aa\0a"
-  "\a0\aa\aa\00"
-  "\aa\00\a0\0a"
-  "\aa\aa\aa\0a"
-  "\a0\aa\aa\00"
-  "\a0\aa\aa\00"
-  "\aa\aa\aa\0a"
-  "\aa\00\a0\0a"
-  "\aa\aa\aa\0a"
-  "\a0\aa\aa\0a"
-  "\00\00\aa\00"
-  "\a0\aa\aa\00"
-  "\a0\aa\0a\00"
+  ;; digits
+  "\3e\7f\63\63\63\63\7f\3e"  ;; 0
+  "\30\3c\3c\30\30\30\7e\7e"  ;; 1
+  "\3e\7e\60\7e\3f\03\7f\7f"  ;; 2
+  "\3e\7f\63\78\38\63\7f\7e"  ;; 3
+  "\66\67\63\7f\7f\60\60\60"  ;; 4
+  "\7f\7f\03\3f\7f\60\7f\3f"  ;; 5
+  "\3c\3e\07\3f\7f\63\7f\3e"  ;; 6
+  "\7f\7f\30\18\18\0c\0c\0c"  ;; 7
+  "\1c\3e\63\7f\3e\63\7f\3e"  ;; 8
+  "\3e\7f\63\7f\7e\30\3e\1e"  ;; 9
+
+  ;; match patterns
+  (i32
+    ;; ........    ........
+    ;; ........    .......x
+    ;; ........    .......x
+    ;; .....xxx    .......x
+     0x00000007  0x00010101
+
+    ;; ........    ........    ........
+    ;; ........    ........    ........
+    ;; .....x..    ......x.    .......x
+    ;; ......xx    .....x.x    .....xx.
+     0x00000403  0x00000205  0x00000106
+
+    ;; ........    ........    ........
+    ;; ........    ........    ........
+    ;; ......xx    .....x.x    .....xx.
+    ;; .....x..    ......x.    .......x
+     0x00000304  0x00000502  0x00000601
+
+    ;; ........    ........
+    ;; ........    ........
+    ;; ........    ........
+    ;; ....x.xx    ....xx.x
+     0x0000000b  0x0000000d
+
+    ;; ........    ........    ........
+    ;; ......x.    .......x    .......x
+    ;; .......x    ......x.    .......x
+    ;; .......x    .......x    ......x.
+     0x00020101  0x00010201  0x00010102
+
+    ;; ........    ........    ........
+    ;; .......x    ......x.    ......x.
+    ;; ......x.    .......x    ......x.
+    ;; ......x.    ......x.    .......x
+     0x00010202  0x00020102  0x00020201
+
+    ;; .......x    .......x
+    ;; ........    .......x
+    ;; .......x    ........
+    ;; .......x    .......x
+     0x01000101  0x01010001
+  )
+
+  ;; match shifts
+  (i64
+    ;;    ..xxxxxx            ........
+    ;;    ..xxxxxx            ........
+    ;;    ..xxxxxx            xxxxxxxx
+    ;;    ..xxxxxx            xxxxxxxx
+    ;;    ..xxxxxx            xxxxxxxx
+    ;;    ..xxxxxx            xxxxxxxx
+    ;;    ..xxxxxx            xxxxxxxx
+    ;;    ..xxxxxx            xxxxxxxx
+    0x3f3f3f3f3f3f3f3f  0x0000ffffffffffff
+
+    ;;    ........            ........            ........
+    ;;    ..xxxxxx            ..xxxxxx            ..xxxxxx
+    ;;    ..xxxxxx            ..xxxxxx            ..xxxxxx
+    ;;    ..xxxxxx            ..xxxxxx            ..xxxxxx
+    ;;    ..xxxxxx            ..xxxxxx            ..xxxxxx
+    ;;    ..xxxxxx            ..xxxxxx            ..xxxxxx
+    ;;    ..xxxxxx            ..xxxxxx            ..xxxxxx
+    ;;    ..xxxxxx            ..xxxxxx            ..xxxxxx
+    0x003f3f3f3f3f3f3f  0x003f3f3f3f3f3f3f  0x003f3f3f3f3f3f3f
+
+    ;;    ........            ........            ........
+    ;;    ..xxxxxx            ..xxxxxx            ..xxxxxx
+    ;;    ..xxxxxx            ..xxxxxx            ..xxxxxx
+    ;;    ..xxxxxx            ..xxxxxx            ..xxxxxx
+    ;;    ..xxxxxx            ..xxxxxx            ..xxxxxx
+    ;;    ..xxxxxx            ..xxxxxx            ..xxxxxx
+    ;;    ..xxxxxx            ..xxxxxx            ..xxxxxx
+    ;;    ..xxxxxx            ..xxxxxx            ..xxxxxx
+    0x003f3f3f3f3f3f3f  0x003f3f3f3f3f3f3f  0x003f3f3f3f3f3f3f
+
+    ;;    ...xxxxx            ...xxxxx
+    ;;    ...xxxxx            ...xxxxx
+    ;;    ...xxxxx            ...xxxxx
+    ;;    ...xxxxx            ...xxxxx
+    ;;    ...xxxxx            ...xxxxx
+    ;;    ...xxxxx            ...xxxxx
+    ;;    ...xxxxx            ...xxxxx
+    ;;    ...xxxxx            ...xxxxx
+    0x1f1f1f1f1f1f1f1f  0x1f1f1f1f1f1f1f1f
+
+    ;;    ........            ........            ........
+    ;;    ........            ........            ........
+    ;;    .xxxxxxx            .xxxxxxx            .xxxxxxx
+    ;;    .xxxxxxx            .xxxxxxx            .xxxxxxx
+    ;;    .xxxxxxx            .xxxxxxx            .xxxxxxx
+    ;;    .xxxxxxx            .xxxxxxx            .xxxxxxx
+    ;;    .xxxxxxx            .xxxxxxx            .xxxxxxx
+    ;;    .xxxxxxx            .xxxxxxx            .xxxxxxx
+    0x00007f7f7f7f7f7f  0x00007f7f7f7f7f7f  0x00007f7f7f7f7f7f
+
+    ;;    ........            ........            ........
+    ;;    ........            ........            ........
+    ;;    .xxxxxxx            .xxxxxxx            .xxxxxxx
+    ;;    .xxxxxxx            .xxxxxxx            .xxxxxxx
+    ;;    .xxxxxxx            .xxxxxxx            .xxxxxxx
+    ;;    .xxxxxxx            .xxxxxxx            .xxxxxxx
+    ;;    .xxxxxxx            .xxxxxxx            .xxxxxxx
+    ;;    .xxxxxxx            .xxxxxxx            .xxxxxxx
+    0x00007f7f7f7f7f7f  0x00007f7f7f7f7f7f  0x00007f7f7f7f7f7f
+
+    ;;    ........            ........
+    ;;    ........            ........
+    ;;    ........            ........
+    ;;    xxxxxxxx            xxxxxxxx
+    ;;    xxxxxxxx            xxxxxxxx
+    ;;    xxxxxxxx            xxxxxxxx
+    ;;    xxxxxxxx            xxxxxxxx
+    ;;    xxxxxxxx            xxxxxxxx
+    0x000000ffffffffff  0x000000ffffffffff
+  )
 )
