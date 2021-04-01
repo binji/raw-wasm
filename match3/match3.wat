@@ -31,6 +31,9 @@
   (local $grid-offset i32)
   (local $idx*4 i32)
   (local $random-grid i32)
+  (local $t-addr i32)
+  (local $i-addr i32)
+  (local $a i32)
   (local $mouse-bit i64)
   (local $empty i64)
   (local $idx i64)
@@ -38,6 +41,8 @@
   (local $above-idx i64)
   (local $mouse-dx f32)
   (local $mouse-dy f32)
+  (local $t f32)
+  (local $mul-t f32)
 
   ;; clear screen to transparent black
   (loop $loop
@@ -360,7 +365,57 @@
 
   end $done
 
-  (call $animate)
+  ;; Animate
+  ;; mul-t = 1
+  (local.set $mul-t (f32.const 1))
+
+  (loop $animate-loop
+    ;; ilerp = (a,b,t) => return a + (b - a) * t
+    ;; easeOutCubic(t) = t => t * (3 + t * (t - 3))
+    ;; current[i] = ilerp(start[i], end[i], easeOutCubic(t))
+    (i32.store8 offset=0x3200
+      (local.get $i-addr)
+      (i32.add
+        (local.tee $a (i32.load8_s offset=0x3300 (local.get $i-addr)))
+        (i32.trunc_f32_s
+          (f32.mul
+            (f32.convert_i32_s
+              (i32.sub
+                (i32.load8_s offset=0x3400 (local.get $i-addr))
+                (local.get $a)))
+            (f32.mul
+              ;; t = Math.min(t[i] + speed, 1)
+              (local.tee $t
+                (f32.min
+                  (f32.add
+                    (f32.load offset=0x3500 (local.get $t-addr))
+                    (f32.const 0.005))
+                  (f32.const 1)))
+              (f32.add
+                (f32.const 3)
+                (f32.mul
+                  (local.get $t)
+                  (f32.sub (local.get $t) (f32.const 3)))))))))
+    ;; t[i] = t
+    (f32.store offset=0x3500 (local.get $t-addr) (local.get $t))
+
+    ;; mul-t *= t
+    (local.set $mul-t (f32.mul (local.get $mul-t) (local.get $t)))
+
+    ;; i-addr += 1
+    ;; t-addr = i-addr & ~3
+    (local.set $t-addr
+      (i32.and
+        (local.tee $i-addr (i32.add (local.get $i-addr) (i32.const 1)))
+        (i32.const 0xfc)))
+
+    ;; loop if i-addr < 256
+    (br_if $animate-loop (i32.lt_s (local.get $i-addr) (i32.const 256))))
+
+  ;; If all t values are 1 (i.e. all animations are finished), then multiplying
+  ;; them together will also be 1.
+  (global.set $animating (f32.ne (local.get $mul-t) (f32.const 1)))
+
   (call $draw-grids (i64.const -1))  ;; Mask with all 1s
 
   ;; Draw the moused-over cell again, so they're on top
@@ -712,63 +767,6 @@
     ;; loop if j < h
     (br_if $y-loop (i32.lt_s (local.get $j) (local.get $dh)))
   )
-)
-
-(func $animate
-  (local $t-addr i32)
-  (local $i-addr i32)
-  (local $a i32)
-  (local $t f32)
-  (local $mul-t f32)
-
-  ;; mul-t = 1
-  (local.set $mul-t (f32.const 1))
-
-  (loop $loop
-    ;; t = Math.min(t[i] + speed, 1)
-    (local.set $t
-      (f32.min
-        (f32.add
-          (f32.load offset=0x3500 (local.get $t-addr))
-          (f32.const 0.005))
-        (f32.const 1)))
-
-    ;; ilerp = (a,b,t) => return a + (b - a) * t
-    ;; easeOutCubic(t) = t => t * (3 + t * (t - 3))
-    ;; current[i] = ilerp(start[i], end[i], easeOutCubic(t))
-    (i32.store8 offset=0x3200
-      (local.get $i-addr)
-      (i32.add
-        (local.tee $a (i32.load8_s offset=0x3300 (local.get $i-addr)))
-        (i32.trunc_f32_s
-          (f32.mul
-            (f32.convert_i32_s
-              (i32.sub
-                (i32.load8_s offset=0x3400 (local.get $i-addr))
-                (local.get $a)))
-            (f32.mul
-              (local.get $t)
-              (f32.add
-                (f32.const 3)
-                (f32.mul
-                  (local.get $t)
-                  (f32.sub (local.get $t) (f32.const 3)))))))))
-    ;; t[i] = t
-    (f32.store offset=0x3500 (local.get $t-addr) (local.get $t))
-
-    ;; mul-t *= t
-    (local.set $mul-t (f32.mul (local.get $mul-t) (local.get $t)))
-
-    ;; i-addr += 1
-    (local.set $i-addr (i32.add (local.get $i-addr) (i32.const 1)))
-    ;; t-addr = i-addr & ~3
-    (local.set $t-addr (i32.and (local.get $i-addr) (i32.const 0xfc)))
-    (br_if $loop (i32.lt_s (local.get $i-addr) (i32.const 256)))
-  )
-
-  ;; If all t values are 1 (i.e. all animations are finished), then multiplying
-  ;; them together will also be 1.
-  (global.set $animating (f32.ne (local.get $mul-t) (f32.const 1)))
 )
 
 (func $draw-digit (param $x i32) (param $divisor i32)
