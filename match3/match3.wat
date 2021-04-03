@@ -95,17 +95,20 @@
 
   end $mouse-down
 
-    ;; mouse-dx = mouse-x - mouse-click-x
-    (local.set $mouse-dx
-      (f32.convert_i32_s
-        (i32.sub (i32.load8_u (i32.const 0)) (i32.load8_u (i32.const 3)))))
-    ;; mouse-dy = mouse-y - mouse-click-y
-    (local.set $mouse-dy
-      (f32.convert_i32_s
-        (i32.sub (i32.load8_u (i32.const 1)) (i32.load8_u (i32.const 4)))))
-
     ;; if abs(mouse-dx) < abs(mouse-dy) ...
-    (if (f32.lt (f32.abs (local.get $mouse-dx)) (f32.abs (local.get $mouse-dy)))
+    (if (f32.lt
+          (f32.abs
+            ;; mouse-dx = mouse-x - mouse-click-x
+            (local.tee $mouse-dx
+              (f32.convert_i32_s
+                (i32.sub (i32.load8_u (i32.const 0))
+                         (i32.load8_u (i32.const 3))))))
+          (f32.abs
+            ;; mouse-dy = mouse-y - mouse-click-y
+            (local.tee $mouse-dy
+              (f32.convert_i32_s
+                (i32.sub (i32.load8_u (i32.const 1))
+                         (i32.load8_u (i32.const 4)))))))
       (then
         ;; mouse-dx = 0
         (local.set $mouse-dx (f32.const 0))
@@ -525,11 +528,6 @@
 )
 
 (func $get-mouse-bit (param $x i32) (param $y i32) (result i64)
-  ;; x -= 7
-  (local.set $x (i32.sub (local.get $x) (i32.const 7)))
-  ;; y = 142 - y
-  (local.set $y (i32.sub (i32.const 142) (local.get $y)))
-
   ;; return ...
   (select
     ;; 1 << ((y / 17) * 8 + (x / 17))
@@ -538,9 +536,15 @@
       (i64.extend_i32_u
         (i32.add
           (i32.mul
-            (i32.div_s (local.get $y) (i32.const 17))
+            (i32.div_s
+              ;; y = 142 - y
+              (local.tee $y (i32.sub (i32.const 142) (local.get $y)))
+              (i32.const 17))
             (i32.const 8))
-          (i32.div_s (local.get $x) (i32.const 17)))))
+          (i32.div_s
+            ;; x -= 7
+            (local.tee $x (i32.sub (local.get $x) (i32.const 7)))
+            (i32.const 17)))))
     ;; -1
     (i64.const 0)
     ;; if (x < 136) && (y < 136)
@@ -561,15 +565,14 @@
     ;; Exit the function if there are no further bits.
     (br_if 1 (i64.eqz (local.get $bits)))
 
-    ;; Get the lowest set bit
-    (local.set $bit
-      (i64.and (local.get $bits) (i64.sub (i64.const 0) (local.get $bits))))
-
-    (local.set $src*4 (call $bit-to-src*4 (local.get $bit)))
-
     ;; Set the start x/y/w/h to the current x/y/w/h.
     (i32.store offset=0x3300
-      (local.get $src*4)
+      (local.tee $src*4
+        (call $bit-to-src*4
+          ;; Get the lowest set bit
+          (local.tee $bit
+            (i64.and (local.get $bits)
+                     (i64.sub (i64.const 0) (local.get $bits))))))
       (i32.load offset=0x3200 (local.get $src*4)))
 
     ;; Set the destination x/y/w/h
@@ -757,17 +760,19 @@
             (i32.load offset=0xc0
               (i32.shl (local.get $palidx) (i32.const 2))))))
 
-      ;; i += 1
-      (local.set $i (i32.add (local.get $i) (i32.const 1)))
-
       ;; loop if i < w
-      (br_if $x-loop (i32.lt_s (local.get $i) (local.get $dw)))
+      (br_if $x-loop
+        (i32.lt_s
+          ;; i += 1
+          (local.tee $i (i32.add (local.get $i) (i32.const 1)))
+          (local.get $dw)))
     )
-    ;; j += 1
-    (local.set $j (i32.add (local.get $j) (i32.const 1)))
-
     ;; loop if j < h
-    (br_if $y-loop (i32.lt_s (local.get $j) (local.get $dh)))
+    (br_if $y-loop
+      (i32.lt_s
+        ;; j += 1
+        (local.tee $j (i32.add (local.get $j) (i32.const 1)))
+        (local.get $dh)))
   )
 )
 
