@@ -131,13 +131,14 @@
                  (i32.load8_u (i32.const 4)))))
 
     ;; end[click-mouse-bit].x = mouse-dx
-    (i32.store8 offset=0x3400
-      (call $bit-to-src*4 (global.get $click-mouse-bit))
-      (i32.trunc_f32_s (local.get $mouse-dx)))
     ;; end[click-mouse-bit].y = mouse-dy
-    (i32.store8 offset=0x3401
+    (i32.store16 offset=0x3400
       (call $bit-to-src*4 (global.get $click-mouse-bit))
-      (i32.trunc_f32_s (local.get $mouse-dy)))
+      (i32.or
+        (i32.shl
+          (i32.trunc_f32_s (local.get $mouse-dy))
+          (i32.const 8))
+        (i32.trunc_f32_s (local.get $mouse-dx))))
 
     ;; If mouse-bit != 0 && mouse-bit != click-mouse-bit
     (if (i32.and
@@ -145,13 +146,14 @@
           (i64.ne (global.get $click-mouse-bit) (local.get $mouse-bit)))
       (then
         ;; end[mouse-bit].x = -mouse-dx
-        (i32.store8 offset=0x3400
-          (call $bit-to-src*4 (local.get $mouse-bit))
-          (i32.trunc_f32_s (f32.neg (local.get $mouse-dx))))
         ;; end[mouse-bit].y = -mouse-dy
-        (i32.store8 offset=0x3401
+        (i32.store16 offset=0x3400
           (call $bit-to-src*4 (local.get $mouse-bit))
-          (i32.trunc_f32_s (f32.neg (local.get $mouse-dy))))))
+          (i32.or
+            (i32.shl
+              (i32.trunc_f32_s (f32.neg (local.get $mouse-dy)))
+              (i32.const 8))
+            (i32.trunc_f32_s (f32.neg (local.get $mouse-dx)))))))
 
     ;; If the button is no longer pressed, go back to idle.
     (if (i32.eqz (i32.load8_u (i32.const 2)))
