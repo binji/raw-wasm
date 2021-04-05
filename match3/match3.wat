@@ -558,7 +558,6 @@
 )
 
 (func $animate-cells (param $bits i64) (param $h_w_y_x i32)
-  (local $bit i64)
   (local $src*4 i32)
 
   (loop $loop
@@ -567,12 +566,7 @@
 
     ;; Set the start x/y/w/h to the current x/y/w/h.
     (i32.store offset=0x3300
-      (local.tee $src*4
-        (call $bit-to-src*4
-          ;; Get the lowest set bit
-          (local.tee $bit
-            (i64.and (local.get $bits)
-                     (i64.sub (i64.const 0) (local.get $bits))))))
+      (local.tee $src*4 (call $bit-to-src*4 (local.get $bits)))
       (i32.load offset=0x3200 (local.get $src*4)))
 
     ;; Set the destination x/y/w/h
