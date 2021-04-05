@@ -29,7 +29,6 @@
 (func (export "run")
   (local $i i32)
   (local $grid-offset i32)
-  (local $idx*4 i32)
   (local $random-grid i32)
   (local $t-addr i32)
   (local $i-addr i32)
@@ -249,13 +248,6 @@
         ;; Exit the loop if there are no further bits.
         (br_if $move-down-exit (i64.eqz (local.get $empty)))
 
-        (local.set $idx*4
-          (i32.wrap_i64
-            (i64.shl
-              ;; Get the index of the lowest set bit
-              (local.tee $idx (i64.ctz (local.get $empty)))
-              (i64.const 2))))
-
         ;; Find the lowest set bit in $above-bits
         (local.set $above-idx
           (i64.ctz
@@ -264,7 +256,10 @@
             (local.tee $above-bits
               (i64.and
                 (i64.xor (local.get $empty) (i64.const -1))
-                (i64.shl (i64.const 0x0101010101010101) (local.get $idx))))))
+                (i64.shl
+                  (i64.const 0x0101010101010101)
+                  ;; Get the index of the lowest set bit
+                  (local.tee $idx (i64.ctz (local.get $empty))))))))
 
         ;; If there is not a cell above this one...
         (if (i64.eqz (local.get $above-bits))
@@ -295,17 +290,20 @@
               (i64.or (local.get $empty)
                       (i64.shl (i64.const 1) (local.get $above-idx))))))
 
-        ;; Reset the x,y,w,h to 0
-        (i32.store offset=0x3200 (local.get $idx*4) (i32.const 0))
-
-        ;; Then set the y pixel offset to the y cell difference * 17.
-        (i64.store8 offset=0x3201
-          (local.get $idx*4)
-          (i64.mul
-            (i64.shr_s
-              (i64.sub (local.get $idx) (local.get $above-idx))
-              (i64.const 3))
-            (i64.const 17)))
+        ;; Reset the x,w,h to 0, but set the y pixel offset to the y cell
+        ;; difference * 17.
+        (i64.store32 offset=0x3200
+          (i32.wrap_i64
+            (i64.shl (local.get $idx) (i64.const 2)))
+          (i64.shl
+            (i64.and
+              (i64.mul
+                (i64.shr_s
+                  (i64.sub (local.get $idx) (local.get $above-idx))
+                  (i64.const 3))
+                (i64.const 17))
+              (i64.const 0xff))
+            (i64.const 8)))
 
         ;; Now animate it back to 0.
         (call $animate-cells
