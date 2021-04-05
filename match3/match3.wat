@@ -40,6 +40,7 @@
   (local $mouse-bit i64)
   (local $empty i64)
   (local $idx i64)
+  (local $1<<idx i64)
   (local $above-bits i64)
   (local $above-idx i64)
   (local $mouse-dx f32)
@@ -248,6 +249,12 @@
         ;; Exit the loop if there are no further bits.
         (br_if $move-down-exit (i64.eqz (local.get $empty)))
 
+        (local.set $1<<idx
+          (i64.shl
+            (i64.const 1)
+            ;; Get the index of the lowest set bit
+            (local.tee $idx (i64.ctz (local.get $empty)))))
+
         ;; If there is not a cell above this one...
         (if (i64.eqz
               ;; Find the next cell above that is not empty: invert the empty
@@ -255,10 +262,7 @@
               (local.tee $above-bits
                 (i64.and
                   (i64.xor (local.get $empty) (i64.const -1))
-                  (i64.shl
-                    (i64.const 0x0101010101010101)
-                    ;; Get the index of the lowest set bit
-                    (local.tee $idx (i64.ctz (local.get $empty)))))))
+                  (i64.shl (i64.const 0x0101010101010101) (local.get $idx)))))
           (then
             ;; then we need to fill with a new random cell.
             ;;
@@ -271,7 +275,7 @@
                   (i32.const 3)))
               (i64.or
                 (i64.load offset=0x3000 (local.get $random-grid))
-                (i64.shl (i64.const 1) (local.get $idx))))
+                (local.get $1<<idx)))
 
             ;; Set above-idx so it is always the maximum value (used below)
             (local.set $above-idx (i64.add (local.get $idx) (i64.const 56))))
@@ -282,7 +286,7 @@
                 (i64.const 1)
                 ;; Find the lowest set bit in $above-bits
                 (local.tee $above-idx (i64.ctz (local.get $above-bits))))
-              (i64.shl (i64.const 1) (local.get $idx)))
+              (local.get $1<<idx))
 
             ;; Set above-bit in empty so we will fill it.
             (local.set $empty
@@ -305,9 +309,7 @@
             (i64.const 8)))
 
         ;; Now animate it back to 0.
-        (call $animate-cells
-          (i64.shl (i64.const 1) (local.get $idx))
-          (i32.const 0))
+        (call $animate-cells (local.get $1<<idx) (i32.const 0))
 
         ;; Clear this bit (it has now been filled).
         (local.set $empty
