@@ -497,23 +497,19 @@
   (local $grid-offset i32)
   (local $bits i64)
   (local $a|b i64)
-  (local $temp i64)
 
   (loop $loop
-    ;; bits = mem[grid-idx]
-    ;; temp = bits & (a | b)
-    ;; if bits are different...
-    (if (i32.and
-          (i64.ne
-            (local.tee $temp
-              (i64.and
-                (local.tee $bits
-                  (i64.load offset=0x3000 (local.get $grid-offset)))
-                (local.tee $a|b (i64.or (local.get $a) (local.get $b)))))
-            (i64.const 0))
-          (i64.ne (local.get $temp) (local.get $a|b)))
+    ;; if popcnt(bits & (a | b)) == 1  ;; i.e. bits are different
+    (if (i64.eq
+          (i64.popcnt
+            (i64.and
+              ;; bits = mem[grid-offset]
+              (local.tee $bits
+                (i64.load offset=0x3000 (local.get $grid-offset)))
+              (local.tee $a|b (i64.or (local.get $a) (local.get $b)))))
+            (i64.const 1))
       (then
-        ;; mem[grid-idx] = bits ^ (a | b)
+        ;; mem[grid-offset] = bits ^ (a | b)
         (i64.store offset=0x3000
           (local.get $grid-offset)
           (i64.xor (local.get $bits) (local.get $a|b)))))
