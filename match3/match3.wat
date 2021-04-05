@@ -248,21 +248,17 @@
         ;; Exit the loop if there are no further bits.
         (br_if $move-down-exit (i64.eqz (local.get $empty)))
 
-        ;; Find the lowest set bit in $above-bits
-        (local.set $above-idx
-          (i64.ctz
-            ;; Find the next cell above that is not empty: invert the empty
-            ;; pattern and mask it with a column, shifted by idx.
-            (local.tee $above-bits
-              (i64.and
-                (i64.xor (local.get $empty) (i64.const -1))
-                (i64.shl
-                  (i64.const 0x0101010101010101)
-                  ;; Get the index of the lowest set bit
-                  (local.tee $idx (i64.ctz (local.get $empty))))))))
-
         ;; If there is not a cell above this one...
-        (if (i64.eqz (local.get $above-bits))
+        (if (i64.eqz
+              ;; Find the next cell above that is not empty: invert the empty
+              ;; pattern and mask it with a column, shifted by idx.
+              (local.tee $above-bits
+                (i64.and
+                  (i64.xor (local.get $empty) (i64.const -1))
+                  (i64.shl
+                    (i64.const 0x0101010101010101)
+                    ;; Get the index of the lowest set bit
+                    (local.tee $idx (i64.ctz (local.get $empty)))))))
           (then
             ;; then we need to fill with a new random cell.
             ;;
@@ -282,7 +278,10 @@
           (else
             ;; If there is cell above, move iti down
             (call $swap-all-grids-bits
-              (i64.shl (i64.const 1) (local.get $above-idx))
+              (i64.shl
+                (i64.const 1)
+                ;; Find the lowest set bit in $above-bits
+                (local.tee $above-idx (i64.ctz (local.get $above-bits))))
               (i64.shl (i64.const 1) (local.get $idx)))
 
             ;; Set above-bit in empty so we will fill it.
