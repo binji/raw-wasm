@@ -36,6 +36,8 @@
   (local $a i32)
   (local $mouse-src*4 i32)
   (local $click-mouse-src*4 i32)
+  (local $x i32)
+  (local $divisor i32)
   (local $mouse-bit i64)
   (local $empty i64)
   (local $idx i64)
@@ -424,9 +426,27 @@
   (call $draw-grids (local.get $mouse-bit))
 
   ;; Draw score
-  (call $draw-digit (i32.const 135) (i32.const 1))
-  (call $draw-digit (i32.const 127) (i32.const 10))
-  (call $draw-digit (i32.const 119) (i32.const 100))
+  (local.set $x (i32.const 111))
+  (local.set $divisor (i32.const 1000))
+  (loop $digit-loop
+    (call $draw-sprite
+      (local.tee $x (i32.add (local.get $x) (i32.const 8)))
+      (i32.const 1)
+      (i32.add
+        (i32.const 0x500)
+        (i32.shl
+          (i32.rem_u
+            (i32.div_u (global.get $score) (local.get $divisor))
+            (i32.const 10))
+          (i32.const 3)))
+      (i32.const 8) (i32.const 8)
+      (i32.const 8) (i32.const 8)
+      (i32.const 3) (i32.const 7) (i32.const 1))
+
+    ;; divisor /= 10
+    ;; looop if divisor != 0
+    (br_if $digit-loop
+      (local.tee $divisor (i32.div_u (local.get $divisor) (i32.const 10)))))
 )
 
 (func $match-all-grids-patterns (param $last-pattern i32) (result i64)
@@ -761,23 +781,6 @@
         ;; j += 1
         (local.tee $j (i32.add (local.get $j) (i32.const 1)))
         (local.get $dh)))
-  )
-)
-
-(func $draw-digit (param $x i32) (param $divisor i32)
-  (local $i i32)
-  (call $draw-sprite
-    (local.get $x) (i32.const 1)
-    (i32.add
-      (i32.const 0x500)
-      (i32.shl
-        (i32.rem_u
-          (i32.div_u (global.get $score) (local.get $divisor))
-          (i32.const 10))
-        (i32.const 3)))
-    (i32.const 8) (i32.const 8)
-    (i32.const 8) (i32.const 8)
-    (i32.const 3) (i32.const 7) (i32.const 1)
   )
 )
 
