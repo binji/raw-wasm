@@ -84,7 +84,7 @@
     ;; If the mouse was clicked, and it is on a valid cell...
     (if (i32.and
           (i32.load8_u (i32.const 2))
-          (i64.ne (local.get $mouse-bit) (i64.const 0)))
+          (i32.eqz (i64.eqz (local.get $mouse-bit))))
       (then
         ;; Save the current mouse x/y.
         (i32.store16 (i32.const 3) (i32.load16_u (i32.const 0)))
@@ -150,7 +150,7 @@
 
     ;; If mouse-bit != 0 && mouse-bit != click-mouse-bit
     (if (i32.and
-          (i64.ne (local.get $mouse-bit) (i64.const 0))
+          (i32.eqz (i64.eqz (local.get $mouse-bit)))
           (i64.ne (global.get $click-mouse-bit) (local.get $mouse-bit)))
       (then
         ;; end[mouse-bit].x = -mouse-dx
@@ -170,7 +170,7 @@
 
         ;; If mouse-bit is valid and is different from clicked cell...
         (if (i32.and
-              (i64.ne (local.get $mouse-bit) (i64.const 0))
+              (i32.eqz (i64.eqz (local.get $mouse-bit)))
               (i64.ne (global.get $click-mouse-bit) (local.get $mouse-bit)))
           (then
             ;; swap the mouse-bit-mouse-bit bits in all grids.
@@ -187,8 +187,18 @@
                 (i32.wrap_i64 (i64.popcnt (global.get $matched)))))
 
             ;; Try to find matches. If none, then reset the swap.
-            (if (i64.ne (global.get $matched) (i64.const 0))
+            (if (i64.eqz (global.get $matched))
               (then
+                ;; Swap back
+                (call $swap-all-grids-bits
+                  (local.get $mouse-bit)
+                  (global.get $click-mouse-bit))
+
+                ;; And animate them back to their original place
+                (call $animate-cells
+                  (i64.or (local.get $mouse-bit) (global.get $click-mouse-bit))
+                  (i32.const 0)))
+              (else
                 ;; force the cells back to 0,0
                 (i32.store16 offset=0x3200
                   (local.get $mouse-src*4) (i32.const 0))
@@ -205,20 +215,7 @@
                   (i32.const 0xf1_f1_08_08))
 
                 ;; Set the current state to $removing
-                (global.set $state (i32.const 2)))
-              (else
-                ;; Swap back
-                (call $swap-all-grids-bits
-                  (local.get $mouse-bit)
-                  (global.get $click-mouse-bit))
-
-                ;; And animate them back to their original place
-                (call $animate-cells
-                  (i64.or (local.get $mouse-bit) (global.get $click-mouse-bit))
-                  (i32.const 0))))
-
-          ))
-        ))
+                (global.set $state (i32.const 2))))))))
 
   end $reset-prev-mouse
 
@@ -278,21 +275,10 @@
                 (i64.xor (local.get $empty) (i64.const -1))
                 (i64.shl (i64.const 0x0101010101010101) (local.get $idx))))))
 
-        ;; If there is a cell above this one...
-        (if (i64.ne (local.get $above-bits) (i64.const 0))
+        ;; If there is not a cell above this one...
+        (if (i64.eqz (local.get $above-bits))
           (then
-            ;; Move the cell above down
-            (call $swap-all-grids-bits
-              (i64.shl (i64.const 1) (local.get $above-idx))
-              (i64.shl (i64.const 1) (local.get $idx)))
-
-            ;; Set above-bit in empty so we will fill it.
-            (local.set $empty
-              (i64.or (local.get $empty)
-                      (i64.shl (i64.const 1) (local.get $above-idx)))))
-          (else
-            ;; If there is no bit above, then we need to fill with a new random
-            ;; cell.
+            ;; then we need to fill with a new random cell.
             ;;
             ;; random-grid = int(random() * 8) << 3
             ;; grid-bitmap[random-grid] |= (1 << idx)
@@ -306,7 +292,17 @@
                 (i64.shl (i64.const 1) (local.get $idx))))
 
             ;; Set above-idx so it is always the maximum value (used below)
-            (local.set $above-idx (i64.add (local.get $idx) (i64.const 56)))))
+            (local.set $above-idx (i64.add (local.get $idx) (i64.const 56))))
+          (else
+            ;; If there is cell above, move iti down
+            (call $swap-all-grids-bits
+              (i64.shl (i64.const 1) (local.get $above-idx))
+              (i64.shl (i64.const 1) (local.get $idx)))
+
+            ;; Set above-bit in empty so we will fill it.
+            (local.set $empty
+              (i64.or (local.get $empty)
+                      (i64.shl (i64.const 1) (local.get $above-idx))))))
 
         ;; Reset the x,y,w,h to 0
         (i32.store offset=0x3200 (local.get $idx*4) (i32.const 0))
@@ -472,9 +468,10 @@
         ;; shifts >>= 1
         ;; loop if shifts != 0
         (br_if $bit-loop
-          (i64.ne
-            (local.tee $shifts (i64.shr_u (local.get $shifts) (i64.const 1)))
-            (i64.const 0))))
+          (i32.eqz
+            (i64.eqz
+              (local.tee $shifts
+                (i64.shr_u (local.get $shifts) (i64.const 1)))))))
 
       ;; i += 4
       ;; loop if i < last-pattern
