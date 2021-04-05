@@ -61,6 +61,7 @@
         (i32.const 90000))))
 
   block $done
+  block $matched
   block $falling
   block $removing
   block $reset-prev-mouse
@@ -182,12 +183,6 @@
 
             (global.set $matched (call $match-all-grids-patterns (i32.const 8)))
 
-            ;; Add score
-            (global.set $score
-              (i32.add
-                (global.get $score)
-                (i32.wrap_i64 (i64.popcnt (global.get $matched)))))
-
             ;; Try to find matches. If none, then reset the swap.
             (if (i64.eqz (global.get $matched))
               (then
@@ -211,13 +206,7 @@
                 (i32.store16 offset=0x3400
                   (local.get $click-mouse-src*4) (i32.const 0))
 
-                ;; Animate the matched cells
-                (call $animate-cells
-                  (global.get $matched)
-                  (i32.const 0xf1_f1_08_08))
-
-                ;; Set the current state to $removing
-                (global.set $state (i32.const 2))))))))
+                (br $matched)))))))
 
   end $reset-prev-mouse
 
@@ -347,25 +336,26 @@
         ;; ... then reset the entire board.
         (global.set $matched (i64.const -1))
 
-        ;; Reset the score
-        (global.set $score (i32.const 0)))
+        ;; Reset the score (use -64 since 64 will be added below)
+        (global.set $score (i32.const -64)))
       (else
         ;; Otherwise, check whether any new matches (without swaps) occurred.
-        (global.set $matched (call $match-all-grids-patterns (i32.const 8)))
+        (global.set $matched (call $match-all-grids-patterns (i32.const 8)))))
 
-        ;; Add score
-        (global.set $score
-          (i32.add
-            (global.get $score)
-            (i32.wrap_i64 (i64.popcnt (global.get $matched)))))
-        ))
+  end $matched
 
-  ;; Animate the matched cells
-  (call $animate-cells (global.get $matched) (i32.const 0xf1_f1_08_08))
+    ;; Add score
+    (global.set $score
+      (i32.add
+        (global.get $score)
+        (i32.wrap_i64 (i64.popcnt (global.get $matched)))))
 
-  ;; If there are new matches, then remove them, otherwise go back to $idle
-  (global.set $state
-    (select (i32.const 0) (i32.const 2) (i64.eqz (global.get $matched))))
+    ;; Animate the matched cells
+    (call $animate-cells (global.get $matched) (i32.const 0xf1_f1_08_08))
+
+    ;; If there are new matches, then remove them, otherwise go back to $idle
+    (global.set $state
+      (select (i32.const 0) (i32.const 2) (i64.eqz (global.get $matched))))
 
   end $done
 
