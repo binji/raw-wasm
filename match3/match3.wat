@@ -34,6 +34,8 @@
   (local $t-addr i32)
   (local $i-addr i32)
   (local $a i32)
+  (local $mouse-src*4 i32)
+  (local $click-mouse-src*4 i32)
   (local $mouse-bit i64)
   (local $empty i64)
   (local $idx i64)
@@ -126,17 +128,20 @@
             (f32.min (f32.abs (local.get $mouse-dx)) (f32.const 17))
             (local.get $mouse-dx)))))
 
-    (local.set $mouse-bit
-      (call $get-mouse-bit
-        (i32.add (i32.trunc_f32_s (local.get $mouse-dx))
-                 (i32.load8_u (i32.const 3)))
-        (i32.add (i32.trunc_f32_s (local.get $mouse-dy))
-                 (i32.load8_u (i32.const 4)))))
+    (local.set $mouse-src*4
+      (call $bit-to-src*4
+        (local.tee $mouse-bit
+          (call $get-mouse-bit
+            (i32.add (i32.trunc_f32_s (local.get $mouse-dx))
+                     (i32.load8_u (i32.const 3)))
+            (i32.add (i32.trunc_f32_s (local.get $mouse-dy))
+                     (i32.load8_u (i32.const 4)))))))
 
     ;; end[click-mouse-bit].x = mouse-dx
     ;; end[click-mouse-bit].y = mouse-dy
     (i32.store16 offset=0x3400
-      (call $bit-to-src*4 (global.get $click-mouse-bit))
+      (local.tee $click-mouse-src*4
+        (call $bit-to-src*4 (global.get $click-mouse-bit)))
       (i32.or
         (i32.shl
           (i32.trunc_f32_s (local.get $mouse-dy))
@@ -151,7 +156,7 @@
         ;; end[mouse-bit].x = -mouse-dx
         ;; end[mouse-bit].y = -mouse-dy
         (i32.store16 offset=0x3400
-          (call $bit-to-src*4 (local.get $mouse-bit))
+          (local.get $mouse-src*4)
           (i32.or
             (i32.shl
               (i32.trunc_f32_s (f32.neg (local.get $mouse-dy)))
@@ -186,17 +191,13 @@
               (then
                 ;; force the cells back to 0,0
                 (i32.store16 offset=0x3200
-                  (call $bit-to-src*4 (local.get $mouse-bit))
-                  (i32.const 0))
+                  (local.get $mouse-src*4) (i32.const 0))
                 (i32.store16 offset=0x3200
-                  (call $bit-to-src*4 (global.get $click-mouse-bit))
-                  (i32.const 0))
+                  (local.get $click-mouse-src*4) (i32.const 0))
                 (i32.store16 offset=0x3400
-                  (call $bit-to-src*4 (local.get $mouse-bit))
-                  (i32.const 0))
+                  (local.get $mouse-src*4) (i32.const 0))
                 (i32.store16 offset=0x3400
-                  (call $bit-to-src*4 (global.get $click-mouse-bit))
-                  (i32.const 0))
+                  (local.get $click-mouse-src*4) (i32.const 0))
 
                 ;; Animate the matched cells
                 (call $animate-cells
