@@ -420,7 +420,7 @@
       (local.tee $x (i32.add (local.get $x) (i32.const 8)))
       (i32.const 1)
       (i32.add
-        (i32.const 0x500)
+        (i32.const 0x400)
         (i32.shl
           (i32.rem_u
             (i32.div_u (global.get $score) (local.get $divisor))
@@ -636,9 +636,7 @@
              ;; y offset
             (i32.load8_s offset=0x3201 (local.get $anim-idx)))
           ;; src
-          (i32.add
-            (i32.const 0x100)
-            (i32.shl (local.get $grid-idx) (i32.const 7)))
+          (i32.shl (local.get $grid-idx) (i32.const 7))
           ;; sw / sh
           (i32.const 16) (i32.const 16)
           ;; base w
@@ -709,7 +707,7 @@
       (local.set $palidx
         (i32.and
           (i32.shr_u
-            (i32.load8_u
+            (i32.load8_u offset=0x100
               (i32.add
                 (local.get $src)
                 (i32.shr_u
