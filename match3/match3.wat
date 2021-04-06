@@ -71,16 +71,14 @@
 
   end $idle
 
-    (local.set $mouse-bit
-      (call $get-mouse-bit
-        (i32.load8_u (i32.const 0))   ;; mousex
-        (i32.load8_u (i32.const 1)))) ;; mousey
-
     ;; Animate mouse-bit scaling up, as long as it isn't the same as
     ;; prev-mouse-bit: mouse-bit & ~prev-mouse-bit
     (call $animate-cells
       (i64.and
-        (local.get $mouse-bit)
+        (local.tee $mouse-bit
+          (call $get-mouse-bit
+            (i32.load8_u (i32.const 0))   ;; mousex
+            (i32.load8_u (i32.const 1)))) ;; mousey
         (i64.xor (global.get $prev-mouse-bit) (i64.const -1)))
       (i32.const 0x08_08_fc_fc))
 
@@ -101,7 +99,8 @@
   end $mouse-down
 
     ;; if abs(mouse-dx) < abs(mouse-dy) ...
-    (if (f32.lt
+    (if (result f32)
+        (f32.lt
           (f32.abs
             ;; mouse-dx = mouse-x - mouse-click-x
             (local.tee $mouse-dx
@@ -115,27 +114,26 @@
                 (i32.sub (i32.load8_u (i32.const 1))
                          (i32.load8_u (i32.const 4)))))))
       (then
-        ;; mouse-dx = 0
-        (local.set $mouse-dx (f32.const 0))
         ;; mouse-dy = copysign(min(abs(mouse-dy), 17), mouse-dy)
         (local.set $mouse-dy
           (f32.copysign
             (f32.min (f32.abs (local.get $mouse-dy)) (f32.const 17))
-            (local.get $mouse-dy))))
+            (local.get $mouse-dy)))
+        ;; mouse-dx = 0
+        (f32.const 0))
       (else
         ;; mouse-dy = 0
         (local.set $mouse-dy (f32.const 0))
         ;; mouse-dx = copysign(min(abs(mouse-dx), 17), mouse-dx)
-        (local.set $mouse-dx
-          (f32.copysign
-            (f32.min (f32.abs (local.get $mouse-dx)) (f32.const 17))
-            (local.get $mouse-dx)))))
+        (f32.copysign
+          (f32.min (f32.abs (local.get $mouse-dx)) (f32.const 17))
+          (local.get $mouse-dx))))
 
     (local.set $mouse-src*4
       (call $bit-to-src*4
         (local.tee $mouse-bit
           (call $get-mouse-bit
-            (i32.add (i32.trunc_f32_s (local.get $mouse-dx))
+            (i32.add (i32.trunc_f32_s (local.tee $mouse-dx (; `if` result ;)))
                      (i32.load8_u (i32.const 3)))
             (i32.add (i32.trunc_f32_s (local.get $mouse-dy))
                      (i32.load8_u (i32.const 4)))))))
