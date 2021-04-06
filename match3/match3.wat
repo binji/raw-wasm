@@ -82,18 +82,20 @@
         (i64.xor (global.get $prev-mouse-bit) (i64.const -1)))
       (i32.const 0x08_08_fc_fc))
 
-    ;; If the mouse was clicked, and it is on a valid cell...
-    (if (i32.and
-          (i32.load8_u (i32.const 2))
-          (i32.eqz (i64.eqz (local.get $mouse-bit))))
-      (then
-        ;; Save the current mouse x/y.
-        (i32.store16 (i32.const 3) (i32.load16_u (i32.const 0)))
-
-        ;; Set the current state to $mouse-down.
-        (global.set $state (i32.const 1))))
-
     (global.set $click-mouse-bit (local.get $mouse-bit))
+
+    ;; If the mouse was not clicked, or if it is an invalid cell, then skip.
+    (br_if $reset-prev-mouse
+      (i32.or
+        (i32.eqz (i32.load8_u (i32.const 2)))
+        (i64.eqz (local.get $mouse-bit))))
+
+    ;; Save the current mouse x/y.
+    (i32.store16 (i32.const 3) (i32.load16_u (i32.const 0)))
+
+    ;; Set the current state to $mouse-down.
+    (global.set $state (i32.const 1))
+
     (br $reset-prev-mouse)
 
   end $mouse-down
@@ -165,46 +167,48 @@
             (i32.trunc_f32_s (f32.neg (local.get $mouse-dx)))))))
 
     ;; If the button is no longer pressed, go back to idle.
-    (if (i32.eqz (i32.load8_u (i32.const 2)))
+    (br_if $reset-prev-mouse (i32.load8_u (i32.const 2)))
+
+    (global.set $state (i32.const 0))
+
+    ;; If mouse-bit is not valid or is different from clicked cell, then
+    ;; exit the `if`.
+    (br_if $reset-prev-mouse
+      (i32.or
+        (i64.eqz (local.get $mouse-bit))
+        (i64.eq (global.get $click-mouse-bit) (local.get $mouse-bit))))
+
+    ;; swap the mouse-bit-mouse-bit bits in all grids.
+    (call $swap-all-grids-bits
+      (local.get $mouse-bit)
+      (global.get $click-mouse-bit))
+
+    (global.set $matched (call $match-all-grids-patterns (i32.const 8)))
+
+    ;; Try to find matches. If none, then reset the swap.
+    (if (i64.eqz (global.get $matched))
       (then
-        (global.set $state (i32.const 0))
+        ;; Swap back
+        (call $swap-all-grids-bits
+          (local.get $mouse-bit)
+          (global.get $click-mouse-bit))
 
-        ;; If mouse-bit is valid and is different from clicked cell...
-        (if (i32.and
-              (i32.eqz (i64.eqz (local.get $mouse-bit)))
-              (i64.ne (global.get $click-mouse-bit) (local.get $mouse-bit)))
-          (then
-            ;; swap the mouse-bit-mouse-bit bits in all grids.
-            (call $swap-all-grids-bits
-              (local.get $mouse-bit)
-              (global.get $click-mouse-bit))
+        ;; And animate them back to their original place
+        (call $animate-cells
+          (i64.or (local.get $mouse-bit) (global.get $click-mouse-bit))
+          (i32.const 0)))
+      (else
+        ;; force the cells back to 0,0
+        (i32.store16 offset=0x3200
+          (local.get $mouse-src*4) (i32.const 0))
+        (i32.store16 offset=0x3200
+          (local.get $click-mouse-src*4) (i32.const 0))
+        (i32.store16 offset=0x3400
+          (local.get $mouse-src*4) (i32.const 0))
+        (i32.store16 offset=0x3400
+          (local.get $click-mouse-src*4) (i32.const 0))
 
-            (global.set $matched (call $match-all-grids-patterns (i32.const 8)))
-
-            ;; Try to find matches. If none, then reset the swap.
-            (if (i64.eqz (global.get $matched))
-              (then
-                ;; Swap back
-                (call $swap-all-grids-bits
-                  (local.get $mouse-bit)
-                  (global.get $click-mouse-bit))
-
-                ;; And animate them back to their original place
-                (call $animate-cells
-                  (i64.or (local.get $mouse-bit) (global.get $click-mouse-bit))
-                  (i32.const 0)))
-              (else
-                ;; force the cells back to 0,0
-                (i32.store16 offset=0x3200
-                  (local.get $mouse-src*4) (i32.const 0))
-                (i32.store16 offset=0x3200
-                  (local.get $click-mouse-src*4) (i32.const 0))
-                (i32.store16 offset=0x3400
-                  (local.get $mouse-src*4) (i32.const 0))
-                (i32.store16 offset=0x3400
-                  (local.get $click-mouse-src*4) (i32.const 0))
-
-                (br $matched)))))))
+        (br $matched)))
 
   end $reset-prev-mouse
 
