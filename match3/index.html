@@ -39,7 +39,7 @@
       const exports = instance.exports;
 
       const input = new Uint8Array(exports.mem.buffer, 0x0000, 3);
-      const canvasData = new Uint8Array(exports.mem.buffer, 0x10000, w*h*4);
+      const canvasData = new Uint8Array(exports.mem.buffer, 0x1100, w*h*4);
 
       function mouseEventHandler(event) {
         const target = event.target;

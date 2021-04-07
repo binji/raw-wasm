@@ -2,22 +2,22 @@
 
 ;; Memory map:
 ;;
-;; [0x00000 .. 0x00001]  x, y mouse position
-;; [0x00002 .. 0x00002]  mouse buttons
-;; [0x00003 .. 0x00004]  x, y mouse click position
-;; [0x000c0 .. 0x00100]  16 RGBA colors       u32[16]
-;; [0x00100 .. 0x00500]  16x16 emojis 4bpp    u8[8][128]
-;; [0x00500 .. 0x00550]  8x8 digits 1bpp      u8[10][8]
-;; [0x00550 .. 0x00598]  18 match patterns    u32[18]
-;; [0x00598 .. 0x00628]  18 shift masks       u64[18]
-;; [0x03000 .. 0x03040]  8x8 grid bitmap   u64[8]
-;; [0x03200 .. 0x03300]  current offset  {s8 x, s8 y, s8 w, s8 h}[64]
-;; [0x03300 .. 0x03400]  start offset    {s8 x, s8 y, s8 w, s8 h}[64]
-;; [0x03400 .. 0x03500]  end offset      {s8 x, s8 y, s8 w, s8 h}[64]
-;; [0x03500 .. 0x03600]  time [0..1)     f32[64]
-;; [0x03600 .. 0x03975]  compressed data
-;; [0x10000 .. 0x25f90]  150x150xRGBA data (4 bytes per pixel)
-(memory (export "mem") 3)
+;; [0x0000 .. 0x00001]  x, y mouse position
+;; [0x0002 .. 0x00002]  mouse buttons
+;; [0x0003 .. 0x00004]  x, y mouse click position
+;; [0x00c0 .. 0x00100]  16 RGBA colors       u32[16]
+;; [0x0100 .. 0x00500]  16x16 emojis 4bpp    u8[8][128]
+;; [0x0500 .. 0x00550]  8x8 digits 1bpp      u8[10][8]
+;; [0x0550 .. 0x00598]  18 match patterns    u32[18]
+;; [0x0598 .. 0x00628]  18 shift masks       u64[18]
+;; [0x0700 .. 0x00740]  8x8 grid bitmap      u64[8]
+;; [0x0900 .. 0x00a00]  current offset  {s8 x, s8 y, s8 w, s8 h}[64]
+;; [0x0a00 .. 0x00b00]  start offset    {s8 x, s8 y, s8 w, s8 h}[64]
+;; [0x0b00 .. 0x00c00]  end offset      {s8 x, s8 y, s8 w, s8 h}[64]
+;; [0x0c00 .. 0x00d00]  time [0..1)     f32[64]
+;; [0x0d00 .. 0x01075]  compressed data
+;; [0x1100 .. 0x11090]  150x150xRGBA data (4 bytes per pixel)
+(memory (export "mem") 2)
 
 (global $score (mut i32) (i32.const 0))
 (global $matched (mut i64) (i64.const -1))
@@ -34,9 +34,9 @@
   (local $copy-end i32)
   (local $byte-or-len i32)
 
-  ;; Decompress from [0x3600,0x3975] -> 0xc4.
+  ;; Decompress from [0xd00,0x1075] -> 0xc4.
   ;;
-  ;; While src < 0x3975:
+  ;; While src < 0x1075:
   ;;   byte = readbyte()
   ;;   if byte <= 12:
   ;;     len = byte + 3
@@ -48,7 +48,7 @@
   (loop $loop
     (if (result i32)
         (i32.le_s
-          (local.tee $byte-or-len (i32.load8_u offset=0x3600 (local.get $src)))
+          (local.tee $byte-or-len (i32.load8_u offset=0xd00 (local.get $src)))
           (i32.const 12))
       (then
         ;; back-reference
@@ -61,7 +61,7 @@
             (local.get $dst)
             (i32.load8_u offset=0xc4
               (i32.sub (local.get $dst)
-                       (i32.load8_u offset=0x3601 (local.get $src)))))
+                       (i32.load8_u offset=0xd01 (local.get $src)))))
 
           (br_if $copy-loop
             (i32.lt_s (local.tee $dst (i32.add (local.get $dst) (i32.const 1)))
@@ -108,8 +108,8 @@
 
   ;; clear screen to transparent black
   (loop $loop
-    ;; mem[0x10000 + i] = 0
-    (i32.store offset=0x10000 (local.get $i) (i32.const 0))
+    ;; mem[0x1100 + i] = 0
+    (i32.store offset=0x1100 (local.get $i) (i32.const 0))
 
     ;; i += 4
     ;; loop if i < 90000
@@ -200,7 +200,7 @@
 
     ;; end[click-mouse-bit].x = mouse-dx
     ;; end[click-mouse-bit].y = mouse-dy
-    (i32.store16 offset=0x3400
+    (i32.store16 offset=0xb00
       (local.tee $click-mouse-src*4
         (call $bit-to-src*4 (global.get $click-mouse-bit)))
       (i32.or
@@ -216,7 +216,7 @@
       (then
         ;; end[mouse-bit].x = -mouse-dx
         ;; end[mouse-bit].y = -mouse-dy
-        (i32.store16 offset=0x3400
+        (i32.store16 offset=0xb00
           (local.get $mouse-src*4)
           (i32.or
             (i32.shl
@@ -257,13 +257,13 @@
           (i32.const 0)))
       (else
         ;; force the cells back to 0,0
-        (i32.store16 offset=0x3200
+        (i32.store16 offset=0x900
           (local.get $mouse-src*4) (i32.const 0))
-        (i32.store16 offset=0x3200
+        (i32.store16 offset=0x900
           (local.get $click-mouse-src*4) (i32.const 0))
-        (i32.store16 offset=0x3400
+        (i32.store16 offset=0xb00
           (local.get $mouse-src*4) (i32.const 0))
-        (i32.store16 offset=0x3400
+        (i32.store16 offset=0xb00
           (local.get $click-mouse-src*4) (i32.const 0))
 
         (br $matched)))
@@ -288,10 +288,10 @@
     ;; Remove the matched cells...
     (loop $loop
       ;; grid-bitmap[grid-offset] &= ~pattern
-      (i64.store offset=0x3000
+      (i64.store offset=0x700
         (local.get $grid-offset)
         (i64.and
-          (i64.load offset=0x3000 (local.get $grid-offset))
+          (i64.load offset=0x700 (local.get $grid-offset))
           (i64.xor (global.get $matched) (i64.const -1))))
 
       ;; grid-offset += 8
@@ -328,13 +328,13 @@
             ;;
             ;; random-grid = int(random() * 8) << 3
             ;; grid-bitmap[random-grid] |= (1 << idx)
-            (i64.store offset=0x3000
+            (i64.store offset=0x700
               (local.tee $random-grid
                 (i32.shl
                   (i32.trunc_f32_u (f32.mul (call $random) (f32.const 8)))
                   (i32.const 3)))
               (i64.or
-                (i64.load offset=0x3000 (local.get $random-grid))
+                (i64.load offset=0x700 (local.get $random-grid))
                 (local.get $1<<idx)))
 
             ;; Set above-idx so it is always the maximum value (used below)
@@ -355,7 +355,7 @@
 
         ;; Reset the x,w,h to 0, but set the y pixel offset to the y cell
         ;; difference * 17.
-        (i64.store32 offset=0x3200
+        (i64.store32 offset=0x900
           (i32.wrap_i64
             (i64.shl (local.get $idx) (i64.const 2)))
           (i64.shl
@@ -426,22 +426,22 @@
     ;; ilerp = (a,b,t) => return a + (b - a) * t
     ;; easeOutCubic(t) = t => t * (3 + t * (t - 3))
     ;; current[i] = ilerp(start[i], end[i], easeOutCubic(t))
-    (i32.store8 offset=0x3200
+    (i32.store8 offset=0x900
       (local.get $i-addr)
       (i32.add
-        (local.tee $a (i32.load8_s offset=0x3300 (local.get $i-addr)))
+        (local.tee $a (i32.load8_s offset=0xa00 (local.get $i-addr)))
         (i32.trunc_f32_s
           (f32.mul
             (f32.convert_i32_s
               (i32.sub
-                (i32.load8_s offset=0x3400 (local.get $i-addr))
+                (i32.load8_s offset=0xb00 (local.get $i-addr))
                 (local.get $a)))
             (f32.mul
               ;; t = Math.min(t[i] + speed, 1)
               (local.tee $t
                 (f32.min
                   (f32.add
-                    (f32.load offset=0x3500 (local.get $t-addr))
+                    (f32.load offset=0xc00 (local.get $t-addr))
                     (f32.const 0.005))
                   (f32.const 1)))
               (f32.add
@@ -450,7 +450,7 @@
                   (local.get $t)
                   (f32.sub (local.get $t) (f32.const 3)))))))))
     ;; t[i] = t
-    (f32.store offset=0x3500 (local.get $t-addr) (local.get $t))
+    (f32.store offset=0xc00 (local.get $t-addr) (local.get $t))
 
     ;; mul-t *= t
     (local.set $mul-t (f32.mul (local.get $mul-t) (local.get $t)))
@@ -508,7 +508,7 @@
 
   (loop $grid-loop
     ;; grid = grids[i]
-    (local.set $grid (i64.load offset=0x3000 (local.get $grid-offset)))
+    (local.set $grid (i64.load offset=0x700 (local.get $grid-offset)))
 
     ;; i = 0;
     (local.set $i (i32.const 0))
@@ -572,12 +572,12 @@
             (i64.and
               ;; bits = mem[grid-offset]
               (local.tee $bits
-                (i64.load offset=0x3000 (local.get $grid-offset)))
+                (i64.load offset=0x700 (local.get $grid-offset)))
               (local.tee $a|b (i64.or (local.get $a) (local.get $b)))))
             (i64.const 1))
       (then
         ;; mem[grid-offset] = bits ^ (a | b)
-        (i64.store offset=0x3000
+        (i64.store offset=0x700
           (local.get $grid-offset)
           (i64.xor (local.get $bits) (local.get $a|b)))))
 
@@ -628,19 +628,19 @@
     (br_if 1 (i64.eqz (local.get $bits)))
 
     ;; Set the start x/y/w/h to the current x/y/w/h.
-    (i32.store offset=0x3300
+    (i32.store offset=0xa00
       (local.tee $src*4 (call $bit-to-src*4 (local.get $bits)))
-      (i32.load offset=0x3200 (local.get $src*4)))
+      (i32.load offset=0x900 (local.get $src*4)))
 
     ;; Set the destination x/y/w/h
-    (i32.store offset=0x3400 (local.get $src*4) (local.get $h_w_y_x))
+    (i32.store offset=0xb00 (local.get $src*4) (local.get $h_w_y_x))
 
     ;; Set the time value to 1 - time.
-    (f32.store offset=0x3500
+    (f32.store offset=0xc00
       (local.get $src*4)
       (f32.sub
         (f32.const 1)
-        (f32.load offset=0x3500 (local.get $src*4))))
+        (f32.load offset=0xc00 (local.get $src*4))))
 
     ;; Clear the lowest set bit: bits &= bits - 1
     (local.set $bits
@@ -663,7 +663,7 @@
     ;; bits = grid[grid-idx] & mask
     (local.set $bits
       (i64.and
-        (i64.load offset=0x3000 (i32.shl (local.get $grid-idx) (i32.const 3)))
+        (i64.load offset=0x700 (i32.shl (local.get $grid-idx) (i32.const 3)))
         (local.get $mask)))
 
     (block $cell-exit
@@ -685,7 +685,7 @@
                   (i32.const 7))
                 (i32.const 17)))
             ;; x offset
-            (i32.load8_s offset=0x3200
+            (i32.load8_s offset=0x900
               (local.tee $anim-idx
                 (i32.shl (local.get $cell-idx) (i32.const 2)))))
           (i32.add
@@ -696,7 +696,7 @@
                 (i32.shr_u (local.get $cell-idx) (i32.const 3))
                 (i32.const 17)))
              ;; y offset
-            (i32.load8_s offset=0x3201 (local.get $anim-idx)))
+            (i32.load8_s offset=0x901 (local.get $anim-idx)))
           ;; src
           (i32.shl (local.get $grid-idx) (i32.const 7))
           ;; sw / sh
@@ -705,12 +705,12 @@
           (i32.add
             (i32.const 16)
             ;; w offset
-            (i32.load8_s offset=0x3202 (local.get $anim-idx)))
+            (i32.load8_s offset=0x902 (local.get $anim-idx)))
           ;; base h
           (i32.add
             (i32.const 16)
             ;; h offset
-            (i32.load8_s offset=0x3203 (local.get $anim-idx)))
+            (i32.load8_s offset=0x903 (local.get $anim-idx)))
           (i32.const 1)
           (i32.const 1)
           (i32.const 0xf))
@@ -805,8 +805,8 @@
                 (i32.const 150))))
 
           ;; color = mem[0xc0 + (palidx << 2)]
-          ;; mem[0x10000 + (y * 150 + x) * 4] = color
-          (i32.store offset=0x10000
+          ;; mem[0x1100 + (y * 150 + x) * 4] = color
+          (i32.store offset=0x1100
             (i32.mul
               (i32.add
                 (i32.mul (local.get $y+j) (i32.const 150))
@@ -831,7 +831,7 @@
   )
 )
 
-(data (i32.const 0x3600)
+(data (i32.const 0xd00)
   "\56\e8\9d\76\72\69\ad\76\dd\b0\a8\76\01\01\23\a9"
   "\a9\76\da\12\76\76\d6\44\5b\76\50\ce\da\76\42\52"
   "\73\76\ff\cd\b2\76\bc\9f\b3\76\d2\e5\58\76\10\5c"
