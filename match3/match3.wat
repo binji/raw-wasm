@@ -21,70 +21,18 @@
 
 (global $score (mut i32) (i32.const 0))
 (global $matched (mut i64) (i64.const -1))
-(global $state (mut i32) (i32.const 2))  ;; removing
+(global $state (mut i32) (i32.const 0))  ;; init
 (global $animating (mut i32) (i32.const 1))
 
 (global $prev-mouse-bit (mut i64) (i64.const 0))
 (global $click-mouse-bit (mut i64) (i64.const 0))
 
-(func $start
+(func (export "run")
   (local $src i32)
   (local $dst i32)
   (local $dist i32)
   (local $copy-end i32)
   (local $byte-or-len i32)
-
-  ;; Decompress from [0xd00,0x1075] -> 0xc4.
-  ;;
-  ;; While src < 0x1075:
-  ;;   byte = readbyte()
-  ;;   if byte <= 12:
-  ;;     len = byte + 3
-  ;;     dist = readbyte()
-  ;;     copy data from mem[dst-dist:dst-dist+len] to mem[dst:dst+len]
-  ;;   else:
-  ;;     mem[dst] = byte + 137
-  ;;
-  (loop $loop
-    (if (result i32)
-        (i32.le_s
-          (local.tee $byte-or-len (i32.load8_u offset=0xd00 (local.get $src)))
-          (i32.const 12))
-      (then
-        ;; back-reference
-        (local.set $copy-end
-          (i32.add (i32.add (local.get $dst) (local.get $byte-or-len))
-                   (i32.const 3)))
-
-        (loop $copy-loop
-          (i32.store8 offset=0xc4
-            (local.get $dst)
-            (i32.load8_u offset=0xc4
-              (i32.sub (local.get $dst)
-                       (i32.load8_u offset=0xd01 (local.get $src)))))
-
-          (br_if $copy-loop
-            (i32.lt_s (local.tee $dst (i32.add (local.get $dst) (i32.const 1)))
-                      (local.get $copy-end))))
-
-        ;; src addend
-        (i32.const 2))
-      (else
-        ;; literal data
-        (i32.store8 offset=0xc3
-          (local.tee $dst (i32.add (local.get $dst) (i32.const 1)))
-          (i32.add (local.get $byte-or-len) (i32.const 137)))
-
-        ;; src addend
-        (i32.const 1)))
-
-    (br_if $loop
-      (i32.lt_s (local.tee $src (i32.add (; result ;) (local.get $src)))
-                (i32.const 0x375))))
-)
-(start $start)
-
-(func (export "run")
   (local $i i32)
   (local $grid-offset i32)
   (local $random-grid i32)
@@ -122,10 +70,11 @@
   block $matched
   block $falling
   block $removing
+  block $init
   block $reset-prev-mouse
   block $mouse-down
   block $idle
-    (br_table $idle $mouse-down $removing $falling (global.get $state))
+    (br_table $init $idle $mouse-down $removing $falling (global.get $state))
 
   end $idle
 
@@ -152,7 +101,7 @@
     (i32.store16 (i32.const 3) (i32.load16_u (i32.const 0)))
 
     ;; Set the current state to $mouse-down.
-    (global.set $state (i32.const 1))
+    (global.set $state (i32.const 2))
 
     (br $reset-prev-mouse)
 
@@ -227,7 +176,7 @@
     ;; If the button is no longer pressed, go back to idle.
     (br_if $reset-prev-mouse (i32.load8_u (i32.const 2)))
 
-    (global.set $state (i32.const 0))
+    (global.set $state (i32.const 1))
 
     ;; If mouse-bit is not valid or is different from clicked cell, then
     ;; exit the `if`.
@@ -280,6 +229,58 @@
 
     (global.set $prev-mouse-bit (local.get $mouse-bit))
     (br $done)
+
+  end $init
+
+    ;; Decompress from [0xd00,0x1075] -> 0xc4.
+    ;;
+    ;; While src < 0x1075:
+    ;;   byte = readbyte()
+    ;;   if byte <= 12:
+    ;;     len = byte + 3
+    ;;     dist = readbyte()
+    ;;     copy data from mem[dst-dist:dst-dist+len] to mem[dst:dst+len]
+    ;;   else:
+    ;;     mem[dst] = byte + 137
+    ;;
+    (loop $loop
+      (if (result i32)
+          (i32.le_s
+            (local.tee $byte-or-len (i32.load8_u offset=0xd00 (local.get $src)))
+            (i32.const 12))
+        (then
+          ;; back-reference
+          (local.set $copy-end
+            (i32.add (i32.add (local.get $dst) (local.get $byte-or-len))
+                     (i32.const 3)))
+
+          (loop $copy-loop
+            (i32.store8 offset=0xc4
+              (local.get $dst)
+              (i32.load8_u offset=0xc4
+                (i32.sub (local.get $dst)
+                         (i32.load8_u offset=0xd01 (local.get $src)))))
+
+            (br_if $copy-loop
+              (i32.lt_s (local.tee $dst (i32.add (local.get $dst) (i32.const 1)))
+                        (local.get $copy-end))))
+
+          ;; src addend
+          (i32.const 2))
+        (else
+          ;; literal data
+          (i32.store8 offset=0xc3
+            (local.tee $dst (i32.add (local.get $dst) (i32.const 1)))
+            (i32.add (local.get $byte-or-len) (i32.const 137)))
+
+          ;; src addend
+          (i32.const 1)))
+
+      (br_if $loop
+        (i32.lt_s (local.tee $src (i32.add (; result ;) (local.get $src)))
+                  (i32.const 0x375))))
+
+    ;; fallthrough
 
   end $removing
 
@@ -381,7 +382,7 @@
         (br $move-down-loop)))
 
     ;; Set state to $falling
-    (global.set $state (i32.const 3))
+    (global.set $state (i32.const 4))
 
     (br $done)
 
@@ -414,7 +415,7 @@
 
     ;; If there are new matches, then remove them, otherwise go back to $idle
     (global.set $state
-      (select (i32.const 0) (i32.const 2) (i64.eqz (global.get $matched))))
+      (select (i32.const 1) (i32.const 3) (i64.eqz (global.get $matched))))
 
   end $done
 
