@@ -655,16 +655,16 @@
 )
 
 (func $draw-grids (param $mask i64)
-  (local $grid-idx i32)
+  (local $grid-offset i32)
   (local $cell-idx i32)
   (local $anim-idx i32)
   (local $bits i64)
 
   (loop $grid-loop
-    ;; bits = grid[grid-idx] & mask
+    ;; bits = grid[grid-offset] & mask
     (local.set $bits
       (i64.and
-        (i64.load offset=0x700 (i32.shl (local.get $grid-idx) (i32.const 3)))
+        (i64.load offset=0x700 (local.get $grid-offset))
         (local.get $mask)))
 
     (block $cell-exit
@@ -699,7 +699,7 @@
              ;; y offset
             (i32.load8_s offset=0x901 (local.get $anim-idx)))
           ;; src
-          (i32.shl (local.get $grid-idx) (i32.const 7))
+          (i32.shl (local.get $grid-offset) (i32.const 4))
           ;; sw / sh
           (i32.const 16) (i32.const 16)
           ;; base w
@@ -725,12 +725,12 @@
         ;; Always loop
         (br $cell-loop)))
 
-    ;; grid-idx += 1
-    ;; loop if grid-idx < 8
+    ;; grid-offset += 8
+    ;; loop if grid-offset < 64
     (br_if $grid-loop
       (i32.lt_s
-        (local.tee $grid-idx (i32.add (local.get $grid-idx) (i32.const 1)))
-        (i32.const 8))))
+        (local.tee $grid-offset (i32.add (local.get $grid-offset) (i32.const 8)))
+        (i32.const 64))))
 )
 
 (func $draw-sprite (param $x i32) (param $y i32)
