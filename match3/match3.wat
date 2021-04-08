@@ -623,8 +623,8 @@
         (i32.add
           (i32.mul
             (i32.div_s
-              ;; y = 142 - y
-              (local.tee $y (i32.sub (i32.const 142) (local.get $y)))
+              ;; y = 147 - y
+              (local.tee $y (i32.sub (i32.const 147) (local.get $y)))
               (i32.const 17))
             (i32.const 8))
           (i32.div_s
@@ -712,9 +712,9 @@
               (local.tee $anim-idx
                 (i32.shl (local.get $cell-idx) (i32.const 2)))))
           (i32.add
-            ;; base y-coordinate: (150 - 17 - 7) - (idx >> 3) * 17
+            ;; base y-coordinate: (150 - 17 - 2) - (idx >> 3) * 17
             (i32.sub
-              (i32.const 126)
+              (i32.const 131)
               (i32.mul
                 (i32.shr_u (local.get $cell-idx) (i32.const 3))
                 (i32.const 17)))
