@@ -8,14 +8,15 @@
 ;; [0x00c0 .. 0x00100]  16 RGBA colors       u32[16]
 ;; [0x0100 .. 0x00500]  16x16 emojis 4bpp    u8[8][128]
 ;; [0x0500 .. 0x00550]  8x8 digits 1bpp      u8[10][8]
-;; [0x0550 .. 0x00598]  18 match patterns    u32[18]
-;; [0x0598 .. 0x00628]  18 shift masks       u64[18]
+;; [0x0550 .. 0x00578]  gameover 1bpp        u8[5][8]
+;; [0x0578 .. 0x005c0]  18 match patterns    u32[18]
+;; [0x05c0 .. 0x00650]  18 shift masks       u64[18]
 ;; [0x0700 .. 0x00740]  8x8 grid bitmap      u64[8]
 ;; [0x0900 .. 0x00a00]  current offset  {s8 x, s8 y, s8 w, s8 h}[64]
 ;; [0x0a00 .. 0x00b00]  start offset    {s8 x, s8 y, s8 w, s8 h}[64]
 ;; [0x0b00 .. 0x00c00]  end offset      {s8 x, s8 y, s8 w, s8 h}[64]
 ;; [0x0c00 .. 0x00d00]  time [0..1)     f32[64]
-;; [0x0d00 .. 0x01075]  compressed data
+;; [0x0d00 .. 0x0109c]  compressed data
 ;; [0x1100 .. 0x11090]  150x150xRGBA data (4 bytes per pixel)
 (memory (export "mem") 2)
 
@@ -68,13 +69,15 @@
 
   block $done
   block $matched
+  block $gameover
   block $falling
   block $removing
   block $init
   block $reset-prev-mouse
   block $mouse-down
   block $idle
-    (br_table $init $idle $mouse-down $removing $falling (global.get $state))
+    (br_table $init $idle $mouse-down $removing $falling $gameover
+      (global.get $state))
 
   end $idle
 
@@ -232,22 +235,22 @@
 
   end $init
 
-    ;; Decompress from [0xd00,0x1075] -> 0xc4.
+    ;; Decompress from [0xd00,0x109c] -> 0xc4.
     ;;
-    ;; While src < 0x1075:
+    ;; While src < 0x109c:
     ;;   byte = readbyte()
-    ;;   if byte <= 12:
+    ;;   if byte <= 7:
     ;;     len = byte + 3
     ;;     dist = readbyte()
     ;;     copy data from mem[dst-dist:dst-dist+len] to mem[dst:dst+len]
     ;;   else:
-    ;;     mem[dst] = byte + 137
+    ;;     mem[dst] = byte + 230
     ;;
     (loop $loop
       (if (result i32)
           (i32.le_s
             (local.tee $byte-or-len (i32.load8_u offset=0xd00 (local.get $src)))
-            (i32.const 12))
+            (i32.const 7))
         (then
           ;; back-reference
           (local.set $copy-end
@@ -271,14 +274,14 @@
           ;; literal data
           (i32.store8 offset=0xc3
             (local.tee $dst (i32.add (local.get $dst) (i32.const 1)))
-            (i32.add (local.get $byte-or-len) (i32.const 137)))
+            (i32.add (local.get $byte-or-len) (i32.const 230)))
 
           ;; src addend
           (i32.const 1)))
 
       (br_if $loop
         (i32.lt_s (local.tee $src (i32.add (; result ;) (local.get $src)))
-                  (i32.const 0x375))))
+                  (i32.const 0x39c))))
 
     ;; fallthrough
 
@@ -390,17 +393,36 @@
 
     (br_if $done (global.get $animating))
 
-    ;; If there are no matches (including swaps)...
-    (if (i64.eqz (call $match-all-grids-patterns (i32.const 72)))
-      (then
-        ;; ... then reset the entire board.
-        (global.set $matched (i64.const -1))
+    ;; Check whether any new matches (without swaps) occurred.
+    (global.set $matched (call $match-all-grids-patterns (i32.const 8)))
 
-        ;; Reset the score (use -64 since 64 will be added below)
-        (global.set $score (i32.const -64)))
-      (else
-        ;; Otherwise, check whether any new matches (without swaps) occurred.
-        (global.set $matched (call $match-all-grids-patterns (i32.const 8)))))
+    ;; If there are any matches (including swaps), then keep going.
+    (br_if $matched
+      (i32.eqz (i64.eqz (call $match-all-grids-patterns (i32.const 72)))))
+
+    ;; otherwise fallthrough to gameover, with a brief animation.
+    (call $animate-cells (i64.const -1) (i32.const 0x04_04_fe_fe))
+    (global.set $state (i32.const 5))
+
+  end $gameover
+
+    ;; draw game over sprite
+    (call $draw-sprite
+      (i32.const 8) (i32.const 1)
+      (i32.const 0x450)
+      (i32.const 40) (i32.const 8)
+      (i32.const 80) (i32.const 8)
+      (i32.const 3) (i32.const 7) (i32.const 1))
+
+    ;; don't reset until animation is finished and mouse is clicked
+    (br_if $done (i32.or (global.get $animating)
+                         (i32.eqz (i32.load8_u (i32.const 2)))))
+
+    ;; Reset the entire board.
+    (global.set $matched (i64.const -1))
+
+    ;; Reset the score (use -64 since 64 will be added below)
+    (global.set $score (i32.const -64))
 
   end $matched
 
@@ -516,11 +538,11 @@
 
     (loop $pattern-loop
       ;; pattern = match-patterns[i]
-      (local.set $pattern (i64.load32_u offset=0x550 (local.get $i)))
+      (local.set $pattern (i64.load32_u offset=0x578 (local.get $i)))
 
       ;; shifts = match-shifts[i]
       (local.set $shifts
-        (i64.load offset=0x598 (i32.shl (local.get $i) (i32.const 1))))
+        (i64.load offset=0x5c0 (i32.shl (local.get $i) (i32.const 1))))
 
       (loop $bit-loop
         ;; if ((shifts & 1) && ((grid & pattern) == pattern)) ...
@@ -833,59 +855,62 @@
 )
 
 (data (i32.const 0xd00)
-  "\56\e8\9d\76\72\69\ad\76\dd\b0\a8\76\01\01\23\a9"
-  "\a9\76\da\12\76\76\d6\44\5b\76\50\ce\da\76\42\52"
-  "\73\76\ff\cd\b2\76\bc\9f\b3\76\d2\e5\58\76\10\5c"
-  "\c7\76\bd\77\d7\76\f7\77\0d\76\77\77\77\88\88\00"
-  "\05\00\07\99\99\01\09\87\99\00\01\78\77\77\98\01"
-  "\08\89\01\0f\aa\00\02\78\05\08\00\17\01\08\89\98"
-  "\9a\01\08\a9\89\98\aa\01\28\01\08\02\01\89\87\a9"
-  "\bb\00\01\9a\00\30\01\0f\00\49\98\a9\aa\aa\9a\89"
-  "\01\58\a9\01\0f\06\68\05\78\87\01\08\00\18\c8\01"
-  "\18\8c\77\88\cc\8c\88\89\c8\cc\88\cc\00\01\c8\01"
-  "\05\cc\cc\8c\c9\03\0c\98\89\00\0c\06\08\8c\01\08"
-  "\c8\8c\c7\98\c8\98\89\8c\89\7c\87\89\88\00\01\98"
-  "\78\0b\80\98\01\80\bb\bb\8b\02\80\a8\01\0f\0c\80"
-  "\08\08\00\73\01\09\87\01\73\01\90\02\7b\00\0f\ac"
-  "\ca\ac\ca\cc\78\87\cc\aa\cc\00\03\78\c8\00\0d\00"
-  "\13\01\88\02\21\c8\03\20\8c\c8\dc\03\08\87\ec\02"
-  "\18\78\87\ed\cd\02\08\d7\ee\de\aa\aa\ca\8c\77\00"
-  "\08\fa\fa\ca\00\58\ed\8d\fa\ff\8a\00\68\d7\77\f8"
-  "\ff\03\80\ee\ee\03\07\dd\dd\01\09\e7\dd\00\01\7e"
-  "\77\77\de\01\08\ed\03\0f\00\11\05\08\de\dd\ad\da"
-  "\dd\aa\dd\ed\07\08\02\01\06\08\f0\dd\ab\bb\ba\ab"
-  "\db\7e\f0\dd\00\ff\aa\da\7e\80\e0\01\10\eb\80\77"
-  "\f0\02\3f\80\77\80\01\68\80\80\77\00\09\ee\77\00"
-  "\07\77\77\aa\aa\02\80\a7\aa\aa\7a\00\06\7a\01\38"
-  "\02\06\1a\21\01\0b\aa\aa\21\01\08\2a\32\32\21\21"
-  "\31\32\b2\8a\99\29\32\32\32\99\a8\87\99\02\01\78"
-  "\00\08\aa\00\02\09\08\04\18\01\3b\99\78\77\98\a9"
-  "\aa\aa\9a\89\77\77\87\99\a9\01\0f\77\77\88\99\99"
-  "\88\02\71\88\03\07\77\43\43\03\07\bb\bb\01\09\37"
-  "\c0\00\01\83\77\77\13\ad\0d\0d\ad\3d\77\37\dd\ba"
-  "\da\00\03\83\37\ad\bb\ab\00\03\83\e3\03\08\3d\53"
-  "\b4\bb\ab\00\03\44\53\54\ba\4a\00\03\44\98\a4\a4"
-  "\a4\aa\49\49\89\00\80\a9\aa\9a\00\80\88\01\08\89"
-  "\00\88\00\81\9a\98\00\18\98\00\9f\98\89\98\99\01"
-  "\80\00\08\89\01\80\87\99\03\83\77\77\85\03\07\57"
-  "\65\03\08\65\75\65\57\65\65\00\04\75\76\75\76\76"
-  "\76\75\66\01\06\00\01\66\57\75\36\32\76\36\32\65"
-  "\57\76\76\32\72\32\72\85\00\08\01\01\01\08\36\72"
-  "\32\07\08\77\02\31\66\77\00\08\32\32\32\00\08\57"
-  "\00\36\72\01\66\65\76\76\03\65\65\04\6c\05\01\a7"
-  "\7a\04\08\aa\03\08\b2\aa\02\11\27\32\32\82\02\17"
-  "\00\48\01\08\aa\bb\aa\bb\01\19\32\2b\aa\2b\00\2a"
-  "\27\32\bb\00\02\00\1f\2a\00\20\00\2a\aa\02\01\7a"
-  "\27\b2\aa\bb\bb\bb\aa\aa\00\3e\c2\bb\2b\32\32\03"
-  "\1f\00\42\a7\03\20\05\75\b5\f6\da\00\01\f6\b5\a7"
-  "\b3\b3\a7\a7\a7\f5\f5\b5\f5\d7\f5\b6\7a\f6\f6\00"
-  "\18\ef\af\da\f6\f5\dd\de\da\f6\f6\d7\d7\d7\f6\f6"
-  "\7a\b6\f6\d7\f6\b6\b3\b5\7e\b6\f6\00\30\f6\f6\a7"
-  "\8f\8f\83\83\83\93\b5\00\0d\00\03\00\30\f6\f5\a7"
-  "\b5\95\7e\00\54\78\78\78\77\7a\7b\77\77\7c\79\77"
-  "\77\7d\78\77\77\7b\00\6e\79\7c\00\18\7d\77\77\01"
-  "\cb\84\02\24\79\77\78\79\78\77\79\00\2c\79\02\08"
-  "\01\10\00\04\78\03\03\b6\04\01\76\02\01\77\77\04"
-  "\0f\0c\08\0c\08\08\08\96\0c\01\f6\02\01\77\77\0c"
-  "\08\0c\08\07\08\04\77\02\08\76"
+  "\f9\8b\40\19\15\0c\50\19\80\53\4b\19\01\01\c6\4c"
+  "\4c\19\7d\b5\19\19\79\e7\fe\19\f3\71\7d\19\e5\f5"
+  "\16\19\a2\70\55\19\5f\42\56\19\75\88\fb\19\b3\ff"
+  "\6a\19\60\1a\7a\19\9a\1a\b0\19\1a\1a\1a\2b\2b\00"
+  "\05\00\07\3c\3c\01\09\2a\3c\00\01\1b\1a\1a\3b\01"
+  "\08\2c\01\0f\4d\00\02\1b\05\08\00\17\01\08\2c\3b"
+  "\3d\01\08\4c\2c\3b\4d\01\28\01\08\02\01\2c\2a\4c"
+  "\5e\00\01\3d\00\30\01\0f\00\49\3b\4c\4d\4d\3d\2c"
+  "\01\58\4c\01\0f\06\68\05\78\2a\01\08\00\18\6b\01"
+  "\18\2f\1a\2b\6f\2f\2b\2c\6b\6f\2b\6f\00\01\6b\01"
+  "\05\6f\6f\2f\6c\03\0c\3b\2c\00\0c\06\08\2f\01\08"
+  "\6b\2f\6a\3b\6b\3b\2c\2f\2c\1f\2a\2c\2b\00\01\3b"
+  "\1b\07\80\01\80\3b\01\80\5e\5e\2e\02\80\4b\01\0f"
+  "\07\80\05\f8\05\08\00\73\01\09\2a\01\73\01\90\02"
+  "\7b\00\0f\4f\6d\4f\6d\6f\1b\2a\6f\4d\6f\00\03\1b"
+  "\6b\00\0d\00\13\01\88\02\21\6b\03\20\2f\6b\7f\03"
+  "\08\2a\8f\02\18\1b\2a\90\70\02\08\7a\91\81\4d\4d"
+  "\6d\2f\1a\00\08\9d\9d\6d\00\58\90\30\9d\a2\2d\00"
+  "\68\7a\1a\9b\a2\03\80\91\91\03\07\80\80\01\09\8a"
+  "\80\00\01\21\1a\1a\81\01\08\90\03\0f\00\11\05\08"
+  "\81\80\50\7d\80\4d\80\90\07\08\02\01\06\08\93\80"
+  "\4e\5e\5d\4e\7e\21\93\80\00\ff\4d\7d\21\23\83\01"
+  "\10\8e\23\1a\93\02\3f\23\1a\23\01\68\23\23\1a\00"
+  "\09\91\1a\00\07\1a\1a\4d\4d\02\80\4a\4d\4d\1d\00"
+  "\06\1d\01\38\02\06\bd\c4\01\0b\4d\4d\c4\01\08\cd"
+  "\d5\d5\c4\c4\d4\d5\55\2d\3c\cc\d5\d5\d5\3c\4b\2a"
+  "\3c\02\01\1b\00\08\4d\00\02\07\08\06\18\01\3b\3c"
+  "\1b\1a\3b\4c\4d\4d\3d\2c\1a\1a\2a\3c\4c\01\0f\1a"
+  "\1a\2b\3c\3c\2b\02\71\2b\03\07\1a\e6\e6\03\07\5e"
+  "\5e\01\09\da\63\00\01\26\1a\1a\b6\50\b0\b0\50\e0"
+  "\1a\da\80\5d\7d\00\03\26\da\50\5e\4e\00\03\26\86"
+  "\03\08\e0\f6\57\5e\4e\00\03\e7\f6\f7\5d\ed\00\03"
+  "\e7\3b\47\47\47\4d\ec\ec\2c\00\80\4c\4d\3d\00\80"
+  "\2b\01\08\2c\00\88\00\81\3d\3b\00\18\3b\00\9f\3b"
+  "\2c\3b\3c\01\80\00\08\2c\01\80\2a\3c\03\83\1a\1a"
+  "\28\03\07\fa\08\03\08\08\18\08\fa\08\08\00\04\18"
+  "\19\18\19\19\19\18\09\01\06\00\01\09\fa\18\d9\d5"
+  "\19\d9\d5\08\fa\19\19\d5\15\d5\15\28\00\08\01\01"
+  "\01\08\d9\15\d5\07\08\1a\02\31\09\1a\00\08\d5\d5"
+  "\d5\00\08\fa\00\36\15\01\66\08\19\19\03\65\08\04"
+  "\6c\05\01\4a\1d\04\08\4d\03\08\55\4d\02\11\ca\d5"
+  "\d5\25\02\17\00\48\01\08\4d\5e\4d\5e\01\19\d5\ce"
+  "\4d\ce\00\2a\ca\d5\5e\00\02\00\1f\cd\00\20\00\2a"
+  "\4d\02\01\1d\ca\55\4d\5e\5e\5e\4d\4d\00\3e\65\5e"
+  "\ce\d5\d5\03\1f\00\42\4a\03\20\05\75\58\99\7d\00"
+  "\01\99\58\4a\56\56\4a\4a\4a\98\98\58\98\7a\98\59"
+  "\1d\99\99\00\18\92\52\7d\99\98\80\81\7d\99\99\7a"
+  "\7a\7a\99\99\1d\59\99\7a\99\59\56\58\21\59\99\00"
+  "\30\99\99\4a\32\32\26\26\26\36\58\00\0d\00\03\00"
+  "\30\99\98\4a\58\38\a8\f3\38\6d\91\f9\15\b8\71\11"
+  "\5b\c4\9c\6e\ab\f7\c5\b8\6e\11\f7\a5\b8\6e\91\6b"
+  "\a4\00\0f\79\a4\b8\91\b1\68\a4\38\3d\b1\21\00\7c"
+  "\1b\1b\1b\1a\1d\1e\1a\1a\1f\1c\1a\1a\20\1b\1a\1a"
+  "\1e\00\96\1c\1f\00\18\20\1a\1a\01\f3\27\02\24\1c"
+  "\1a\1b\1c\1b\1a\1c\00\2c\1c\02\08\01\10\00\04\1b"
+  "\03\03\59\04\01\19\02\01\1a\1a\04\0f\07\08\07\08"
+  "\07\08\07\08\1a\39\07\01\02\01\99\02\01\1a\1a\07"
+  "\08\07\08\07\08\07\08\04\77\02\08\19"
 )
