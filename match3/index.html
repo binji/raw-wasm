@@ -41,7 +41,7 @@
       const input = new Uint8Array(exports.mem.buffer, 0x0000, 3);
       const canvasData = new Uint8Array(exports.mem.buffer, 0x1100, w*h*4);
 
-      function mouseEventHandler(event) {
+      function convertEventMouseLocation(event) {
         const target = event.target;
         const cw = target.clientWidth, ch = target.clientHeight;
         let size, ow, oh;
@@ -54,14 +54,44 @@
           ow = (cw - ch) / 2;
           oh = 0;
         }
-        input[0] = clamp(0, w * (event.offsetX - ow) / size, w - 1);
-        input[1] = clamp(0, h * (event.offsetY - oh) / size, h - 1);
+        let offsetX = event.clientX - target.offsetLeft;
+        let offsetY = event.clientY - target.offsetTop;
+        return [clamp(0, w * (offsetX - ow) / size, w - 1),
+                clamp(0, h * (offsetY - oh) / size, h - 1)];
+      }
+
+      function mouseEventHandler(event) {
+        let [x, y] = convertEventMouseLocation(event);
+        input[0] = x;
+        input[1] = y;
         input[2] = event.buttons;
       }
 
       canvas.addEventListener('mousemove', mouseEventHandler);
       canvas.addEventListener('mousedown', mouseEventHandler);
       canvas.addEventListener('mouseup', mouseEventHandler);
+
+      let currentTouch;
+      let ontouch = (down, event) => {
+        for (let touch of event.changedTouches) {
+          if (!currentTouch || currentTouch == touch.identifier) {
+            let [x, y] = convertEventMouseLocation(touch);
+            input[0] = x;
+            input[1] = y;
+            input[2] = down;
+            if (down && !currentTouch) {
+              currentTouch = touch.identifier;
+            } else if (!down) {
+              currentTouch = undefined;
+            }
+          }
+        }
+        event.preventDefault();
+      };
+      canvas.addEventListener('touchstart', ontouch.bind(null, 1));
+      canvas.addEventListener('touchmove', ontouch.bind(null, 1));
+      canvas.addEventListener('touchend', ontouch.bind(null, 0));
+      canvas.addEventListener('touchcancel', ontouch.bind(null, 0));
 
       (function update() {
         requestAnimationFrame(update);
