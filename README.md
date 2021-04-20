@@ -69,6 +69,13 @@ up of 120-levels of brightness, which fade into black in the distance. [**2047 b
 
 [Demo!][8]
 
+## Match3
+
+An implementation of a [match 3][20]-style game, with an 8x8 grid and 8
+different emojis. [** 2657 bytes**]
+
+[Demo!][21]
+
 [1]: http://fabiensanglard.net/doom_fire_psx/index.html
 [2]: https://binji.github.io/raw-wasm/doomfire
 [3]: http://jamie-wong.com/2014/08/19/metaballs-and-marching-squares/
@@ -88,3 +95,5 @@ up of 120-levels of brightness, which fade into black in the distance. [**2047 b
 [17]: https://tools.ietf.org/html/rfc1951
 [18]: https://github.com/pfusik/zlib6502
 [19]: https://binji.github.io/raw-wasm/inflate
+[20]: https://en.wikipedia.org/?title=Match-3&redirect=no
+[21]: https://binji.github.io/raw-wasm/match3
