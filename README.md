@@ -72,7 +72,7 @@ up of 120-levels of brightness, which fade into black in the distance. [**2047 b
 ## Match3
 
 An implementation of a [match 3][20]-style game, with an 8x8 grid and 8
-different emojis. [** 2657 bytes**]
+different emojis. [**2657 bytes**]
 
 [Demo!][21]
 
