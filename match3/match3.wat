@@ -74,6 +74,7 @@
   block $removing
   block $init
   block $reset-prev-mouse
+  block $reset-all-mouse
   block $mouse-down
   block $idle
     (br_table $init $idle $mouse-down $removing $falling $gameover
@@ -150,45 +151,47 @@
             (i32.add (i32.trunc_f32_s (local.get $mouse-dy))
                      (i32.load8_u (i32.const 4)))))))
 
-    ;; end[click-mouse-bit].x = mouse-dx
-    ;; end[click-mouse-bit].y = mouse-dy
-    (i32.store16 offset=0xb00
-      (local.tee $click-mouse-src*4
-        (call $bit-to-src*4 (global.get $click-mouse-bit)))
-      (i32.or
-        (i32.shl
-          (i32.trunc_f32_s (local.get $mouse-dy))
-          (i32.const 8))
-        (i32.trunc_f32_s (local.get $mouse-dx))))
-
-    ;; If mouse-bit != 0 && mouse-bit != click-mouse-bit
-    (if (i32.and
-          (i32.eqz (i64.eqz (local.get $mouse-bit)))
-          (i64.ne (global.get $click-mouse-bit) (local.get $mouse-bit)))
+    ;; If mouse-bit is valid
+    (if (i32.eqz (i64.eqz (local.get $mouse-bit)))
       (then
-        ;; end[mouse-bit].x = -mouse-dx
-        ;; end[mouse-bit].y = -mouse-dy
+        ;; end[click-mouse-bit].x = mouse-dx
+        ;; end[click-mouse-bit].y = mouse-dy
         (i32.store16 offset=0xb00
-          (local.get $mouse-src*4)
+          (local.tee $click-mouse-src*4
+            (call $bit-to-src*4 (global.get $click-mouse-bit)))
           (i32.or
             (i32.shl
-              (i32.trunc_f32_s (f32.neg (local.get $mouse-dy)))
+              (i32.trunc_f32_s (local.get $mouse-dy))
               (i32.const 8))
-            (i32.trunc_f32_s (f32.neg (local.get $mouse-dx)))))))
+            (i32.trunc_f32_s (local.get $mouse-dx))))
 
-    ;; If the button is no longer pressed, go back to idle.
+        ;; If mouse-bit != click-mouse-bit
+        (if (i64.ne (global.get $click-mouse-bit) (local.get $mouse-bit))
+          (then
+            ;; end[mouse-bit].x = -mouse-dx
+            ;; end[mouse-bit].y = -mouse-dy
+            (i32.store16 offset=0xb00
+              (local.get $mouse-src*4)
+              (i32.or
+                (i32.shl
+                  (i32.trunc_f32_s (f32.neg (local.get $mouse-dy)))
+                  (i32.const 8))
+                (i32.trunc_f32_s (f32.neg (local.get $mouse-dx)))))))))
+
+    ;; Skip the following if the button is still pressed.
     (br_if $reset-prev-mouse (i32.load8_u (i32.const 2)))
 
     (global.set $state (i32.const 1))
 
-    ;; If mouse-bit is not valid or is different from clicked cell, then
-    ;; exit the `if`.
-    (br_if $reset-prev-mouse
+    ;; Skip the following if mouse-bit is not valid or is different from
+    ;; the clicked cell. Since we know that the button was released, we branch
+    ;; to $reset-all-mouse, which will reset the clicked mouse too.
+    (br_if $reset-all-mouse
       (i32.or
         (i64.eqz (local.get $mouse-bit))
         (i64.eq (global.get $click-mouse-bit) (local.get $mouse-bit))))
 
-    ;; swap the mouse-bit-mouse-bit bits in all grids.
+    ;; swap the mouse-bit and click-mouse-bit bits in all grids.
     (call $swap-all-grids-bits
       (local.get $mouse-bit)
       (global.get $click-mouse-bit))
@@ -201,12 +204,7 @@
         ;; Swap back
         (call $swap-all-grids-bits
           (local.get $mouse-bit)
-          (global.get $click-mouse-bit))
-
-        ;; And animate them back to their original place
-        (call $animate-cells
-          (i64.or (local.get $mouse-bit) (global.get $click-mouse-bit))
-          (i32.const 0)))
+          (global.get $click-mouse-bit)))
       (else
         ;; force the cells back to 0,0
         (i32.store16 offset=0x900
@@ -219,6 +217,17 @@
           (local.get $click-mouse-src*4) (i32.const 0))
 
         (br $matched)))
+
+  ;; fallthrough
+
+  end $reset-all-mouse
+
+  ;; Animate mouse and click-mouse cells back to their original place
+  (call $animate-cells
+    (i64.or (local.get $mouse-bit) (global.get $click-mouse-bit))
+    (i32.const 0))
+
+  ;; fallthrough
 
   end $reset-prev-mouse
 
@@ -635,8 +644,8 @@
     (i64.const 0)
     ;; if (x < 136) && (y < 136)
     (i32.and
-      (i32.lt_s (local.get $x) (i32.const 136))
-      (i32.lt_s (local.get $y) (i32.const 136))))
+      (i32.lt_u (local.get $x) (i32.const 136))
+      (i32.lt_u (local.get $y) (i32.const 136))))
 )
 
 (func $bit-to-src*4 (param $bit i64) (result i32)
