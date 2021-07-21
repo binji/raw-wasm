@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<head>
+  <style>
+  </style>
+</head>
+<body>
+  <button id="play">play</button>
+  <script>
+    const AUDIO_FRAMES = 4096;
+    let module;
+    (async function() {
+      let response = await fetch('mod.wasm');
+      let bytes = await response.arrayBuffer();
+      module = await WebAssembly.compile(bytes);
+    })();
+
+    play.addEventListener('click', async event => {
+      let response = await fetch('space_debris.mod');
+      let bytes = await response.arrayBuffer();
+      start(bytes);
+    });
+
+    const log = x => console.log(x);
+
+    async function start(modBytes) {
+      const ctx = new AudioContext;
+
+      mem = new WebAssembly.Memory({initial: 1 + Math.ceil(modBytes.byteLength / 65536)});
+      dv = new DataView(mem.buffer);
+      const data = new Uint8Array(mem.buffer, 0x10000);
+      data.set(new Uint8Array(modBytes));
+
+      const imports = {'': {rate: ctx.sampleRate, log, mem}};
+      const instance = await WebAssembly.instantiate(module, imports);
+      const exports = instance.exports;
+
+      const channel0 = new Float32Array(mem.buffer, AUDIO_FRAMES, 1024);
+      const channel1 = new Float32Array(mem.buffer, AUDIO_FRAMES, 1024 + AUDIO_FRAMES);
+
+      (function update() {
+        requestAnimationFrame(update);
+        const buffer = ctx.createBuffer(2, AUDIO_FRAMES, ctx.sampleRate);
+        const bufferSource = ctx.createBufferSource();
+
+        bufferSource.buffer = buffer;
+        // bufferSource.connect(Audio.ctx.destination);
+        // bufferSource.start(this.startSec);
+        // const bufferSec = AUDIO_FRAMES / this.sampleRate;
+        // this.startSec += bufferSec;
+        exports.run(AUDIO_FRAMES);
+      })();
+    };
+  </script>
+</body>
