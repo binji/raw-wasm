@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<head>
+  <style>
+    body {
+      position: absolute;
+      display: flex;
+      flex-direction: column;
+      background-color: #eee;
+      margin: 0;
+      width: 100%;
+      height: 100%;
+    }
+    canvas {
+      object-fit: contain;
+      width: 100%;
+      height: 100%;
+      image-rendering: pixelated;
+      image-rendering: crisp-edges;
+    }
+  </style>
+</head>
+<body>
+  <canvas width="160" height="144"></canvas>
+  <script>
+    const w = 160, h = 144;
+    const canvas = document.querySelector('canvas');
+    const context = canvas.getContext('2d');
+    const imageData = context.createImageData(w, h);
+
+    (async function start() {
+      const romResponse = await fetch('rom.gb');
+      const romBytes = await romResponse.arrayBuffer();
+
+      const response = await fetch('pokegb.wasm');
+      const moduleBytes = await response.arrayBuffer();
+      const {instance} = await WebAssembly.instantiate(moduleBytes, {'': {x, R, W}});
+      const exports = instance.exports;
+
+      const canvasData = new Uint8Array(exports.mem.buffer, 0x118000, w*h*4);
+      const romData = new Uint8Array(exports.mem.buffer, 0x10000, 1<<20);
+      romData.set(new Uint8Array(romBytes));
+
+      let keys = new Uint8Array(exports.mem.buffer, 0x0c, 4);
+      let setkey = (index, isButton, down) => {
+        let mask = 1 << index;
+        keys[1] = (keys[1] | mask) & ~((!isButton && down) ? mask : 0);
+        keys[2] = (keys[2] | mask) & ~((isButton && down) ? mask : 0);
+        keys[3] = (keys[3] | mask) & ~(down ? mask : 0);
+      };
+
+      let onkey = (down, event) => {
+        switch (event.code) {
+          case 'ArrowDown': setkey(3, 0, down); break;
+          case 'ArrowUp': setkey(2, 0, down); break;
+          case 'ArrowLeft': setkey(1, 0, down); break;
+          case 'ArrowRight': setkey(0, 0, down); break;
+          case 'Enter': setkey(3, 1, down); break;
+          case 'Tab': setkey(2, 1, down); break;
+          case 'KeyZ': setkey(1, 1, down); break;
+          case 'KeyX': setkey(0, 1, down); break;
+        }
+      };
+      keyDownFn = onkey.bind(null, 1);
+      keyUpFn = onkey.bind(null, 0);
+      window.addEventListener('keydown', keyDownFn, false);
+      window.addEventListener('keyup', keyUpFn, false);
+
+      (function update() {
+        requestAnimationFrame(update);
+        exports.run();
+        imageData.data.set(canvasData);
+        context.putImageData(imageData, 0, 0);
+      })();
+    })();
+  </script>
+</body>
