@@ -256,6 +256,9 @@
   (local $sprite i32)
   (local $sprite-color i32)
   (local $sprite-attr i32)
+  (local $sprite-tile i32)
+  (local $sprite-height-minus1 i32)
+  (local $sprite8x16 i32)
 
   (loop $loop
     (local.set $prev-cycles (global.get $cycles))
@@ -466,7 +469,7 @@
         (br $ppu-tick)
 
       end $7  ;; rla / rlca / rrca / rra
-        (local.set $neg (i32.const 0))
+        (local.set $neg (i32.const 1))
         (br $rotate)
 
       end $8  ;; jr i8 / jr <cond>, i8
@@ -517,7 +520,7 @@
       end $a  ;; cpl
         (i32.store8 (i32.const 7) (i32.xor (local.get $a) (i32.const 255)))
         (call $set-flags
-          (i32.const 129)
+          (i32.const 144)
           (i32.const 1)
           (i32.const 1)
           (i32.const 1)
@@ -705,8 +708,11 @@
         (global.set $IME (i32.eq (local.get $opcode) (i32.const 0xfb)))
         (br $ppu)
 
-      end $u  ;; ld hl, sp + i8
-        (i32.store16 (i32.const 0x4)
+      end $u  ;; ld hl, sp + i8 / add sp, i8
+        (i32.store16
+          (if (result i32) (i32.and (local.get $opcode) (i32.const 16))
+            (then (i32.const 0x4))                ;; ld hl, sp + i8
+            (else (call $tick) (i32.const 0x8)))  ;; add sp, i8
           (i32.add
             (local.tee $sp (i32.load16_u (i32.const 0x8)))
             (i32.extend8_s (local.tee $tmp (call $readpc)))))
@@ -838,6 +844,7 @@
     end $ppu
       (local.set $prev-cycles
         (i32.sub (global.get $cycles) (local.get $prev-cycles)))
+      ;; update DIV register
       (i32.store16 (i32.const 0xff03)
         (i32.add
           (i32.load16_u (i32.const 0xff03))
@@ -923,46 +930,74 @@
                       (i32.xor (local.get $x) (i32.const 7))))
 
                   ;; render sprites
-                  (if (i32.and (local.get $lcdc) (i32.const 2))
+                  (if $sprites-done (i32.and (local.get $lcdc) (i32.const 2))
                     (then
+                      ;; check whether sprites are 8x16 or 8x8
+                      (local.set $sprite8x16
+                        (i32.and (i32.shr_u (local.get $lcdc) (i32.const 2))
+                                 (i32.const 1)))
                       (local.set $sprite (i32.const 0xfe00))
                       (loop $sprite
-                        (local.set $x
-                          (i32.add
-                            (i32.sub
-                              (local.get $tmp)
-                              (i32.load8_u offset=1 (local.get $sprite)))
-                            (i32.const 8)))
+                        ;; sprite-y offset is ly - sprite[0] + 16; however, if
+                        ;; the sprite is y-fliiped, then we also need to xor w/
+                        ;; 7 (for 8x8 sprites) or 15 (for 8x16 sprites)
                         (local.set $y
-                          (i32.add
-                            (i32.sub
-                              (local.get $ly)
-                              (i32.load8_u (local.get $sprite)))
-                            (i32.const 16)))
+                          (i32.xor
+                            (i32.add
+                              (i32.sub
+                                (local.get $ly)
+                                (i32.load8_u (local.get $sprite)))
+                              (i32.const 16))
+                            (select
+                              (local.tee $sprite-height-minus1
+                                (select
+                                  (i32.const 15)
+                                  (i32.const 7)
+                                  (local.get $sprite8x16)))
+                              (i32.const 0)
+                              (i32.and
+                                (local.tee $sprite-attr
+                                  (i32.load8_u offset=3 (local.get $sprite)))
+                                (i32.const 64)))))
+                        ;; sprite-x offset is tmp - sprite[1] + 8; also xor w/
+                        ;; 7 if the sprite is x-flipped.
+                        (local.set $x
+                          (i32.xor
+                            (i32.add
+                              (i32.sub
+                                (local.get $tmp)
+                                (i32.load8_u offset=1 (local.get $sprite)))
+                              (i32.const 8))
+                            (select
+                              (i32.const 0)
+                              (i32.const 7)
+                              (i32.and (local.get $sprite-attr) (i32.const 32)))))
                         (local.set $sprite-color
                           (call $get-color
-                            (i32.load8_u offset=2 (local.get $sprite))
-                            (i32.xor
-                              (local.get $y)
-                              (select
-                                (i32.const 7)
-                                (i32.const 0)
-                                (i32.and
-                                  (local.tee $sprite-attr
-                                    (i32.load8_u offset=3 (local.get $sprite)))
-                                  (i32.const 64))))
-                            (i32.xor
-                              (local.get $x)
-                              (select
-                                (i32.const 0)
-                                (i32.const 7)
-                                (i32.and (local.get $sprite-attr) (i32.const 32))))))
+                            (select
+                              (i32.and
+                                (local.tee $sprite-tile
+                                  (i32.load8_u offset=2 (local.get $sprite)))
+                                (i32.xor (local.get $sprite8x16) (i32.const 255)))
+                              (i32.or
+                                (local.get $sprite-tile)
+                                (local.get $sprite8x16))
+                              (i32.lt_u (local.get $y) (i32.const 8)))
+                            (local.get $y)
+                            (local.get $x)))
 
+                        ;; only draw the sprite if the x/y coordinates are in
+                        ;; bounds. For y, that depends on whether it is a 8x8
+                        ;; or 8x16 sprite.
+                        ;;
+                        ;; The sprite pixel color should only be chosen if the
+                        ;; sprite is non-zero color, and has priority or the
+                        ;; background is zero.
                         (if
                           (i32.and
                             (i32.and
                               (i32.lt_u (local.get $x) (i32.const 8))
-                              (i32.lt_u (local.get $y) (i32.const 8)))
+                              (i32.le_u (local.get $y) (local.get $sprite-height-minus1)))
                             (i32.and
                               (i32.or
                                 (i32.eqz
@@ -976,7 +1011,11 @@
                                 (i32.const 1)
                                 (i32.ne
                                   (i32.and (local.get $sprite-attr) (i32.const 8))
-                                  (i32.const 0))))))
+                                  (i32.const 0))))
+                            ;; don't process any later sprites once we found
+                            ;; one to draw (this gives priority to the lowest
+                            ;; numbered sprite.
+                            (br $sprites-done)))
 
                         (br_if $sprite
                           (i32.lt_u
@@ -1046,62 +1085,62 @@
   (i32 -1 -23197   -65536    -16777216
        -1 -8092417 -12961132 -16777216)       ;; palette
 
-  ;; opcode decode tables
-  (i8 0xff 0x00 0x07)
-  (i8 0xcf 0x01 0x08)
-  (i8 0xc7 0x02 0x09)
-  (i8 0xc7 0x03 0x0a)
-  (i8 0xc6 0x04 0x0b)
-  (i8 0xc7 0x06 0x0c)
-  (i8 0xcf 0x09 0x0d)
-  (i8 0xe7 0x07 0x0e)
-  (i8 0xc7 0x00 0x0f)
-  (i8 0xff 0x27 0x10)
-  (i8 0xff 0x2f 0x11)
-  (i8 0xf7 0x37 0x12)
-  (i8 0xff 0x76 0x13)
-  (i8 0xc0 0x40 0x14)
-  (i8 0xf8 0x80 0x15)
-  (i8 0xff 0xc6 0x00)
-  (i8 0xf8 0x88 0x16)
-  (i8 0xff 0xce 0x01)
-  (i8 0xf8 0x90 0x17)
-  (i8 0xff 0xd6 0x02)
-  (i8 0xf8 0x98 0x18)
-  (i8 0xff 0xde 0x03)
-  (i8 0xf8 0xa0 0x19)
-  (i8 0xff 0xe6 0x04)
-  (i8 0xf8 0xa8 0x1a)
-  (i8 0xff 0xee 0x05)
-  (i8 0xf8 0xb0 0x1b)
-  (i8 0xff 0xf6 0x06)
-  (i8 0xf8 0xb8 0x17)
-  (i8 0xff 0xfe 0x02)
-  (i8 0xff 0xd9 0x1c)
-  (i8 0xe7 0xc0 0x1d)
-  (i8 0xff 0xc9 0x1d)
-  (i8 0xcf 0xc1 0x1e)
-  (i8 0xe7 0xc2 0x1f)
-  (i8 0xff 0xc3 0x1f)
-  (i8 0xe7 0xc4 0x20)
-  (i8 0xff 0xcd 0x20)
-  (i8 0xcf 0xc5 0x21)
-  (i8 0xe7 0xe2 0x22)
-  (i8 0xef 0xe0 0x22)
-  (i8 0xff 0xe9 0x23)
-  (i8 0xf7 0xf3 0x24)
-  (i8 0xff 0xf8 0x25)
-  (i8 0xff 0xf9 0x26)
-  (i8 0xff 0xcb 0x27)
+  ;; opcode decode tables (sorted by frequency used in pokemon)
+  (i8 0xff 0x00 0x07)  ;; nop   (must come before jr*)
+  (i8 0xc7 0x00 0x0f)  ;; jr i8 / jr <cond>, i8
+  (i8 0xef 0xe0 0x22)  ;; ldh u8, a / ldh a, u8
+  (i8 0xf8 0xb8 0x17)  ;; cp a, r8
+  (i8 0xc6 0x04 0x0b)  ;; dec r8 / inc r8
+  (i8 0xe7 0xe2 0x22)  ;; ldh a, c / ld a, (u16) / ldh c, a / ld (u16), a
+  (i8 0xf8 0xa0 0x19)  ;; and a, r8
+  (i8 0xcf 0xc1 0x1e)  ;; pop r16
+  (i8 0xff 0x76 0x13)  ;; halt   (must come before ld r8, r8)
+  (i8 0xc0 0x40 0x14)  ;; ld r8, r8
+  (i8 0xff 0xcd 0x20)  ;; call u16
+  (i8 0xcf 0x01 0x08)  ;; ld r16, u16
+  (i8 0xff 0xc9 0x1d)  ;; ret
+  (i8 0xcf 0x09 0x0d)  ;; add hl, r16
+  (i8 0xff 0xfe 0x02)  ;; cp a, u8
+  (i8 0xff 0xe6 0x04)  ;; and a, u8
+  (i8 0xc7 0x06 0x0c)  ;; ld r8, u8
+  (i8 0xf8 0xb0 0x1b)  ;; or a, r8
+  (i8 0xf8 0x80 0x15)  ;; add a, r8
+  (i8 0xc7 0x03 0x0a)  ;; dec r16 / inc r16
+  (i8 0xf8 0xa8 0x1a)  ;; xor a, r8
+  (i8 0xe7 0xc0 0x1d)  ;; ret <cond>
+  (i8 0xe7 0x07 0x0e)  ;; rla / rlca / rrca / rra
+  (i8 0xc7 0x02 0x09)  ;; ld a, (r16) / ld (r16), a
+  (i8 0xff 0xcb 0x27)  ;; cb prefix
+  (i8 0xe7 0xc2 0x1f)  ;; jp <cond>, u16
+  (i8 0xcf 0xc5 0x21)  ;; push r16
+  (i8 0xff 0xe9 0x23)  ;; jp hl
+  (i8 0xff 0x2f 0x11)  ;; cpl
+  (i8 0xff 0xf9 0x26)  ;; ld sp, hl
+  (i8 0xff 0xc6 0x00)  ;; add a, u8
+  (i8 0xff 0xc3 0x1f)  ;; jp u16
+  (i8 0xf8 0x98 0x18)  ;; sbc a, r8
+  (i8 0xef 0xe8 0x25)  ;; ld hl, sp + i8 / add sp, i8
+  (i8 0xf8 0x88 0x16)  ;; adc a, r8
+  (i8 0xe7 0xc4 0x20)  ;; call <cond>, u16
+  (i8 0xff 0xd9 0x1c)  ;; reti
+  (i8 0xf7 0x37 0x12)  ;; scf / ccf
+  (i8 0xff 0xf6 0x06)  ;; or a, u8
+  (i8 0xf8 0x90 0x17)  ;; sub a, r8
+  (i8 0xff 0xd6 0x02)  ;; sub a, u8
+  (i8 0xff 0xee 0x05)  ;; xor a, u8
+  (i8 0xff 0xde 0x03)  ;; sbc a, u8
+  (i8 0xff 0xce 0x01)  ;; adc a, u8
+  (i8 0xf7 0xf3 0x24)  ;; di / ei
+  (i8 0xff 0x27 0x10)  ;; daa
   (i8 0x00 0x00 0x07)  ;; terminator
 
    ;; cb
-  (i8 0xf8 0x30 0x02)
-  (i8 0xc8 0x00 0x00)
-  (i8 0xc8 0x08 0x01)
-  (i8 0xc0 0x40 0x03)
-  (i8 0xc0 0x80 0x04)
-  (i8 0xc0 0xc0 0x05)
+  (i8 0xf8 0x30 0x02)  ;; swap r8 / swap (hl)   (must come before rl*)
+  (i8 0xc8 0x00 0x00)  ;; rlc r8 / rl r8 / sla r8
+  (i8 0xc0 0x40 0x03)  ;; bit b, r8 / bit b, (hl)
+  (i8 0xc8 0x08 0x01)  ;; rrc r8 / rr r8 / sra r8 / srl r8
+  (i8 0xc0 0xc0 0x05)  ;; set b, r8 / set b, (hl)
+  (i8 0xc0 0x80 0x04)  ;; res b, r8 / res b, (hl)
 )
 
 ;; TODO better way to init?

@@ -1,6 +1,10 @@
 <!DOCTYPE html>
 <head>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <style>
+    @media (max-width: 480px) {
+      button { font-size: 32px; }
+    }
     body {
       position: absolute;
       display: flex;
@@ -12,65 +16,111 @@
     }
     canvas {
       object-fit: contain;
-      width: 100%;
-      height: 100%;
       image-rendering: pixelated;
       image-rendering: crisp-edges;
+      flex: 1;
     }
+    .hflex { display: flex; flex-direction: row; }
+    #load { flex: 1; }
+    #help { width: auto; }
   </style>
 </head>
 <body>
   <canvas width="160" height="144"></canvas>
+  <div class="hflex">
+    <button id="load">load</button>
+    <button id="help">help</button>
+  </div>
+  <input type="file" id="openfile" hidden>
   <script>
+    const $ = document.querySelector.bind(document);
     const w = 160, h = 144;
     const canvas = document.querySelector('canvas');
     const context = canvas.getContext('2d');
     const imageData = context.createImageData(w, h);
 
-    (async function start() {
-      const romResponse = await fetch('rom.gb');
-      const romBytes = await romResponse.arrayBuffer();
+    $('#load').addEventListener('click', () => { $('#openfile').click(); });
 
-      const response = await fetch('pokegb.wasm');
-      const moduleBytes = await response.arrayBuffer();
-      const {instance} = await WebAssembly.instantiate(moduleBytes, {'': {x, R, W}});
-      const exports = instance.exports;
-
-      const canvasData = new Uint8Array(exports.mem.buffer, 0x118000, w*h*4);
-      const romData = new Uint8Array(exports.mem.buffer, 0x10000, 1<<20);
-      romData.set(new Uint8Array(romBytes));
-
-      let keys = new Uint8Array(exports.mem.buffer, 0x0c, 4);
-      let setkey = (index, isButton, down) => {
-        let mask = 1 << index;
-        keys[1] = (keys[1] | mask) & ~((!isButton && down) ? mask : 0);
-        keys[2] = (keys[2] | mask) & ~((isButton && down) ? mask : 0);
-        keys[3] = (keys[3] | mask) & ~(down ? mask : 0);
-      };
-
-      let onkey = (down, event) => {
-        switch (event.code) {
-          case 'ArrowDown': setkey(3, 0, down); break;
-          case 'ArrowUp': setkey(2, 0, down); break;
-          case 'ArrowLeft': setkey(1, 0, down); break;
-          case 'ArrowRight': setkey(0, 0, down); break;
-          case 'Enter': setkey(3, 1, down); break;
-          case 'Tab': setkey(2, 1, down); break;
-          case 'KeyZ': setkey(1, 1, down); break;
-          case 'KeyX': setkey(0, 1, down); break;
-        }
-      };
-      keyDownFn = onkey.bind(null, 1);
-      keyUpFn = onkey.bind(null, 0);
-      window.addEventListener('keydown', keyDownFn, false);
-      window.addEventListener('keyup', keyUpFn, false);
-
-      (function update() {
-        requestAnimationFrame(update);
-        exports.run();
-        imageData.data.set(canvasData);
-        context.putImageData(imageData, 0, 0);
-      })();
+    let module, emulator;
+    (async function() {
+      let response = await fetch('pokegb.wasm');
+      let bytes = await response.arrayBuffer();
+      module = await WebAssembly.compile(bytes);
     })();
+
+    $('#openfile').addEventListener('change', async event => {
+      let file = event.target.files[0];
+      if (!file) return;
+
+      if (emulator) emulator.destroy();
+
+      let romBytes = await readFile(file);
+      let instance = await WebAssembly.instantiate(module);
+      emulator = new Emulator(instance, romBytes);
+    });
+
+    function readFile(file) {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onerror = event => reject(event.error);
+        reader.onloadend = event => resolve(event.target.result);
+        reader.readAsArrayBuffer(file);
+      });
+    }
+
+    class Emulator {
+      constructor(instance, romBytes) {
+        this.exports = instance.exports;
+        const buffer = this.exports.mem.buffer;
+
+        this.canvasData = new Uint8Array(buffer, 0x118000, w*h*4);
+        const romData = new Uint8Array(buffer, 0x10000, 1<<20);
+        romData.set(new Uint8Array(romBytes));
+
+        this.keys = new Uint8Array(buffer, 0x0c, 4);
+        this.keyDownFn = this.onKey.bind(this, 1);
+        this.keyUpFn = this.onKey.bind(this, 0);
+        window.addEventListener('keydown', this.keyDownFn, false);
+        window.addEventListener('keyup', this.keyUpFn, false);
+        this.running = true;
+        this.update();
+      }
+
+      destroy() {
+        this.running = false;
+        window.removeEventListener('keydown', this.keyDownFn, false);
+        window.removeEventListener('keyup', this.keyUpFn, false);
+      }
+
+      setKey(index, isButton, down) {
+        const clearMask = 1 << index;
+        const setMask = ~(down ? clearMask : 0);
+        const f = i => this.keys[i] = (this.keys[i] | clearMask) & setMask;
+        f(isButton ? 2 : 1);
+        f(3);
+      }
+
+      onKey(down, event) {
+        switch (event.code) {
+          case 'ArrowDown': this.setKey(3, 0, down); break;
+          case 'ArrowUp': this.setKey(2, 0, down); break;
+          case 'ArrowLeft': this.setKey(1, 0, down); break;
+          case 'ArrowRight': this.setKey(0, 0, down); break;
+          case 'Enter': this.setKey(3, 1, down); break;
+          case 'Tab': this.setKey(2, 1, down); break;
+          case 'KeyZ': this.setKey(1, 1, down); break;
+          case 'KeyX': this.setKey(0, 1, down); break;
+        }
+      }
+
+      update() {
+        if (this.running) {
+          requestAnimationFrame(this.update.bind(this));
+        }
+        this.exports.run();
+        imageData.data.set(this.canvasData);
+        context.putImageData(imageData, 0, 0);
+      }
+    }
   </script>
 </body>
