@@ -76,6 +76,12 @@ different emojis. [**2662 bytes**]
 
 [Demo!][21]
 
+## BadGB
+
+A very simple gameboy emulator that only plays a few games. [**3001 bytes**]
+
+[Demo!][22]
+
 [1]: http://fabiensanglard.net/doom_fire_psx/index.html
 [2]: https://binji.github.io/raw-wasm/doomfire
 [3]: http://jamie-wong.com/2014/08/19/metaballs-and-marching-squares/
@@ -97,3 +103,4 @@ different emojis. [**2662 bytes**]
 [19]: https://binji.github.io/raw-wasm/inflate
 [20]: https://en.wikipedia.org/?title=Match-3&redirect=no
 [21]: https://binji.github.io/raw-wasm/match3
+[22]: https://binji.github.io/raw-wasm/badgb

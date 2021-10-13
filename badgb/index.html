@@ -43,7 +43,7 @@
 
     let module, emulator;
     (async function() {
-      let response = await fetch('pokegb.wasm');
+      let response = await fetch('badgb.wasm');
       let bytes = await response.arrayBuffer();
       module = await WebAssembly.compile(bytes);
     })();
