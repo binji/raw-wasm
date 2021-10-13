@@ -664,10 +664,17 @@
                                    (local.get $~cond)))
         ;; fallthrough
 
-      end $p  ;; call u16 / call <cond>, u16
-        (local.set $tmp (call $read16 (i32.const 0x0a)))
-        (br_if $ppu (i32.and (i32.ne (local.get $opcode) (i32.const 0xcd))
-                             (local.get $~cond)))
+      end $p  ;; call u16 / call <cond>, u16 / rst $NN
+        (local.set $tmp
+          (if (result i32)
+            (i32.eq (i32.and (local.get $opcode) (i32.const 7)) (i32.const 7))
+            (then ;; rst
+              (i32.and (local.get $opcode) (i32.const 0x38)))
+            (else ;; call/jp
+              (call $read16 (i32.const 0x0a))
+              (br_if $ppu
+                (i32.and (i32.ne (local.get $opcode) (i32.const 0xcd))
+                         (local.get $~cond))))))
 
         (if (i32.and (local.get $opcode) (i32.const 4))
           (then (call $push (i32.load16_u (i32.const 0x0a))))  ;; CALL
@@ -758,7 +765,7 @@
           (call $reg8-access (i32.const 0) (i32.const 1) (local.get $opcode)))
         (local.set $bit (i32.shl (i32.const 1) (local.get $opcode>>3)))
 
-        (local.set $opindex (call $decodeop (local.get $opcode) (i32.const 0xce)))
+        (local.set $opindex (call $decodeop (local.get $opcode) (i32.const 0xd1)))
         (br_table $0 $1 $2 $3 $4 $5 (local.get $opindex))
 
         end $0  ;; rlc r8 / rlc (hl) / rl r8 / rl (hl) / sla r8 / sla (hl)
@@ -1122,6 +1129,7 @@
   (i8 0xef 0xe8 0x25)  ;; ld hl, sp + i8 / add sp, i8
   (i8 0xf8 0x88 0x16)  ;; adc a, r8
   (i8 0xe7 0xc4 0x20)  ;; call <cond>, u16
+  (i8 0xc7 0xc7 0x20)  ;; rst nn
   (i8 0xff 0xd9 0x1c)  ;; reti
   (i8 0xf7 0x37 0x12)  ;; scf / ccf
   (i8 0xff 0xf6 0x06)  ;; or a, u8
