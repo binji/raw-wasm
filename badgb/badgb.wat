@@ -1001,7 +1001,7 @@
                               (i32.add
                                 (i32.const 1)
                                 (i32.ne
-                                  (i32.and (local.get $sprite-attr) (i32.const 8))
+                                  (i32.and (local.get $sprite-attr) (i32.const 16))
                                   (i32.const 0))))
                             ;; don't process any later sprites once we found
                             ;; one to draw (this gives priority to the lowest
