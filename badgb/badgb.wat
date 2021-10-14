@@ -290,7 +290,6 @@
 
     end $normal
       block $rotate
-      block $w
       block $v
       block $u
       block $t
@@ -359,7 +358,7 @@
 
       (br_table $z $z $z $z $z $z $z $0 $1 $2 $3 $4 $5 $6 $7 $8
                 $9 $a $b $d $y $y $y $y $y $y $y $y $l $m $n $o
-                $p $q $r $s $t $u $v $w
+                $p $q $r $s $t $u $v
         (local.get $opindex))
 
       end $z  ;; ALU operation w/ immediate
@@ -659,22 +658,16 @@
                      (call $read16 (i32.const 0x08)))
         (br $ppu)
 
-      end $o  ;; jp u16 / jp <cond>, u16
-        (local.set $~cond (i32.and (i32.ne (local.get $opcode) (i32.const 0xc3))
-                                   (local.get $~cond)))
-        ;; fallthrough
-
-      end $p  ;; call u16 / call <cond>, u16 / rst $NN
+      end $o  ;; call/jp u16 / call/jp <cond>, u16 / rst $NN
         (local.set $tmp
           (if (result i32)
             (i32.eq (i32.and (local.get $opcode) (i32.const 7)) (i32.const 7))
-            (then ;; rst
-              (i32.and (local.get $opcode) (i32.const 0x38)))
-            (else ;; call/jp
-              (call $read16 (i32.const 0x0a))
-              (br_if $ppu
-                (i32.and (i32.ne (local.get $opcode) (i32.const 0xcd))
-                         (local.get $~cond))))))
+            (then (i32.and (local.get $opcode) (i32.const 0x38)))  ;; rst
+            (else (call $read16 (i32.const 0x0a)))))               ;; call/jp
+
+        (br_if $ppu
+          (i32.and (i32.eqz (i32.and (local.get $opcode) (i32.const 1)))
+                   (local.get $~cond)))
 
         (if (i32.and (local.get $opcode) (i32.const 4))
           (then (call $push (i32.load16_u (i32.const 0x0a))))  ;; CALL
@@ -682,11 +675,11 @@
         (i32.store16 (i32.const 0x0a) (local.get $tmp)) ;; PC = tmp
         (br $ppu)
 
-      end $q  ;; push r16
+      end $p  ;; push r16
         (call $push (i32.load16_u (i32.shl (local.get $opcode>>4) (i32.const 1))))
         (br $ppu)
 
-      end $r  ;; ldh a, u8 / ldh a, c / ld a, (u16)
+      end $q  ;; ldh a, u8 / ldh a, c / ld a, (u16)
               ;; ldh u8, a / ldh c, a / ld (u16), a
         (local.set $tmp (i32.and (local.get $opcode) (i32.const 16)))
         (call $reg8-access
@@ -707,15 +700,15 @@
           (i32.const 7))
         (br $ppu)
 
-      end $s  ;; jp hl
+      end $r  ;; jp hl
         (i32.store16 (i32.const 0x0a) (i32.load16_u (i32.const 4)))
         (br $ppu)
 
-      end $t  ;; di / ei
+      end $s  ;; di / ei
         (global.set $IME (i32.eq (local.get $opcode) (i32.const 0xfb)))
         (br $ppu)
 
-      end $u  ;; ld hl, sp + i8 / add sp, i8
+      end $t  ;; ld hl, sp + i8 / add sp, i8
         (i32.store16
           (if (result i32) (i32.and (local.get $opcode) (i32.const 16))
             (then (i32.const 0x4))                ;; ld hl, sp + i8
@@ -739,11 +732,11 @@
             (i32.const 255)))
         (br $ppu-tick)
 
-      end $v  ;; ld sp, hl
+      end $u  ;; ld sp, hl
         (i32.store16 (i32.const 0x08) (i32.load16_u (i32.const 4)))
         (br $ppu-tick)
 
-      end $w  ;; cb prefix
+      end $v  ;; cb prefix
         ;; read next byte
         (local.set $neg (i32.const 0))
         (local.set $opcode (call $readpc))
@@ -765,7 +758,7 @@
           (call $reg8-access (i32.const 0) (i32.const 1) (local.get $opcode)))
         (local.set $bit (i32.shl (i32.const 1) (local.get $opcode>>3)))
 
-        (local.set $opindex (call $decodeop (local.get $opcode) (i32.const 0xd1)))
+        (local.set $opindex (call $decodeop (local.get $opcode) (i32.const 0xce)))
         (br_table $0 $1 $2 $3 $4 $5 (local.get $opindex))
 
         end $0  ;; rlc r8 / rlc (hl) / rl r8 / rl (hl) / sla r8 / sla (hl)
@@ -1095,15 +1088,15 @@
   ;; opcode decode tables (sorted by frequency used in pokemon)
   (i8 0xff 0x00 0x07)  ;; nop   (must come before jr*)
   (i8 0xc7 0x00 0x0f)  ;; jr i8 / jr <cond>, i8
-  (i8 0xef 0xe0 0x22)  ;; ldh u8, a / ldh a, u8
+  (i8 0xef 0xe0 0x21)  ;; ldh u8, a / ldh a, u8
   (i8 0xf8 0xb8 0x17)  ;; cp a, r8
   (i8 0xc6 0x04 0x0b)  ;; dec r8 / inc r8
-  (i8 0xe7 0xe2 0x22)  ;; ldh a, c / ld a, (u16) / ldh c, a / ld (u16), a
+  (i8 0xe7 0xe2 0x21)  ;; ldh a, c / ld a, (u16) / ldh c, a / ld (u16), a
   (i8 0xf8 0xa0 0x19)  ;; and a, r8
   (i8 0xcf 0xc1 0x1e)  ;; pop r16
   (i8 0xff 0x76 0x13)  ;; halt   (must come before ld r8, r8)
   (i8 0xc0 0x40 0x14)  ;; ld r8, r8
-  (i8 0xff 0xcd 0x20)  ;; call u16
+  (i8 0xff 0xcd 0x1f)  ;; call u16
   (i8 0xcf 0x01 0x08)  ;; ld r16, u16
   (i8 0xff 0xc9 0x1d)  ;; ret
   (i8 0xcf 0x09 0x0d)  ;; add hl, r16
@@ -1117,28 +1110,27 @@
   (i8 0xe7 0xc0 0x1d)  ;; ret <cond>
   (i8 0xe7 0x07 0x0e)  ;; rla / rlca / rrca / rra
   (i8 0xc7 0x02 0x09)  ;; ld a, (r16) / ld (r16), a
-  (i8 0xff 0xcb 0x27)  ;; cb prefix
-  (i8 0xe7 0xc2 0x1f)  ;; jp <cond>, u16
-  (i8 0xcf 0xc5 0x21)  ;; push r16
-  (i8 0xff 0xe9 0x23)  ;; jp hl
-  (i8 0xff 0x2f 0x11)  ;; cpl
-  (i8 0xff 0xf9 0x26)  ;; ld sp, hl
+  (i8 0xff 0xcb 0x26)  ;; cb prefix
   (i8 0xff 0xc6 0x00)  ;; add a, u8
+  (i8 0xff 0xd6 0x02)  ;; sub a, u8
+  (i8 0xff 0xde 0x03)  ;; sbc a, u8
+  (i8 0xff 0xce 0x01)  ;; adc a, u8
+  (i8 0xe1 0xc0 0x1f)  ;; call/jp <cond>, u16
+  (i8 0xcf 0xc5 0x20)  ;; push r16
+  (i8 0xff 0xe9 0x22)  ;; jp hl
+  (i8 0xff 0x2f 0x11)  ;; cpl
+  (i8 0xff 0xf9 0x25)  ;; ld sp, hl
   (i8 0xff 0xc3 0x1f)  ;; jp u16
   (i8 0xf8 0x98 0x18)  ;; sbc a, r8
-  (i8 0xef 0xe8 0x25)  ;; ld hl, sp + i8 / add sp, i8
+  (i8 0xef 0xe8 0x24)  ;; ld hl, sp + i8 / add sp, i8
   (i8 0xf8 0x88 0x16)  ;; adc a, r8
-  (i8 0xe7 0xc4 0x20)  ;; call <cond>, u16
-  (i8 0xc7 0xc7 0x20)  ;; rst nn
+  (i8 0xc7 0xc7 0x1f)  ;; rst nn
   (i8 0xff 0xd9 0x1c)  ;; reti
   (i8 0xf7 0x37 0x12)  ;; scf / ccf
   (i8 0xff 0xf6 0x06)  ;; or a, u8
   (i8 0xf8 0x90 0x17)  ;; sub a, r8
-  (i8 0xff 0xd6 0x02)  ;; sub a, u8
   (i8 0xff 0xee 0x05)  ;; xor a, u8
-  (i8 0xff 0xde 0x03)  ;; sbc a, u8
-  (i8 0xff 0xce 0x01)  ;; adc a, u8
-  (i8 0xf7 0xf3 0x24)  ;; di / ei
+  (i8 0xf7 0xf3 0x23)  ;; di / ei
   (i8 0xff 0x27 0x10)  ;; daa
   (i8 0x00 0x00 0x07)  ;; terminator
 
