@@ -1,43 +1,42 @@
+<!-- mobile gamepad CSS and JS copied from
+https://github.com/chrismaltby/gb-studio/blob/v2beta/appData/js-emulator/index.html
+(see LICENSE.gbstudio)
+-->
 <!DOCTYPE html>
 <head>
+  <meta charset="utf-8" />
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <style>
-    @media (max-width: 480px) {
-      button { font-size: 32px; }
-    }
-    body {
-      position: absolute;
-      display: flex;
-      flex-direction: column;
-      background-color: #eee;
-      margin: 0;
-      width: 100%;
-      height: 100%;
-    }
-    canvas {
-      object-fit: contain;
-      image-rendering: pixelated;
-      image-rendering: crisp-edges;
-      flex: 1;
-    }
-    .hflex { display: flex; flex-direction: row; }
-    #load { flex: 1; }
-    #help { width: auto; }
-  </style>
+  <link rel="stylesheet" href="index.css">
 </head>
 <body>
-  <canvas width="160" height="144"></canvas>
-  <div class="hflex">
-    <button id="load">load</button>
-    <button id="help">help</button>
+  <div>
+    <div id="game">
+      <canvas width="160" height="144"></canvas>
+    </div>
+    <button id="load" class="capsuleBtn">Load</button>
+    <div id="gp">
+      <div id="gp_dpad">
+        <div id="gp_left"></div>
+        <div id="gp_right"></div>
+        <div id="gp_up"></div>
+        <div id="gp_down"></div>
+      </div>
+      <div id="gp_select" class="capsuleBtn">Select</div>
+      <div id="gp_start" class="capsuleBtn">Start</div>
+      <div id="gp_b" class="roundBtn">B</div>
+      <div id="gp_a" class="roundBtn">A</div>
+    </div>
+    <input type="file" id="openfile" hidden>
   </div>
-  <input type="file" id="openfile" hidden>
+
   <script>
     const $ = document.querySelector.bind(document);
     const w = 160, h = 144;
     const canvas = document.querySelector('canvas');
     const context = canvas.getContext('2d');
     const imageData = context.createImageData(w, h);
+    const deadzone = 0.1;
 
     $('#load').addEventListener('click', () => { $('#openfile').click(); });
 
@@ -46,6 +45,12 @@
       let response = await fetch('badgb.wasm');
       let bytes = await response.arrayBuffer();
       module = await WebAssembly.compile(bytes);
+
+      // Load porklike by default
+      let romResponse = await fetch('porklike.gb');
+      let romBytes = await romResponse.arrayBuffer();
+      let instance = await WebAssembly.instantiate(module);
+      emulator = new Emulator(instance, romBytes);
     })();
 
     $('#openfile').addEventListener('change', async event => {
@@ -76,20 +81,47 @@
         this.canvasData = new Uint8Array(buffer, 0x118000, w*h*4);
         const romData = new Uint8Array(buffer, 0x10000, 1<<20);
         romData.set(new Uint8Array(romBytes));
-
         this.keys = new Uint8Array(buffer, 0x0c, 4);
-        this.keyDownFn = this.onKey.bind(this, 1);
-        this.keyUpFn = this.onKey.bind(this, 0);
-        window.addEventListener('keydown', this.keyDownFn, false);
-        window.addEventListener('keyup', this.keyUpFn, false);
+
+        this.bindings = [
+          {sel: '',           type: 'keydown',    fn: this.onKey.bind(this, true)},
+          {sel: '',           type: 'keyup',      fn: this.onKey.bind(this, false)},
+          {sel: '#gp_select', type: 'touchstart', fn: this.btnTouch.bind(this, 2, 1, true)},
+          {sel: '#gp_select', type: 'touchend',   fn: this.btnTouch.bind(this, 2, 1, false)},
+          {sel: '#gp_start',  type: 'touchstart', fn: this.btnTouch.bind(this, 3, 1, true)},
+          {sel: '#gp_start',  type: 'touchend',   fn: this.btnTouch.bind(this, 3, 1, false)},
+          {sel: '#gp_b',      type: 'touchstart', fn: this.btnTouch.bind(this, 1, 1, true)},
+          {sel: '#gp_b',      type: 'touchend',   fn: this.btnTouch.bind(this, 1, 1, false)},
+          {sel: '#gp_a',      type: 'touchstart', fn: this.btnTouch.bind(this, 0, 1, true)},
+          {sel: '#gp_a',      type: 'touchend',   fn: this.btnTouch.bind(this, 0, 1, false)},
+          {sel: '#gp_dpad',   type: 'touchstart', fn: this.dpadTouchStartMove.bind(this)},
+          {sel: '#gp_dpad',   type: 'touchmove',  fn: this.dpadTouchStartMove.bind(this)},
+          {sel: '#gp_dpad',   type: 'touchend',   fn: this.dpadTouchEnd.bind(this)},
+          {sel: '',           type: 'touchstart', fn: this.touchRestore.bind(this)},
+        ];
+
+        this.updateBinding(true);
+        this.touchEnabled = 'ontouchstart' in document.documentElement;
+        this.updateOnscreenGamepad();
+
         this.running = true;
         this.update();
       }
 
       destroy() {
         this.running = false;
-        window.removeEventListener('keydown', this.keyDownFn, false);
-        window.removeEventListener('keyup', this.keyUpFn, false);
+        this.updateBinding(false);
+      }
+
+      updateBinding(bind) {
+        for (let binding of this.bindings) {
+          const el = binding.sel ? $(binding.sel) : window;
+          if (bind) {
+            el.addEventListener(binding.type, binding.fn);
+          } else {
+            el.removeEventListener(binding.type, binding.fn);
+          }
+        }
       }
 
       setKey(index, isButton, down) {
@@ -100,16 +132,30 @@
         f(3);
       }
 
+      setJoypRight(down)  { this.setKey(0, 0, down); }
+      setJoypLeft(down)   { this.setKey(1, 0, down); }
+      setJoypUp(down)     { this.setKey(2, 0, down); }
+      setJoypDown(down)   { this.setKey(3, 0, down); }
+      setJoypA(down)      { this.setKey(0, 1, down); }
+      setJoypB(down)      { this.setKey(1, 1, down); }
+      setJoypSelect(down) { this.setKey(2, 1, down); }
+      setJoypStart(down)  { this.setKey(3, 1, down); }
+
       onKey(down, event) {
         switch (event.code) {
-          case 'ArrowDown': this.setKey(3, 0, down); break;
-          case 'ArrowUp': this.setKey(2, 0, down); break;
-          case 'ArrowLeft': this.setKey(1, 0, down); break;
-          case 'ArrowRight': this.setKey(0, 0, down); break;
-          case 'Enter': this.setKey(3, 1, down); break;
-          case 'Tab': this.setKey(2, 1, down); break;
-          case 'KeyZ': this.setKey(1, 1, down); break;
-          case 'KeyX': this.setKey(0, 1, down); break;
+          case 'ArrowDown': this.setJoypDown(down); break;
+          case 'ArrowUp': this.setJoypUp(down); break;
+          case 'ArrowLeft': this.setJoypLeft(down); break;
+          case 'ArrowRight': this.setJoypRight(down); break;
+          case 'Enter': this.setJoypStart(down); break;
+          case 'Tab': this.setJoypSelect(down); break;
+          case 'KeyZ': this.setJoypB(down); break;
+          case 'KeyX': this.setJoypA(down); break;
+        }
+
+        if (down && this.touchEnabled) {
+          this.touchEnabled = false;
+          this.updateOnscreenGamepad();
         }
       }
 
@@ -120,6 +166,62 @@
         this.exports.run();
         imageData.data.set(this.canvasData);
         context.putImageData(imageData, 0, 0);
+      }
+
+      updateOnscreenGamepad() {
+        $('#gp').style.display = this.touchEnabled ? 'block' : 'none';
+      }
+
+      btnTouch(index, isButton, down) {
+        this.setKey(index, isButton, down);
+        event.currentTarget.classList.toggle('btnPressed', down);
+        event.preventDefault();
+      }
+
+      dpadTouchStartMove(event) {
+        const rect = event.currentTarget.getBoundingClientRect();
+        const x = (2 * (event.targetTouches[0].clientX - rect.left)) / rect.width - 1;
+        const y = (2 * (event.targetTouches[0].clientY - rect.top)) / rect.height - 1;
+
+        if (Math.abs(x) > deadzone) {
+          if (y > x && y < -x) {
+            this.setJoypLeft(true);
+            this.setJoypRight(false);
+          } else if (y < x && y > -x) {
+            this.setJoypLeft(false);
+            this.setJoypRight(true);
+          }
+        } else {
+          this.setJoypLeft(false);
+          this.setJoypRight(false);
+        }
+
+        if (Math.abs(y) > deadzone) {
+          if (x > y && x < -y) {
+            this.setJoypUp(true);
+            this.setJoypDown(false);
+          } else if (x < y && x > -y) {
+            this.setJoypUp(false);
+            this.setJoypDown(true);
+          }
+        } else {
+          this.setJoypUp(false);
+          this.setJoypDown(false);
+        }
+        event.preventDefault();
+      }
+
+      dpadTouchEnd(event) {
+        this.setJoypLeft(false);
+        this.setJoypRight(false);
+        this.setJoypUp(false);
+        this.setJoypDown(false);
+        event.preventDefault();
+      }
+
+      touchRestore() {
+        this.touchEnabled = true;
+        this.updateOnscreenGamepad();
       }
     }
   </script>
