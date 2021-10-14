@@ -80,6 +80,7 @@ https://github.com/chrismaltby/gb-studio/blob/v2beta/appData/js-emulator/index.h
 
         this.canvasData = new Uint8Array(buffer, 0x118000, w*h*4);
         const romData = new Uint8Array(buffer, 0x10000, 1<<20);
+        this.extram = new Uint8Array(buffer, 0x110000, 0x8000);
         romData.set(new Uint8Array(romBytes));
         this.keys = new Uint8Array(buffer, 0x0c, 4);
 
@@ -104,11 +105,26 @@ https://github.com/chrismaltby/gb-studio/blob/v2beta/appData/js-emulator/index.h
         this.touchEnabled = 'ontouchstart' in document.documentElement;
         this.updateOnscreenGamepad();
 
-        this.running = true;
-        this.update();
+        // Save ExtRam
+        this.extramIntervalId = -1;
+        crypto.subtle.digest('sha-1', romBytes).then(result => {
+          this.sha1 = Array.from(new Uint8Array(result)).map(x => x.toString(16).padStart(2, '0')).join('');
+          const loadedExtram = localStorage.getItem(this.sha1);
+          if (loadedExtram) {
+            this.extram.set(JSON.parse(loadedExtram));
+          }
+          this.extramIntervalId = setInterval(() => {
+            localStorage.setItem(this.sha1,
+                                 JSON.stringify(Array.from(this.extram)));
+          }, 1000);
+        }).finally(() => {
+          this.running = true;
+          this.update();
+        });
       }
 
       destroy() {
+        clearInterval(this.extramIntervalId);
         this.running = false;
         this.updateBinding(false);
       }
