@@ -360,14 +360,14 @@
       (local.set $f (i32.load8_u (i32.const 6)))
       (local.set $~cond
         (i32.xor
-          (i32.ne
-            (i32.and
-              (local.get $f)
-              (i32.load8_u offset=0x20
-                (i32.and
-                  (local.get $opcode>>3)
-                  (i32.const 3))))
-            (i32.const 0))
+          (i32.eqz
+            (i32.eqz
+              (i32.and
+                (local.get $f)
+                (i32.load8_u offset=0x20
+                  (i32.and
+                    (local.get $opcode>>3)
+                    (i32.const 3))))))
           (i32.and
             (local.get $opcode>>3)
             (i32.const 1))))
@@ -507,7 +507,7 @@
         (local.set $neg (i32.and (local.get $f) (i32.const 64)))
 
         (if (i32.or
-              (i32.ne (i32.and (local.get $f) (i32.const 32)) (i32.const 0))
+              (i32.eqz (i32.eqz (i32.and (local.get $f) (i32.const 32))))
               (i32.and
                 (i32.eqz (local.get $neg))
                 (i32.gt_u (i32.and (local.get $a) (i32.const 15)) (i32.const 9))))
@@ -515,7 +515,7 @@
             (local.set $tmp (i32.const 6))))
 
         (if (i32.or
-              (i32.ne (i32.and (local.get $f) (i32.const 16)) (i32.const 0))
+              (i32.eqz (i32.eqz (i32.and (local.get $f) (i32.const 16))))
               (i32.and
                 (i32.eqz (local.get $neg))
                 (i32.gt_u (local.get $a) (i32.const 153))))
@@ -834,8 +834,7 @@
             (i32.const 0)
             (i32.or
               (local.get $neg)
-              (i32.ne (i32.and (local.get $tmp) (i32.const 255))
-                      (i32.const 0)))
+              (i32.eqz (i32.eqz (i32.and (local.get $tmp) (i32.const 255)))))
             (i32.const 0)
             (i32.const 0)
             (local.get $carry))
@@ -1034,15 +1033,15 @@
                                 (i32.eqz
                                   (i32.and (local.get $sprite-attr) (i32.const 128)))
                                 (i32.eqz (local.get $color)))
-                              (i32.ne (local.get $sprite-color) (i32.const 0))))
+                              (i32.eqz (i32.eqz (local.get $sprite-color)))))
                           (then
                             (local.set $color (local.get $sprite-color))
                             (local.set $palette-index
                               (i32.add
                                 (i32.const 1)
-                                (i32.ne
-                                  (i32.and (local.get $sprite-attr) (i32.const 16))
-                                  (i32.const 0))))
+                                (i32.eqz
+                                  (i32.eqz
+                                    (i32.and (local.get $sprite-attr) (i32.const 16))))))
                             ;; don't process any later sprites once we found
                             ;; one to draw (this gives priority to the lowest
                             ;; numbered sprite.
@@ -1087,35 +1086,34 @@
                 (i32.const 154)))
             (global.set $ppu-dot (i32.const 0))
 
-            ;; if LY=LYC and the enable bit is set, then trigger a STAT
-            ;; interrupt
-            (if (i32.and
-                  (local.tee $ly=lyc
-                    (i32.eq (local.get $ly)
-                            (i32.load8_u offset=0x45 (global.get $ff00))))
+            (i32.store8 offset=0x0f (global.get $ff00)
+              (i32.or
+                (i32.or
+                  (local.get $IF)
+                  ;; trigger VBLANK at end of frame
+                  (local.tee $tmp (i32.eq (local.get $ly) (i32.const 143))))
+                ;; if LY=LYC and the enable bit is set, then trigger a STAT
+                ;; interrupt
+                (i32.shl
                   (i32.and
-                    (i32.shr_u
-                      (local.tee $STAT
-                        (i32.load8_u offset=0x41 (global.get $ff00)))
-                      (i32.const 6))
-                    (i32.const 1)))
-              (then
-                (i32.store8 offset=0x0f (global.get $ff00)
-                            (i32.or (local.get $IF) (i32.const 2)))))
+                    (local.tee $ly=lyc
+                      (i32.eq (local.get $ly)
+                              (i32.load8_u offset=0x45 (global.get $ff00))))
+                    (i32.and
+                      (i32.shr_u
+                        (local.tee $STAT
+                          (i32.load8_u offset=0x41 (global.get $ff00)))
+                        (i32.const 6))
+                      (i32.const 1)))
+                  (i32.const 1))))
 
             ;; set/reset the LY=LYC bit
             (i32.store8 offset=0x41 (global.get $ff00)
               (i32.or (i32.and (local.get $STAT) (i32.const 0xfd))
                       (i32.shl (local.get $ly=lyc) (i32.const 1))))
 
-            ;; finished a frame
-            (if (i32.eq (local.get $ly) (i32.const 143))
-              (then
-                ;; IF = 1
-                (i32.store8 offset=0x0f
-                  (global.get $ff00)
-                  (i32.or (local.get $IF) (i32.const 1)))
-                (return))))
+            ;; return if end of frame
+            (br_if 3 (local.get $tmp)))
           (else
             (i32.store8 offset=0x44 (global.get $ff00) (i32.const 0))
             (global.set $ppu-dot (i32.const 0))))
