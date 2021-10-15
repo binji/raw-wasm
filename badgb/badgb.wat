@@ -311,6 +311,7 @@
 
     end $normal
       block $rotate
+      block $v
       block $u
       block $t
       block $s
@@ -378,7 +379,7 @@
 
       (br_table $z $z $z $z $z $z $z $0 $1 $2 $3 $4 $5 $6 $7 $8
                 $9 $a $b $d $y $y $y $y $y $y $y $k $l $m $n $o
-                $p $q $r $s $t $u
+                $p $q $r $s $t $u $v
         (local.get $opindex))
 
       end $z  ;; ALU operation w/ immediate
@@ -750,7 +751,18 @@
         (i32.store16 (i32.const 0x08) (i32.load16_u (i32.const 4)))
         (br $ppu-tick)
 
-      end $u  ;; cb prefix
+      end $u  ;; ld (u16), sp
+        (call $mem8
+          (local.tee $tmp (call $read16 (i32.const 0x0a)))
+          (local.tee $sp (i32.load16_u (i32.const 0x08)))
+          (i32.const 0))
+        (call $mem8
+          (i32.add (local.get $tmp) (i32.const 1))
+          (i32.shr_u (local.get $sp) (i32.const 8))
+          (i32.const 0))
+        (br $ppu-tick)
+
+      end $v  ;; cb prefix
         ;; read next byte
         (local.set $neg (i32.const 0))
         (local.set $opcode (call $readpc))
@@ -772,7 +784,7 @@
           (call $reg8-access (i32.const 0) (i32.const 1) (local.get $opcode)))
         (local.set $bit (i32.shl (i32.const 1) (local.get $opcode>>3)))
 
-        (local.set $opindex (call $decodeop (local.get $opcode) (i32.const 0xce)))
+        (local.set $opindex (call $decodeop (local.get $opcode) (i32.const 0xd1)))
         (br_table $0 $1 $2 $3 $4 $5 (local.get $opindex))
 
         end $0  ;; rlc r8 / rlc (hl) / rl r8 / rl (hl) / sla r8 / sla (hl)
@@ -1128,7 +1140,8 @@
        -1 -8092417 -12961132 -16777216)       ;; palette
 
   ;; opcode decode tables (sorted by frequency used in pokemon)
-  (i8 0xff 0x00 0x07)  ;; nop   (must come before jr*)
+  (i8 0xff 0x00 0x07)  ;; nop            (must come before jr*)
+  (i8 0xff 0x08 0x25)  ;; ld (u16), sp   (must come before jr*)
   (i8 0xc7 0x00 0x0f)  ;; jr i8 / jr <cond>, i8
   (i8 0xef 0xe0 0x20)  ;; ldh u8, a / ldh a, u8
   (i8 0xf8 0xb8 0x17)  ;; cp a, r8
@@ -1152,7 +1165,7 @@
   (i8 0xe7 0xc0 0x1c)  ;; ret <cond>
   (i8 0xe7 0x07 0x0e)  ;; rla / rlca / rrca / rra
   (i8 0xc7 0x02 0x09)  ;; ld a, (r16) / ld (r16), a
-  (i8 0xff 0xcb 0x25)  ;; cb prefix
+  (i8 0xff 0xcb 0x26)  ;; cb prefix
   (i8 0xff 0xc6 0x00)  ;; add a, u8
   (i8 0xff 0xd6 0x02)  ;; sub a, u8
   (i8 0xff 0xde 0x03)  ;; sbc a, u8
