@@ -26,6 +26,7 @@
 (global $halt (mut i32) (i32.const 0))
 (global $ppu-dot (mut i32) (i32.const 32))
 (global $cycles (mut i32) (i32.const 0))
+(global $ff00 i32 (i32.const 0xff00))
 
 (memory (export "mem") 19)
 
@@ -125,7 +126,7 @@
       (i32.load8_u offset=0x0c
         (i32.and
           (i32.shr_u
-            (i32.xor (i32.load8_u (i32.const 0xff00)) (i32.const 0xff))
+            (i32.xor (i32.load8_u (global.get $ff00)) (i32.const 0xff))
             (i32.const 4))
           (i32.const 3))))
 
@@ -259,6 +260,10 @@
   (local $sprite-tile i32)
   (local $sprite-height-minus1 i32)
   (local $sprite8x16 i32)
+  (local $IF i32)
+  (local $STAT i32)
+  (local $irq i32)
+  (local $ly=lyc i32)
 
   (loop $loop
     (local.set $prev-cycles (global.get $cycles))
@@ -271,17 +276,33 @@
 
     (br_if $interrupt
       (i32.and
-        (i32.and (global.get $IME) (i32.load8_u (i32.const 0xff0f))) ;; IF
-        (i32.load8_u (i32.const 0xffff))))                           ;; IE
+        (i32.and
+          (global.get $IME)
+          (local.tee $IF (i32.load8_u offset=0x0f (global.get $ff00)))) ;; IF
+        (i32.load8_u offset=0xff (global.get $ff00))))                  ;; IE
     (br_if $halt (global.get $halt))
     (br $normal)
 
     end $interrupt
-      (i32.store8 (i32.const 0xff0f) (i32.const 0)) ;; IF
+      ;; clear the least-significant 1 bit
+      (i32.store8 offset=0x0f
+        (global.get $ff00)
+        (i32.and
+          (local.get $IF)
+          (i32.xor
+            ;; isolate least-significant 1 bit
+            (local.tee $irq
+              (i32.and (local.get $IF)
+                       (i32.sub (i32.const 0) (local.get $IF))))
+            (i32.const 0xff))))
       (global.set $IME (i32.const 0))
       (global.set $halt (i32.const 0))
-      (call $push (i32.load16_u (i32.const 0x0a)))    ;; push PC
-      (i32.store16 (i32.const 0x0a) (i32.const 64))   ;; PC = 64
+      ;; push PC
+      (call $push (i32.load16_u (i32.const 0x0a)))
+      ;; PC = 0x38 + irq * 8
+      (i32.store16
+        (i32.const 0x0a)
+        (i32.add (i32.const 56) (i32.shl (local.get $irq) (i32.const 3))))
       (call $tick)
       (br $ppu-tick)
 
@@ -634,7 +655,7 @@
 
       end $k  ;; reti
         (local.set $~cond (i32.const 0))
-        (global.set $IME (i32.const 1))
+        (global.set $IME (i32.const 3))
         ;; fallthrough
 
       end $l  ;; ret / ret <cond>
@@ -696,7 +717,9 @@
         (br $ppu)
 
       end $r  ;; di / ei
-        (global.set $IME (i32.eq (local.get $opcode) (i32.const 0xfb)))
+        (global.set $IME
+          (i32.mul (i32.eq (local.get $opcode) (i32.const 0xfb))
+                   (i32.const 3)))
         (br $ppu)
 
       end $s  ;; ld hl, sp + i8 / add sp, i8
@@ -836,12 +859,13 @@
       (local.set $prev-cycles
         (i32.sub (global.get $cycles) (local.get $prev-cycles)))
       ;; update DIV register
-      (i32.store16 (i32.const 0xff03)
+      (i32.store16 offset=0x03 (global.get $ff00)
         (i32.add
-          (i32.load16_u (i32.const 0xff03))
+          (i32.load16_u offset=0x03 (global.get $ff00))
           (local.get $prev-cycles)))
       loop $loop
-        (if $done (i32.and (local.tee $lcdc (i32.load8_u (i32.const 0xff40)))
+        (if $done (i32.and (local.tee $lcdc
+                             (i32.load8_u offset=0x40 (global.get $ff00)))
                            (i32.const 128))
           (then
             (global.set $ppu-dot (i32.add (global.get $ppu-dot) (i32.const 1)))
@@ -849,7 +873,8 @@
             (br_if $done (i32.ne (global.get $ppu-dot) (i32.const 456)))
 
             ;; finished a scanline
-            (if (i32.lt_u (local.tee $ly (i32.load8_u (i32.const 0xff44)))
+            (if (i32.lt_u (local.tee $ly
+                            (i32.load8_u offset=0x44 (global.get $ff00)))
                           (i32.const 144))
               (then
                 ;; loop through all pixels this line
@@ -865,24 +890,27 @@
                           (i32.eqz (i32.and (local.get $lcdc) (i32.const 32)))
                           (i32.lt_s
                             (local.tee $y
-                              (i32.sub (local.get $ly)
-                                       (i32.load8_u (i32.const 0xff4a))))
+                              (i32.sub
+                                (local.get $ly)
+                                (i32.load8_u offset=0x4a (global.get $ff00))))
                             (i32.const 0)))
                         (i32.lt_s
                           (local.tee $x
                             (i32.add
                               (i32.sub
                                 (local.get $tmp)
-                                (i32.load8_u (i32.const 0xff4b)))
+                                (i32.load8_u offset=0x4b (global.get $ff00)))
                               (i32.const 7)))
                           (i32.const 0))))
                     (then
                       ;; x = tmp + mem[0xff43]
                       ;; y = ly + mem[0xff42]
                       (local.set $x
-                        (i32.add (local.get $tmp) (i32.load8_u (i32.const 0xff43))))
+                        (i32.add (local.get $tmp)
+                                 (i32.load8_u offset=0x43 (global.get $ff00))))
                       (local.set $y
-                        (i32.add (local.get $ly) (i32.load8_u (i32.const 0xff42))))))
+                        (i32.add (local.get $ly)
+                                 (i32.load8_u offset=0x42 (global.get $ff00))))))
 
                   (local.set $palette-index (i32.const 0))
                   (local.set $tile
@@ -1041,20 +1069,43 @@
                       (local.tee $tmp (i32.sub (local.get $tmp) (i32.const 1)))
                       (i32.const 0))))))
 
-            (i32.store8 (i32.const 0xff44)
+            (i32.store8 offset=0x44 (global.get $ff00)
               (i32.rem_u
                 (i32.add (local.get $ly) (i32.const 1))
                 (i32.const 154)))
             (global.set $ppu-dot (i32.const 0))
 
+            ;; if LY=LYC and the enable bit is set, then trigger a STAT
+            ;; interrupt
+            (if (i32.and
+                  (local.tee $ly=lyc
+                    (i32.eq (local.get $ly)
+                            (i32.load8_u offset=0x45 (global.get $ff00))))
+                  (i32.and
+                    (i32.shr_u
+                      (local.tee $STAT
+                        (i32.load8_u offset=0x41 (global.get $ff00)))
+                      (i32.const 6))
+                    (i32.const 1)))
+              (then
+                (i32.store8 offset=0x0f (global.get $ff00)
+                            (i32.or (local.get $IF) (i32.const 2)))))
+
+            ;; set/reset the LY=LYC bit
+            (i32.store8 offset=0x41 (global.get $ff00)
+              (i32.or (i32.and (local.get $STAT) (i32.const 0xfd))
+                      (i32.shl (local.get $ly=lyc) (i32.const 1))))
+
             ;; finished a frame
             (if (i32.eq (local.get $ly) (i32.const 143))
               (then
                 ;; IF = 1
-                (i32.store8 (i32.const 0xff0f) (i32.const 1))
+                (i32.store8 offset=0x0f
+                  (global.get $ff00)
+                  (i32.or (local.get $IF) (i32.const 1)))
                 (return))))
           (else
-            (i32.store8 (i32.const 0xff44) (i32.const 0))
+            (i32.store8 offset=0x44 (global.get $ff00) (i32.const 0))
             (global.set $ppu-dot (i32.const 0))))
 
         (br_if $loop

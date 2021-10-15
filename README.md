@@ -78,7 +78,7 @@ different emojis. [**2662 bytes**]
 
 ## BadGB
 
-A very simple gameboy emulator that only plays a few games. [**2987 bytes**]
+A very simple gameboy emulator that only plays a few games. [**3047 bytes**]
 
 [Demo!][22]
 
