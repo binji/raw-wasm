@@ -1,11 +1,150 @@
 <!DOCTYPE html>
 <head>
   <style>
+    body {
+      position: absolute;
+      display: flex;
+      background-color: #eee;
+      margin: 0;
+      width: 100%;
+      height: 100%;
+      flex-direction: column;
+      font-family: monospace;
+    }
+    .config-wrapper {
+    }
+    .config {
+      width: 100%;
+      height: 100%;
+    }
+    .track-wrapper {
+      overflow: auto;
+    }
+    .track {
+      width: 100%;
+      height: 100%;
+    }
+    .cell {
+      display: flex;
+      flex-direction: row;
+    }
+    .note { flex: 1; }
+    .ins { flex: 1; }
+    .fx { flex: 1; }
+    .hl { background-color: blue; color: white; }
   </style>
 </head>
 <body>
-  <button id="play">play</button>
+  <div class="config-wrapper">
+    <div class="config">
+      <button id="play">play</button>
+      <table>
+        <tr>
+          <th>song</th>
+          <td id="song"></td>
+        </tr>
+        <tr>
+          <th>pattern</th>
+          <td id="pattern">0</td>
+        </tr>
+      </table>
+    </div>
+  </div>
+  <div class="track-wrapper">
+    <table class="track">
+    </table>
+  </div>
+
   <script>
+    let mem, dv;
+
+    const numIns = 31;
+    const numRows = 64;
+    const dec = new TextDecoder();
+    let numChannels = 0, pattern = 0, row = 0;
+
+    function getString(offset, len) {
+      const buf = new Uint8Array(mem.buffer, offset, len);
+      return dec.decode(buf).replace(/\0*$/, '');
+    }
+
+    function init(c) {
+      numChannels = c;
+
+      document.querySelector('#song').textContent = getString(0x10000, 20);
+      const configTableEl = document.querySelector('.config table');
+      {
+        let offset = 0x10014;
+
+        for (let ins = 0; ins < numIns; ++ins) {
+          const comment = getString(offset, 22);
+          if (comment) {
+            const trEl = document.createElement('tr');
+            const thEl = document.createElement('th');
+            thEl.textContent = `${ins}`;
+            trEl.appendChild(thEl);
+
+            const tdEl = document.createElement('td');
+            tdEl.textContent = getString(offset, 22);
+            trEl.appendChild(tdEl);
+            offset += 30;
+            configTableEl.appendChild(trEl);
+          }
+        }
+      }
+
+      const trackEl = document.querySelector('.track');
+      {
+        const theadEl = document.createElement('thead');
+        let thEl = document.createElement('th');
+        thEl.textContent = 'row';
+        theadEl.appendChild(thEl);
+
+        for (let ch = 0; ch < numChannels; ++ch) {
+          const thEl = document.createElement('th');
+          thEl.textContent = `ch${ch + 1}`;
+          theadEl.appendChild(thEl);
+        }
+        trackEl.appendChild(theadEl);
+      }
+      {
+        const tbodyEl = document.createElement('tbody');
+        for (let row = 0; row < numRows; ++row) {
+          const trEl = document.createElement('tr');
+          const thEl = document.createElement('th');
+          thEl.textContent = `${row}`;
+          trEl.appendChild(thEl);
+          trEl.classList.add(`row${row}`);
+
+          for (let ch = 0; ch < numChannels; ++ch) {
+            const tdEl = document.createElement('td');
+            const divEl = document.createElement('div');
+            divEl.classList.add('cell', `ch${ch}`, `row${row}`)
+
+            const noteEl = document.createElement('div');
+            noteEl.classList.add('note');
+            noteEl.textContent = 'C-2';
+
+            const insEl = document.createElement('div');
+            insEl.classList.add('ins');
+            insEl.textContent = '00';
+
+            const fxEl = document.createElement('div');
+            fxEl.classList.add('fx');
+            fxEl.textContent = 'C20';
+
+            divEl.appendChild(noteEl);
+            divEl.appendChild(insEl);
+            divEl.appendChild(fxEl);
+            tdEl.appendChild(divEl);
+            trEl.appendChild(tdEl);
+          }
+          tbodyEl.appendChild(trEl);
+        }
+        trackEl.appendChild(tbodyEl);
+      }
+    }
+
     const AUDIO_FRAMES = 4096;
     let module;
     (async function() {
@@ -20,7 +159,86 @@
       start(bytes);
     });
 
-    const log = x => console.log(x);
+    const notes = {
+      0: '',
+      856: 'C-1',
+      808: 'C#-1',
+      762: 'D-1',
+      720: 'D#-1',
+      678: 'E-1',
+      640: 'F-1',
+      604: 'F#-1',
+      570: 'G-1',
+      538: 'G#-1',
+      508: 'A-1',
+      480: 'A#-1',
+      453: 'B-1',
+      428: 'C-2',
+      404: 'C#-2',
+      381: 'D-2',
+      360: 'D#-2',
+      339: 'E-2',
+      320: 'F-2',
+      302: 'F#-2',
+      285: 'G-2',
+      269: 'G#-2',
+      254: 'A-2',
+      240: 'A#-2',
+      226: 'B-2',
+      214: 'C-3',
+      202: 'C#-3',
+      190: 'D-3',
+      180: 'D#-3',
+      170: 'E-3',
+      160: 'F-3',
+      151: 'F#-3',
+      143: 'G-3',
+      135: 'G#-3',
+      127: 'A-3',
+      120: 'A#-3',
+      113: 'B-3',
+    };
+
+    const hex = x => x.toString(16).toUpperCase();
+    const hex2 = x => hex(x).padStart(2, '0');
+
+    function newPattern(p) {
+      document.querySelector('#pattern').textContent = p;
+      pattern = p;
+      let offset = 0x1043c + (dv.getUint8(0x103b8 + p) * 64) * numChannels * 4;
+      for (let row = 0; row < numRows; ++row) {
+        for (let ch = 0; ch < numChannels; ++ch) {
+          const key = ((dv.getUint8(offset) & 0xf) << 8) | dv.getUint8(offset + 1);
+          const ins = (dv.getUint8(offset + 2) >> 4) | dv.getUint8(offset) & 0x10;
+          const effect = dv.getUint8(offset + 2) & 0xf;
+          const param = dv.getUint8(offset + 3);
+
+          const el = document.querySelector(`.cell.ch${ch}.row${row}`);
+          const noteEl = el.querySelector('.note');
+          const insEl = el.querySelector('.ins');
+          const fxEl = el.querySelector('.fx');
+
+          if (notes[key])   { noteEl.textContent = notes[key]; }
+          if (ins !== 0)    { insEl.textContent = hex2(ins); }
+          if (effect !== 0) { fxEl.textContent = `${hex(effect)}${hex2(param)}`; }
+
+          offset += 4;
+        }
+      }
+    }
+
+    function newRow(r) {
+      row = r;
+      for (let el of document.querySelectorAll('.hl')) {
+        el.classList.remove('hl');
+      }
+      for (let el of document.querySelectorAll(`.row${row}`)) {
+        el.classList.add('hl');
+      }
+      document.querySelector(`tr.row${row}`).scrollIntoView({
+        block: 'center',
+      });
+    }
 
     async function start(modBytes) {
       const ctx = new AudioContext;
@@ -30,24 +248,32 @@
       const data = new Uint8Array(mem.buffer, 0x10000);
       data.set(new Uint8Array(modBytes));
 
-      const imports = {'': {rate: ctx.sampleRate, log, mem}};
+      const imports = {'': {rate: ctx.sampleRate, init, newPattern, newRow, mem}};
       const instance = await WebAssembly.instantiate(module, imports);
       const exports = instance.exports;
 
-      const channel0 = new Float32Array(mem.buffer, AUDIO_FRAMES, 1024);
-      const channel1 = new Float32Array(mem.buffer, AUDIO_FRAMES, 1024 + AUDIO_FRAMES);
+      const channel0 = new Float32Array(mem.buffer, 0x1000, AUDIO_FRAMES);
+      const channel1 = new Float32Array(mem.buffer, 0x1000 + AUDIO_FRAMES*4, AUDIO_FRAMES);
+
+      let startSec = ctx.currentTime;
 
       (function update() {
+        const bufferSec = AUDIO_FRAMES / ctx.sampleRate;
         requestAnimationFrame(update);
-        const buffer = ctx.createBuffer(2, AUDIO_FRAMES, ctx.sampleRate);
-        const bufferSource = ctx.createBufferSource();
 
-        bufferSource.buffer = buffer;
-        // bufferSource.connect(Audio.ctx.destination);
-        // bufferSource.start(this.startSec);
-        // const bufferSec = AUDIO_FRAMES / this.sampleRate;
-        // this.startSec += bufferSec;
-        exports.run(AUDIO_FRAMES);
+        if (ctx.currentTime + bufferSec > startSec) {
+          exports.run(AUDIO_FRAMES);
+
+          const buffer = ctx.createBuffer(2, AUDIO_FRAMES, ctx.sampleRate);
+          buffer.copyToChannel(channel0, 0);
+          buffer.copyToChannel(channel1, 1);
+
+          const bufferSource = ctx.createBufferSource();
+          bufferSource.buffer = buffer;
+          bufferSource.connect(ctx.destination);
+          bufferSource.start(startSec);
+          startSec += bufferSec;
+        }
       })();
     };
   </script>
