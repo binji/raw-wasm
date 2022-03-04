@@ -8,9 +8,10 @@
 ;; [0x1043c .. ???????]  pattern data
 
 (import "" "rate" (global $sample-rate i32))
-(import "" "init" (func $init (param i32)))
+(import "" "init" (func $init (param i32 i32)))
 (import "" "newPattern" (func $new-pattern (param i32)))
 (import "" "newRow" (func $new-row (param i32)))
+(import "" "log" (func $log (param i32)))
 (import "" "mem" (memory 1))
 (global $song-length (mut i32) (i32.const 0))
 (global $num-channels (mut i32) (i32.const 0))
@@ -42,6 +43,7 @@
   ;; calculate number of channels
   (local $channel i32)
   (local $channel-end i32)
+  (local $channel-idx i32)
   (local $i i32)
   (local $j i32)
   (local $order-entry i32)
@@ -83,7 +85,7 @@
       (i32.load8_u (;local.get $channel;))
       (i32.lt_u (local.get $channel) (i32.const 59))))
 
-  (call $init (global.get $num-channels))
+  (call $init (global.get $num-channels) (global.get $num-patterns))
 
   ;; calculate sample info
   (local.set $sample-data (i32.add (i32.const 0x1043c)
@@ -134,6 +136,8 @@
             (i32.const 0x7f)))
         (i32.gt_u (local.get $volume) (i32.const 64))))
 
+    (call $log (local.get $sample-data))
+
     (i32.store (local.get $j) (local.get $sample-data))
     (f32.store offset=4 (local.get $j) (f32.convert_i32_u (local.get $loop-start)))
     (f32.store offset=8 (local.get $j) (f32.convert_i32_u (local.get $loop-length)))
@@ -172,14 +176,28 @@
   (local.set $channel (i32.const 0x275))
   (local.set $channel-end (i32.add (local.get $channel) (i32.mul (global.get $num-channels) (i32.const 52))))
   (loop $channel
+    ;; set channel id
     (i32.store8 offset=36 (local.get $channel)
-      (i32.div_u
-        (i32.sub
-          (local.get $channel)
-          (i32.const 0x275))
-        (i32.const 52)))
-    (br_if $channel (i32.lt_u (local.tee $channel (i32.add (local.get $channel) (i32.const 52)))
-                              (local.get $channel-end))))
+      (local.tee $channel-idx
+        (i32.div_u
+          (i32.sub
+            (local.get $channel)
+            (i32.const 0x275))
+          (i32.const 52))))
+    ;; set panning (channel 0,3 => 0; 1,2 => 127)
+    (i32.store8 offset=34 (local.get $channel)
+      (select
+        (i32.const 0)
+        (i32.const 127)
+        (i32.lt_u
+          (i32.and
+            (i32.add (local.get $channel-idx) (i32.const 1))
+            (i32.const 3))
+          (i32.const 2))))
+    (br_if $channel
+      (i32.lt_u (local.tee $channel
+                  (i32.add (local.get $channel) (i32.const 52)))
+                (local.get $channel-end))))
 
   (call $sequence-tick)
 )
@@ -227,7 +245,17 @@
 
           (global.set $pattern (global.get $break-pattern))
           (call $new-pattern (global.get $pattern))
-          ;; TODO: channel pattern loop
+
+          ;; clear pl-row for each channel
+          (local.set $channel (i32.const 0x275))
+          (loop $channel
+            (i32.store8 offset=38 (local.get $channel) (i32.const 0))
+            (br_if $channel
+              (i32.lt_u (local.tee $channel
+                          (i32.add (local.get $channel) (i32.const 52)))
+                        (local.get $channel-end))))
+
+          (local.set $channel (i32.const 0x275))
           (global.set $break-pattern (i32.const -1))))
 
       (global.set $row (global.get $next-row))
@@ -332,7 +360,7 @@
           (br_table $X $X  $X  $3 $4  $X $6   $7 $8 $X $X  $b   $c $d $X  $f
                     $X $11 $12 $X $14 $X $16 $17 $X $X $1a $1b $1c $X $1e $X
                     (local.get $effect))
-        end $1e
+        end $1e ;; pattern delay
           (global.set $tick
             (i32.add
               (global.get $speed)
@@ -363,7 +391,7 @@
                   (local.get $param)))
               (i32.gt_s (local.get $volume) (i32.const 64))))
           br $X
-        end $17
+        end $17 ;; set tremolo waveform
           unreachable
         end $16 ;; pattern loop
           (if (i32.eqz (local.get $param))
@@ -391,9 +419,21 @@
                       (global.get $pl-count)
                       (i32.const 1)))))))
           br $X
-        end $14
-        end $12
-          unreachable
+        end $14 ;; set vibrato waveform
+          (if (i32.lt_s (local.get $param) (i32.const 8))
+            (then
+              (i32.store8 offset=40 (local.get $channel) (local.get $param))))
+          br $X
+        end $12 ;; fine portamento down
+          (i32.store16 offset=24 (local.get $channel)
+            (select
+              (i32.const 65535)
+              (local.tee $period
+                (i32.add
+                  (i32.load16_u offset=24 (local.get $channel))
+                  (local.get $param)))
+              (i32.gt_s (local.get $period) (i32.const 65535))))
+          br $X
         end $11 ;; fine portamento up
           (i32.store16 offset=24 (local.get $channel)
             (select
@@ -438,15 +478,27 @@
               (local.get $param)
               (i32.gt_s (local.get $param) (i32.const 64))))
           br $X
-        end $b
+        end $b ;; pattern jump
           (if (i32.lt_s (global.get $pl-count) (i32.const 0))
             (then
               (global.set $break-pattern (local.get $param))
               (global.set $next-row (i32.const 0))))
           br $X
-        end $8
-        end $7
+        end $8 ;; set panning
           unreachable
+        end $7 ;; tremolo
+          (if (i32.gt_s
+                (local.tee $param' (i32.shr_u (local.get $param) (i32.const 4)))
+                (i32.const 0))
+            (then
+              (i32.store8 offset=47 (local.get $channel) (local.get $param'))))
+          (if (i32.gt_s
+                (local.tee $param' (i32.and (local.get $param) (i32.const 0xf)))
+                (i32.const 0))
+            (then
+              (i32.store8 offset=48 (local.get $channel) (local.get $param'))))
+          (call $tremolo (local.get $channel))
+          br $X
         end $6 ;; vibrato + volume slide
           (call $vibrato (local.get $channel))
           br $X
@@ -506,7 +558,7 @@
             (then
               (call $trigger (local.get $channel))))
           br $X
-        end $1c
+        end $1c ;; note cut
           (if (i32.eq (local.get $param) (local.get $fx-count))
             (then
               (i32.store8 offset=33 (local.get $channel) (i32.const 0))))
@@ -538,8 +590,13 @@
         end $a ;; volume slide
           (call $volume-slide (local.get $channel) (local.get $param))
           br $X
-        end $7
-          unreachable
+        end $7 ;; tremolo
+          (i32.store8 offset=46 (local.get $channel)
+            (i32.add
+              (i32.load8_u offset=46 (local.get $channel))
+              (i32.load8_u offset=47 (local.get $channel))))
+          (call $tremolo (local.get $channel))
+          br $X
         end $6 ;; vibrato + volume slide
           ;; TODO: combine with 0x4
           (i32.store8 offset=41 (local.get $channel)
@@ -642,6 +699,17 @@
           (i32.load8_u offset=40 (local.get $channel)))
         (i32.load8_u offset=43 (local.get $channel)))
       (i32.const 7)))
+)
+
+(func $tremolo (param $channel i32)
+  (i32.store8 offset=49 (local.get $channel)
+    (i32.shr_u
+      (i32.mul
+        (call $waveform
+          (i32.load8_u offset=46 (local.get $channel))
+          (i32.load8_u offset=45 (local.get $channel)))
+        (i32.load8_u offset=48 (local.get $channel)))
+      (i32.const 6)))
 )
 
 (func $waveform (param $phase i32) (param $type i32) (result i32)
@@ -852,6 +920,7 @@
   (local $left-ampl f32)
   (local $right-ampl f32)
   (local $ampl f32)
+  (local $panning f32)
   (local $loop-length f32)
   (local $loop-end f32)
 
@@ -879,13 +948,26 @@
           (f32.load offset=4 (local.tee $instrument-ptr (i32.load (local.get $channel))))
           (local.tee $loop-length
             (f32.load offset=8 (local.get $instrument-ptr)))))
-      ;; TODO: chan->mute, chan->panning
-      (local.set $left-ampl (f32.load offset=20 (local.get $channel)))
-      (local.set $right-ampl (local.get $left-ampl))
+      ;; TODO: chan->mute
+      (local.set $right-ampl
+        (f32.mul
+          (local.tee $panning
+            (f32.div
+              (f32.convert_i32_u (i32.load8_u offset=34 (local.get $channel)))
+              (f32.const 127)))
+          (local.tee $ampl (f32.load offset=20 (local.get $channel)))))
+      (local.set $left-ampl
+        (f32.mul
+          (f32.sub (f32.const 1) (local.get $panning))
+          (local.get $ampl)))
+
       (local.set $sample-data (i32.load (local.get $instrument-ptr)))
 
       (block $exit-buffer
-        (br_if $exit-buffer (i32.eqz (local.get $instrument-ptr)))
+        (br_if $exit-buffer
+          (i32.or
+            (i32.eqz (local.get $instrument-ptr))
+            (i32.ge_u (local.get $buf-idx) (local.get $buf-end))))
 
         (loop $buffer
           ;; loop the sample idx
@@ -898,7 +980,8 @@
 
               ;; Subtract loop-length until within loop points.
               ;; TODO: Use fmod here?
-              (br_if $exit-if (f32.lt (local.get $sample-idx) (local.get $loop-end)))
+              (br_if $exit-if
+                (f32.lt (local.get $sample-idx) (local.get $loop-end)))
               (loop $loop
                 (local.set $sample-idx
                   (f32.sub (local.get $sample-idx) (local.get $loop-length)))
@@ -917,6 +1000,9 @@
 
           ;; write each sample
           (loop $sample
+            (br_if $exit-buffer (i32.ge_u (local.get $buf-idx) (local.get $buf-end)))
+            (br_if $buffer (f32.ge (local.get $sample-idx) (local.get $sample-end)))
+
             (local.set $ampl
               (f32.div
                 (f32.convert_i32_s
@@ -925,16 +1011,21 @@
                 (f32.const 128)))
             (local.set $buf-idx*4 (i32.shl (local.get $buf-idx) (i32.const 2)))
 
+            ;;
             ;; (if (i32.eq (local.get $channel) (i32.const 0x275)) (then
+            ;;
 
             (f32.store offset=0x1000 (local.get $buf-idx*4) (f32.add (f32.load offset=0x1000 (local.get $buf-idx*4)) (f32.mul (local.get $right-ampl) (local.get $ampl))))
             (f32.store offset=0x5000 (local.get $buf-idx*4) (f32.add (f32.load offset=0x5000 (local.get $buf-idx*4)) (f32.mul (local.get $left-ampl) (local.get $ampl))))
 
+            ;;
             ;; ))
+            ;;
 
             (local.set $buf-idx (i32.add (local.get $buf-idx) (i32.const 1)))
-            (br_if $sample (f32.lt (local.tee $sample-idx (f32.add (local.get $sample-idx) (local.get $sample-step)))
-                                   (local.get $sample-end))))
+            (local.set $sample-idx
+              (f32.add (local.get $sample-idx) (local.get $sample-step)))
+            (br $sample))
 
           ;; continue until the buffer is filled
           (br_if $buffer (i32.lt_u (local.get $buf-idx) (local.get $buf-end)))))
@@ -942,8 +1033,10 @@
       ;; update sample index
       (f32.store offset=12 (local.get $channel) (local.get $sample-idx))
 
-      (br_if $channel (i32.lt_u (local.tee $channel (i32.add (local.get $channel) (i32.const 52)))
-                                (local.get $channel-end))))
+      (br_if $channel
+        (i32.lt_u
+          (local.tee $channel (i32.add (local.get $channel) (i32.const 52)))
+          (local.get $channel-end))))
 
     ;; update tick offset, if needed then handle a sequence tick
     (global.set $tick-offset (i32.add (global.get $tick-offset) (local.get $remain)))

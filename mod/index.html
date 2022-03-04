@@ -62,13 +62,14 @@
     const numRows = 64;
     const dec = new TextDecoder();
     let numChannels = 0, pattern = 0, row = 0;
+    const rowEls = [];
 
     function getString(offset, len) {
       const buf = new Uint8Array(mem.buffer, offset, len);
       return dec.decode(buf).replace(/\0*$/, '');
     }
 
-    function init(c) {
+    function init(c, p) {
       numChannels = c;
 
       document.querySelector('#song').textContent = getString(0x10000, 20);
@@ -116,6 +117,7 @@
           trEl.appendChild(thEl);
           trEl.classList.add(`row${row}`);
 
+          const channelEls = [];
           for (let ch = 0; ch < numChannels; ++ch) {
             const tdEl = document.createElement('td');
             const divEl = document.createElement('div');
@@ -138,8 +140,10 @@
             divEl.appendChild(fxEl);
             tdEl.appendChild(divEl);
             trEl.appendChild(tdEl);
+            channelEls.push({div: divEl, note:noteEl, ins:insEl, fx:fxEl});
           }
           tbodyEl.appendChild(trEl);
+          rowEls.push(channelEls);
         }
         trackEl.appendChild(tbodyEl);
       }
@@ -154,7 +158,8 @@
     })();
 
     play.addEventListener('click', async event => {
-      let response = await fetch('space_debris.mod');
+//      let response = await fetch('space_debris.mod');
+      let response = await fetch('eightbm_tove_janssons_groove.mod');
       let bytes = await response.arrayBuffer();
       start(bytes);
     });
@@ -213,14 +218,14 @@
           const effect = dv.getUint8(offset + 2) & 0xf;
           const param = dv.getUint8(offset + 3);
 
-          const el = document.querySelector(`.cell.ch${ch}.row${row}`);
-          const noteEl = el.querySelector('.note');
-          const insEl = el.querySelector('.ins');
-          const fxEl = el.querySelector('.fx');
+          const el = rowEls[row][ch];
+          const noteEl = el.note;
+          const insEl = el.ins;
+          const fxEl = el.fx;
 
-          if (notes[key])   { noteEl.textContent = notes[key]; }
-          if (ins !== 0)    { insEl.textContent = hex2(ins); }
-          if (effect !== 0) { fxEl.textContent = `${hex(effect)}${hex2(param)}`; }
+          noteEl.textContent = notes[key];
+          insEl.textContent = ins ? hex2(ins) : '-';
+          fxEl.textContent = effect ? `${hex(effect)}${hex2(param)}` : '---';
 
           offset += 4;
         }
@@ -228,17 +233,17 @@
     }
 
     function newRow(r) {
+      for (let ch = 0; ch < numChannels; ++ch) {
+        rowEls[row][ch].div.classList.remove('hl');
+        rowEls[r][ch].div.classList.add('hl');
+      }
       row = r;
-      for (let el of document.querySelectorAll('.hl')) {
-        el.classList.remove('hl');
-      }
-      for (let el of document.querySelectorAll(`.row${row}`)) {
-        el.classList.add('hl');
-      }
-      document.querySelector(`tr.row${row}`).scrollIntoView({
+      rowEls[r][0].div.scrollIntoView({
         block: 'center',
-      });
+      })
     }
+
+    const log = x => { console.log(x.toString(16)); };
 
     async function start(modBytes) {
       const ctx = new AudioContext;
@@ -248,7 +253,7 @@
       const data = new Uint8Array(mem.buffer, 0x10000);
       data.set(new Uint8Array(modBytes));
 
-      const imports = {'': {rate: ctx.sampleRate, init, newPattern, newRow, mem}};
+      const imports = {'': {rate: ctx.sampleRate, init, log, newPattern, newRow, mem}};
       const instance = await WebAssembly.instantiate(module, imports);
       const exports = instance.exports;
 
