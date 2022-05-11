@@ -9,9 +9,8 @@
 
 (import "" "rate" (global $sample-rate i32))
 (import "" "init" (func $init (param i32 i32)))
-(import "" "newPattern" (func $new-pattern (param i32)))
-(import "" "newRow" (func $new-row (param i32)))
-(import "" "log" (func $log (param i32)))
+(import "" "draw" (func $draw (param (;pattern;) i32 (;row;) i32)))
+;;(import "" "log" (func $log (param i32)))
 (import "" "mem" (memory 1))
 (global $song-length (mut i32) (i32.const 0))
 (global $num-channels (mut i32) (i32.const 0))
@@ -136,8 +135,6 @@
             (i32.const 0x7f)))
         (i32.gt_u (local.get $volume) (i32.const 64))))
 
-    (call $log (local.get $sample-data))
-
     (i32.store (local.get $j) (local.get $sample-data))
     (f32.store offset=4 (local.get $j) (f32.convert_i32_u (local.get $loop-start)))
     (f32.store offset=8 (local.get $j) (f32.convert_i32_u (local.get $loop-length)))
@@ -244,7 +241,6 @@
               (global.set $next-row (i32.const 0))))
 
           (global.set $pattern (global.get $break-pattern))
-          (call $new-pattern (global.get $pattern))
 
           ;; clear pl-row for each channel
           (local.set $channel (i32.const 0x275))
@@ -259,7 +255,7 @@
           (global.set $break-pattern (i32.const -1))))
 
       (global.set $row (global.get $next-row))
-      (call $new-row (global.get $row))
+      (call $draw (global.get $pattern) (global.get $row))
 
       (global.set $next-row (i32.add (global.get $row) (i32.const 1)))
       (if (i32.ge_u (global.get $next-row) (i32.const 64))
@@ -532,9 +528,9 @@
         (local.set $param (i32.load8_u offset=32 (local.get $channel)))
         ;; fx-count++
         (i32.store8 offset=39 (local.get $channel)
-          (i32.add (local.get $fx-count) (i32.const 1)))
+          (local.tee $fx-count
+            (i32.add (i32.load8_u offset=39 (local.get $channel)) (i32.const 1))))
 
-        (local.set $fx-count (i32.load8_u offset=39 (local.get $channel)))
         (local.set $period (i32.load16_u offset=24 (local.get $channel)))
 
         block $X

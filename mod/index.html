@@ -4,282 +4,213 @@
     body {
       position: absolute;
       display: flex;
+      flex-direction: column;
       background-color: #eee;
       margin: 0;
       width: 100%;
       height: 100%;
-      flex-direction: column;
-      font-family: monospace;
+      user-select: none;
+      -webkit-user-select: none;
     }
-    .config-wrapper {
-    }
-    .config {
-      width: 100%;
-      height: 100%;
-    }
-    .track-wrapper {
-      overflow: auto;
-    }
-    .track {
-      width: 100%;
-      height: 100%;
-    }
-    .cell {
+    .wrapper {
       display: flex;
-      flex-direction: row;
+      flex-direction: column;
+      position: absolute;
+      width: 100%;
+      height: 100%;
     }
-    .note { flex: 1; }
-    .ins { flex: 1; }
-    .fx { flex: 1; }
-    .hl { background-color: blue; color: white; }
+    canvas {
+      object-fit: contain;
+      image-rendering: pixelated;
+      image-rendering: crisp-edges;
+    }
   </style>
 </head>
 <body>
-  <div class="config-wrapper">
-    <div class="config">
-      <button id="play">play</button>
-      <table>
-        <tr>
-          <th>song</th>
-          <td id="song"></td>
-        </tr>
-        <tr>
-          <th>pattern</th>
-          <td id="pattern">0</td>
-        </tr>
-      </table>
-    </div>
-  </div>
-  <div class="track-wrapper">
-    <table class="track">
-    </table>
+  <div class="wrapper">
+    <canvas width="600" height="600"></canvas>
+    <button id="play">play</button>
   </div>
 
   <script>
-    let mem, dv;
-
-    const numIns = 31;
-    const numRows = 64;
-    const dec = new TextDecoder();
-    let numChannels = 0, pattern = 0, row = 0;
-    const rowEls = [];
-
-    function getString(offset, len) {
-      const buf = new Uint8Array(mem.buffer, offset, len);
-      return dec.decode(buf).replace(/\0*$/, '');
-    }
-
-    function init(c, p) {
-      numChannels = c;
-
-      document.querySelector('#song').textContent = getString(0x10000, 20);
-      const configTableEl = document.querySelector('.config table');
-      {
-        let offset = 0x10014;
-
-        for (let ins = 0; ins < numIns; ++ins) {
-          const comment = getString(offset, 22);
-          if (comment) {
-            const trEl = document.createElement('tr');
-            const thEl = document.createElement('th');
-            thEl.textContent = `${ins}`;
-            trEl.appendChild(thEl);
-
-            const tdEl = document.createElement('td');
-            tdEl.textContent = getString(offset, 22);
-            trEl.appendChild(tdEl);
-            offset += 30;
-            configTableEl.appendChild(trEl);
-          }
-        }
-      }
-
-      const trackEl = document.querySelector('.track');
-      {
-        const theadEl = document.createElement('thead');
-        let thEl = document.createElement('th');
-        thEl.textContent = 'row';
-        theadEl.appendChild(thEl);
-
-        for (let ch = 0; ch < numChannels; ++ch) {
-          const thEl = document.createElement('th');
-          thEl.textContent = `ch${ch + 1}`;
-          theadEl.appendChild(thEl);
-        }
-        trackEl.appendChild(theadEl);
-      }
-      {
-        const tbodyEl = document.createElement('tbody');
-        for (let row = 0; row < numRows; ++row) {
-          const trEl = document.createElement('tr');
-          const thEl = document.createElement('th');
-          thEl.textContent = `${row}`;
-          trEl.appendChild(thEl);
-          trEl.classList.add(`row${row}`);
-
-          const channelEls = [];
-          for (let ch = 0; ch < numChannels; ++ch) {
-            const tdEl = document.createElement('td');
-            const divEl = document.createElement('div');
-            divEl.classList.add('cell', `ch${ch}`, `row${row}`)
-
-            const noteEl = document.createElement('div');
-            noteEl.classList.add('note');
-            noteEl.textContent = 'C-2';
-
-            const insEl = document.createElement('div');
-            insEl.classList.add('ins');
-            insEl.textContent = '00';
-
-            const fxEl = document.createElement('div');
-            fxEl.classList.add('fx');
-            fxEl.textContent = 'C20';
-
-            divEl.appendChild(noteEl);
-            divEl.appendChild(insEl);
-            divEl.appendChild(fxEl);
-            tdEl.appendChild(divEl);
-            trEl.appendChild(tdEl);
-            channelEls.push({div: divEl, note:noteEl, ins:insEl, fx:fxEl});
-          }
-          tbodyEl.appendChild(trEl);
-          rowEls.push(channelEls);
-        }
-        trackEl.appendChild(tbodyEl);
-      }
-    }
+    const $ = document.querySelector.bind(document);
+    const canvasEl = $('canvas');
+    const playEl = $('#play');
+    const w = canvasEl.width|0, h = canvasEl.height|0;
+    const ctx2d = canvasEl.getContext('2d');
+    const audio = new AudioContext;
 
     const AUDIO_FRAMES = 4096;
-    let module;
-    (async function() {
-      let response = await fetch('mod.wasm');
-      let bytes = await response.arrayBuffer();
-      module = await WebAssembly.compile(bytes);
+    const fontSize = 16;
+
+    let dv, node;
+    let numChannels;
+    let started = false, playing = false, drawQueued = false;
+    let pattern, row;
+
+    let initialized = (async function() {
+      module = await WebAssembly.compile(
+            await (await fetch('mod.wasm')).arrayBuffer());
+
+      await audio.audioWorklet.addModule('worklet.js');
+      node = new AudioWorkletNode(audio, 'player', {
+        numberOfInputs: 0,
+        numberOfOutputs: 1,
+        outputChannelCount: [2],
+        processorOptions: {sampleRate: audio.sampleRate, module}
+      });
+      node.port.onmessage = e => {
+        switch (e.data.msg) {
+          case 'init': init(e.data.channels); break;
+          case 'draw': draw(e.data.pattern, e.data.row); break;
+        }
+        console.log(e.data);
+      };
     })();
 
-    play.addEventListener('click', async event => {
-//      let response = await fetch('space_debris.mod');
-      let response = await fetch('eightbm_tove_janssons_groove.mod');
-      let bytes = await response.arrayBuffer();
-      start(bytes);
+    async function load(name) {
+      let [_, response] = await Promise.all([initialized, await fetch(name)]);
+      const file = await response.arrayBuffer();
+      dv = new DataView(file);
+      node.port.postMessage({msg: 'load', file});
+    }
+
+    const songs = [
+      /*  0 */ '2a03fox-ida_first.mod',
+      /*  1 */ 'adkd_-_absalon_junction.mod',
+      /*  2 */ 'adkd_-_solitary_work.mod',
+      /*  3 */ 'atariklang_4k.mod',
+      /*  4 */ 'back_to_the_past.mod',
+      /*  5 */ 'backwithavengeance!.mod',
+      /*  6 */ 'bonefish_and_mygg_-_brofists.mod',
+      /*  7 */ 'calcpreculation.mod',
+      /*  8 */ 'clairvoy.mod',
+      /*  9 */ 'comatron_-_d4wn.mod',
+      /* 10 */ 'cream_of_the_earth.mod',
+      /* 11 */ 'dascon_-_begrenzt_viruzid.mod',
+      /* 12 */ 'eightbm_the_new_republic_cafe.mod',
+      /* 13 */ 'eightbm_tove_janssons_groove.mod',
+      /* 14 */ 'enigma.mod',
+      /* 15 */ 'essai_sawwave_01v06.mod',
+      /* 16 */ 'gouafhg_-_chucky_diagrom_anthem.mod',
+      /* 17 */ 'GSLINGER.MOD',
+      /* 18 */ 'josss_-_distortion.mod',
+      /* 19 */ 'lazydayz.mod',
+      /* 20 */ 'maze_-_virtual_disco_chip.mod',
+      /* 21 */ 'moby_and_ra_-_bud_rap.mod',
+      /* 22 */ 'robyn_and_dhr2_-_fashion_statement.mod',
+      /* 23 */ 'seaoflov.mod',
+      /* 24 */ 'space_debris.mod',
+      /* 25 */ 'triace_-_12_bars_-_all_closed.mod',
+      /* 26 */ 'virgill_and_slimey_-_the_codewizard.mod',
+      /* 27 */ 'virgill_-_cherry_coke.mod',
+    ];
+    load(`mods/${songs[1]}`);
+
+    playEl.addEventListener('click', _ => {
+      // Wait to connect on user action.
+      if (!started) {
+        started = true;
+        audio.resume();
+        node.connect(audio.destination);
+      }
+      playing = !playing;
+      node.port.postMessage({msg: 'play', value: playing});
+      playEl.textContent = playing ? 'pause' : 'play';
     });
 
-    const notes = {
-      0: '',
-      856: 'C-1',
-      808: 'C#-1',
-      762: 'D-1',
-      720: 'D#-1',
-      678: 'E-1',
-      640: 'F-1',
-      604: 'F#-1',
-      570: 'G-1',
-      538: 'G#-1',
-      508: 'A-1',
-      480: 'A#-1',
-      453: 'B-1',
-      428: 'C-2',
-      404: 'C#-2',
-      381: 'D-2',
-      360: 'D#-2',
-      339: 'E-2',
-      320: 'F-2',
-      302: 'F#-2',
-      285: 'G-2',
-      269: 'G#-2',
-      254: 'A-2',
-      240: 'A#-2',
-      226: 'B-2',
-      214: 'C-3',
-      202: 'C#-3',
-      190: 'D-3',
-      180: 'D#-3',
-      170: 'E-3',
-      160: 'F-3',
-      151: 'F#-3',
-      143: 'G-3',
-      135: 'G#-3',
-      127: 'A-3',
-      120: 'A#-3',
-      113: 'B-3',
-    };
+    function init(channels) {
+      const decoder = new TextDecoder();
+      function getString(offset, len) {
+        const buf = new Uint8Array(dv.buffer, offset, len);
+        return decoder.decode(buf).replace(/\0*$/, '');
+      }
 
-    const hex = x => x.toString(16).toUpperCase();
-    const hex2 = x => hex(x).padStart(2, '0');
+      numChannels = channels;
 
-    function newPattern(p) {
-      document.querySelector('#pattern').textContent = p;
+      ctx2d.font = `${fontSize}px monospace`;
+      ctx2d.fillStyle = '#111';
+      ctx2d.fillRect(0, 0, w, h);
+
+      ctx2d.fillStyle = 'white';
+      ctx2d.fillText(getString(0, 20), 0, fontSize);
+
+      const numIns = 31;
+      for (let ins = 0; ins < numIns; ++ins) {
+        const comment = getString(0x14 + ins * 30, 22);
+        let x = 0, y = fontSize * (ins + 2);
+        if (ins >= 15) {
+          x = fontSize * 23;
+          y -= 16 * fontSize;
+        }
+        ctx2d.fillText(`${(ins+1+'').padStart(2, ' ')}: ${comment}`, x, y);
+      }
+    }
+
+    function draw(p, r) {
       pattern = p;
-      let offset = 0x1043c + (dv.getUint8(0x103b8 + p) * 64) * numChannels * 4;
-      for (let row = 0; row < numRows; ++row) {
-        for (let ch = 0; ch < numChannels; ++ch) {
-          const key = ((dv.getUint8(offset) & 0xf) << 8) | dv.getUint8(offset + 1);
-          const ins = (dv.getUint8(offset + 2) >> 4) | dv.getUint8(offset) & 0x10;
-          const effect = dv.getUint8(offset + 2) & 0xf;
-          const param = dv.getUint8(offset + 3);
-
-          const el = rowEls[row][ch];
-          const noteEl = el.note;
-          const insEl = el.ins;
-          const fxEl = el.fx;
-
-          noteEl.textContent = notes[key];
-          insEl.textContent = ins ? hex2(ins) : '-';
-          fxEl.textContent = effect ? `${hex(effect)}${hex2(param)}` : '---';
-
-          offset += 4;
-        }
-      }
-    }
-
-    function newRow(r) {
-      for (let ch = 0; ch < numChannels; ++ch) {
-        rowEls[row][ch].div.classList.remove('hl');
-        rowEls[r][ch].div.classList.add('hl');
-      }
       row = r;
-      rowEls[r][0].div.scrollIntoView({
-        block: 'center',
-      })
-    }
+      if (drawQueued) return;
+      drawQueued = true;
 
-    const log = x => { console.log(x.toString(16)); };
+      requestAnimationFrame(() => {
+        drawQueued = false;
+        const notes = {
+          0:"",856:"C-1 ",808:"C#-1",762:"D-1 ",720:"D#-1",678:"E-1 ",640:"F-1 ",
+          604:"F#-1",570:"G-1 ",538:"G#-1",508:"A-1 ",480:"A#-1",453:"B-1 ",
+          428:"C-2 ",404:"C#-2",381:"D-2 ",360:"D#-2",339:"E-2 ",320:"F-2 ",
+          302:"F#-2",285:"G-2 ",269:"G#-2",254:"A-2 ",240:"A#-2",226:"B-2 ",
+          214:"C-3 ",202:"C#-3",190:"D-3 ",180:"D#-3",170:"E-3 ",160:"F-3 ",
+          151:"F#-3",143:"G-3 ",135:"G#-3",127:"A-3 ",120:"A#-3",113:"B-3 ",
+        };
 
-    async function start(modBytes) {
-      const ctx = new AudioContext;
+        const hex = x => x.toString(16).toUpperCase();
+        const hex2 = x => hex(x).padStart(2, '0');
+        const numRows = 64;
+        const visRows = Math.floor(h / fontSize) - 16;
 
-      mem = new WebAssembly.Memory({initial: 1 + Math.ceil(modBytes.byteLength / 65536)});
-      dv = new DataView(mem.buffer);
-      const data = new Uint8Array(mem.buffer, 0x10000);
-      data.set(new Uint8Array(modBytes));
+        ctx2d.fillStyle = '#111';
+        ctx2d.fillRect(0, 16*fontSize, w, h-16*fontSize);
 
-      const imports = {'': {rate: ctx.sampleRate, init, log, newPattern, newRow, mem}};
-      const instance = await WebAssembly.instantiate(module, imports);
-      const exports = instance.exports;
-
-      const channel0 = new Float32Array(mem.buffer, 0x1000, AUDIO_FRAMES);
-      const channel1 = new Float32Array(mem.buffer, 0x1000 + AUDIO_FRAMES*4, AUDIO_FRAMES);
-
-      let startSec = ctx.currentTime;
-
-      (function update() {
-        const bufferSec = AUDIO_FRAMES / ctx.sampleRate;
-        requestAnimationFrame(update);
-
-        if (ctx.currentTime + bufferSec > startSec) {
-          exports.run(AUDIO_FRAMES);
-
-          const buffer = ctx.createBuffer(2, AUDIO_FRAMES, ctx.sampleRate);
-          buffer.copyToChannel(channel0, 0);
-          buffer.copyToChannel(channel1, 1);
-
-          const bufferSource = ctx.createBufferSource();
-          bufferSource.buffer = buffer;
-          bufferSource.connect(ctx.destination);
-          bufferSource.start(startSec);
-          startSec += bufferSec;
+        ctx2d.fillStyle = 'white';
+        let startRow = row - Math.floor(visRows / 2), endRow = startRow + visRows;
+        if (startRow < 0) {
+          startRow = 0;
+          endRow = visRows;
+        } else if (endRow >= numRows) {
+          endRow = numRows;
+          startRow = endRow - visRows;
         }
-      })();
-    };
+
+        let offset = 0x43c +
+              (dv.getUint8(0x3b8 + pattern) * 64 + startRow) * numChannels * 4;
+        for (let r = startRow; r < endRow; ++r) {
+          const y = (17 + r - startRow) * fontSize;
+          if (r == row) {
+            ctx2d.fillRect(0, y - fontSize, w, fontSize);
+            ctx2d.fillStyle = '#111';
+          }
+          ctx2d.fillText(hex2(r), 0, y);
+
+          for (let ch = 0; ch < numChannels; ++ch) {
+            const key = dv.getUint16(offset) & 0xfff;
+            const ins = (dv.getUint8(offset + 2) >> 4) | dv.getUint8(offset) & 0x10;
+            const effect = dv.getUint8(offset + 2) & 0xf;
+            const param = dv.getUint8(offset + 3);
+
+            const noteText = key ? notes[key] : '----';
+            const insText = ins ? hex2(ins) : '  ';
+            const effectText = effect ? hex(effect)+hex2(param): '---';
+            const x = (2 + ch * 9) * fontSize;
+            ctx2d.fillText(`${noteText} ${insText} ${effectText}`, x, y);
+            offset += 4;
+          }
+
+          if (r == row) {
+            ctx2d.fillStyle = 'white';
+          }
+        }
+      });
+    }
   </script>
 </body>
