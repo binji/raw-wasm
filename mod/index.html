@@ -42,6 +42,7 @@
 
     const AUDIO_FRAMES = 4096;
     const fontSize = 16;
+    let fontWidth = 0, fontHeight = 0, fontDescender = 0;
 
     let dv, node;
     let numChannels;
@@ -64,7 +65,6 @@
           case 'init': init(e.data.channels); break;
           case 'draw': draw(e.data.pattern, e.data.row); break;
         }
-        console.log(e.data);
       };
     })();
 
@@ -105,7 +105,7 @@
       /* 26 */ 'virgill_and_slimey_-_the_codewizard.mod',
       /* 27 */ 'virgill_-_cherry_coke.mod',
     ];
-    load(`mods/${songs[1]}`);
+    load(`mods/${songs[22]}`);
 
     playEl.addEventListener('click', _ => {
       // Wait to connect on user action.
@@ -129,19 +129,23 @@
       numChannels = channels;
 
       ctx2d.font = `${fontSize}px monospace`;
+      fontWidth = ctx2d.measureText('A').width;
+      fontDescender = ctx2d.measureText('g').fontBoundingBoxDescent;
+      fontHeight = fontSize;
+
       ctx2d.fillStyle = '#111';
       ctx2d.fillRect(0, 0, w, h);
 
       ctx2d.fillStyle = 'white';
-      ctx2d.fillText(getString(0, 20), 0, fontSize);
+      ctx2d.fillText(getString(0, 20), 0, fontHeight);
 
       const numIns = 31;
       for (let ins = 0; ins < numIns; ++ins) {
         const comment = getString(0x14 + ins * 30, 22);
-        let x = 0, y = fontSize * (ins + 2);
+        let x = 0, y = fontHeight * (ins + 2);
         if (ins >= 15) {
-          x = fontSize * 23;
-          y -= 16 * fontSize;
+          x = fontWidth * (4 + 22 + 1);
+          y -= 16 * fontHeight;
         }
         ctx2d.fillText(`${(ins+1+'').padStart(2, ' ')}: ${comment}`, x, y);
       }
@@ -167,10 +171,11 @@
         const hex = x => x.toString(16).toUpperCase();
         const hex2 = x => hex(x).padStart(2, '0');
         const numRows = 64;
-        const visRows = Math.floor(h / fontSize) - 16;
+        const visRows = Math.floor(h / fontHeight) - 16;
+        const trackerTop = 16 * fontHeight + fontDescender;
 
         ctx2d.fillStyle = '#111';
-        ctx2d.fillRect(0, 16*fontSize, w, h-16*fontSize);
+        ctx2d.fillRect(0, trackerTop, w, h - trackerTop);
 
         ctx2d.fillStyle = 'white';
         let startRow = row - Math.floor(visRows / 2), endRow = startRow + visRows;
@@ -185,9 +190,9 @@
         let offset = 0x43c +
               (dv.getUint8(0x3b8 + pattern) * 64 + startRow) * numChannels * 4;
         for (let r = startRow; r < endRow; ++r) {
-          const y = (17 + r - startRow) * fontSize;
+          const y = (17 + r - startRow) * fontHeight + fontDescender;
           if (r == row) {
-            ctx2d.fillRect(0, y - fontSize, w, fontSize);
+            ctx2d.fillRect(0, y - fontHeight, w, fontHeight);
             ctx2d.fillStyle = '#111';
           }
           ctx2d.fillText(hex2(r), 0, y);
@@ -201,7 +206,7 @@
             const noteText = key ? notes[key] : '----';
             const insText = ins ? hex2(ins) : '  ';
             const effectText = effect ? hex(effect)+hex2(param): '---';
-            const x = (2 + ch * 9) * fontSize;
+            const x = (3 + ch * (5 + 3 + 4)) * fontWidth;
             ctx2d.fillText(`${noteText} ${insText} ${effectText}`, x, y);
             offset += 4;
           }
