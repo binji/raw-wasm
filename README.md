@@ -14,6 +14,14 @@ An implementation of the Doom fire effect described in
 
 [Demo!][2]
 
+## JIT
+
+A *very* simple expression compiler using the [Shunting Yard algorithm][23].
+It parses an infix expression, compiles it to WebAssembly, then copies
+the generated function into the original WebAssembly module. [**449 bytes**]
+
+[Demo!][24]
+
 ## Metaball
 
 An implementation of the metaball effect described in [Jamie Wong's blog][3],
@@ -104,3 +112,5 @@ A very simple gameboy emulator that only plays a few games. [**3072 bytes**]
 [20]: https://en.wikipedia.org/?title=Match-3&redirect=no
 [21]: https://binji.github.io/raw-wasm/match3
 [22]: https://binji.github.io/raw-wasm/badgb
+[23]: https://en.wikipedia.org/wiki/Shunting_yard_algorithm
+[24]: https://binji.github.io/raw-wasm/jit
