@@ -70,6 +70,8 @@
     <div class="controls-wrapper bborder">
       <div class="config">
         <button id="play">play</button>
+        <select id="select">
+        </select>
         <table>
           <tr>
             <th>song</th>
@@ -96,6 +98,7 @@
   <script>
     const $ = document.querySelector.bind(document);
     const playEl = $('#play');
+    const selectEl = $('#select');
     const audio = new AudioContext;
 
     const AUDIO_FRAMES = 4096;
@@ -108,7 +111,7 @@
     let numChannels;
     let started = false, playing = false;
     let pattern = 0, row = 0;
-    const rowEls = [];
+    let rowEls = [];
 
     let initialized = (async function() {
       module = await WebAssembly.compile(
@@ -137,36 +140,98 @@
     }
 
     const songs = [
-      /*  0 */ '2a03fox-ida_first.mod',
-      /*  1 */ 'adkd_-_absalon_junction.mod',
-      /*  2 */ 'adkd_-_solitary_work.mod',
-      /*  3 */ 'atariklang_4k.mod',
-      /*  4 */ 'back_to_the_past.mod',
-      /*  5 */ 'backwithavengeance!.mod',
-      /*  6 */ 'bonefish_and_mygg_-_brofists.mod',
-      /*  7 */ 'calcpreculation.mod',
-      /*  8 */ 'clairvoy.mod',
-      /*  9 */ 'comatron_-_d4wn.mod',
-      /* 10 */ 'cream_of_the_earth.mod',
-      /* 11 */ 'dascon_-_begrenzt_viruzid.mod',
-      /* 12 */ 'eightbm_the_new_republic_cafe.mod',
-      /* 13 */ 'eightbm_tove_janssons_groove.mod',
-      /* 14 */ 'enigma.mod',
-      /* 15 */ 'essai_sawwave_01v06.mod',
-      /* 16 */ 'gouafhg_-_chucky_diagrom_anthem.mod',
-      /* 17 */ 'GSLINGER.MOD',
-      /* 18 */ 'josss_-_distortion.mod',
-      /* 19 */ 'lazydayz.mod',
-      /* 20 */ 'maze_-_virtual_disco_chip.mod',
-      /* 21 */ 'moby_and_ra_-_bud_rap.mod',
-      /* 22 */ 'robyn_and_dhr2_-_fashion_statement.mod',
-      /* 23 */ 'seaoflov.mod',
-      /* 24 */ 'space_debris.mod',
-      /* 25 */ 'triace_-_12_bars_-_all_closed.mod',
-      /* 26 */ 'virgill_and_slimey_-_the_codewizard.mod',
-      /* 27 */ 'virgill_-_cherry_coke.mod',
+      '2a03fox-ida_first.mod',
+      '95-ravers-megamix.mod',
+      'GSLINGER.MOD',
+      'adkd_-_absalon_junction.mod',
+      'adkd_-_resting.mod',
+      'adkd_-_solitary_work.mod',
+      'apocalypse_1.mod',
+      'assassin_-_do-not-press.mod',
+      'atariklang_4k.mod',
+      'back_again.mod',
+      'back_to_the_past.mod',
+      'backwithavengeance!.mod',
+      'ballada.mod',
+      'bananasplit.mod',
+      'beyond_music.mod',
+      'bombastic-968.mod',
+      'bonefish_and_mygg_-_brofists.mod',
+      'calcpreculation.mod',
+      'clairvoy.mod',
+      'comatron_-_d4wn.mod',
+      'conqueror_of_virgins.mod',
+      'cream_of_the_earth.mod',
+      'curt_cool_-_diskthief.mod',
+      'dascon_-_begrenzt_viruzid.mod',
+      'echoing.mod',
+      'eightbm_the_new_republic_cafe.mod',
+      'eightbm_tove_janssons_groove.mod',
+      'eleganten.mod',
+      'enigma.mod',
+      'entertainer.mod',
+      'essai_sawwave_01v06.mod',
+      'etro.mod',
+      'giel.mod',
+      'gmz.mod',
+      'gouafhg_-_chucky_diagrom_anthem.mod',
+      'h0ffman_-_technova.mod',
+      'hoffman_and_daytripper_-_professional_tracker.mod',
+      'hymn_to_aurora.mod',
+      'josss_-_churrasco.mod',
+      'josss_-_distortion.mod',
+      'josss_-_greased_machine.mod',
+      'josss_-_khromical_science.mod',
+      'josss_-_sunny_soul.mod',
+      'kayoto.mod',
+      'lazydayz.mod',
+      'liqube_-_persuadertron.mod',
+      'maze_-_virtual_disco_chip.mod',
+      'moby_and_ra_-_bud_rap.mod',
+      'mrs_beanbag_-_its_a_holiday.mod',
+      'orbit_lex_nine9.mod',
+      'overture.mod',
+      'physical_presence.mod',
+      'radix-rainy_summerdays.mod',
+      'raiden_-_claustrophobic_effect.mod',
+      'random_voice_-_monday.mod',
+      'robyn_and_dhr2_-_fashion_statement.mod',
+      'scrambld.mod',
+      'seaoflov.mod',
+      'slaze_-_the_ark_of_untruths.mod',
+      'space_debris.mod',
+      'stardstm.mod',
+      'subi_-_wreckonciled.mod',
+      'syphus_-_olden_days.mod',
+      'szudi_-_prestige.mod',
+      'tempest-acidjazz.mod',
+      'tilbury_fair.mod',
+      'triace_-_12_bars_-_all_closed.mod',
+      'ufo_tune.mod',
+      'virgill_-_cherry_coke.mod',
+      'virgill_and_slimey_-_the_codewizard.mod',
+      'wizardry.mod',
+      'xtd-ride.mod',
+      'xtd_-_revision_x.mod',
+      'zedsdead.mod',
     ];
-    load(`mods/${songs[27]}`);
+    load(`mods/${songs[0]}`);
+
+    for (let i = 0; i < songs.length; ++i) {
+      const optionEl = document.createElement('option');
+      if (i === 0) {
+        optionEl.selected = true;
+      }
+      optionEl.textContent = songs[i];
+      optionEl.value = i;
+      selectEl.appendChild(optionEl);
+    }
+
+    function setPlaying(newPlaying) {
+      playing = newPlaying;
+      node.port.postMessage({msg: 'play', value: playing});
+      playEl.textContent = playing ? 'pause' : 'play';
+    }
 
     playEl.addEventListener('click', _ => {
       // Wait to connect on user action.
@@ -175,9 +240,12 @@
         audio.resume();
         node.connect(audio.destination);
       }
-      playing = !playing;
-      node.port.postMessage({msg: 'play', value: playing});
-      playEl.textContent = playing ? 'pause' : 'play';
+      setPlaying(!playing);
+    });
+
+    selectEl.addEventListener('change', event => {
+      setPlaying(false);
+      load(`mods/${songs[event.target.value]}`);
     });
 
     function init(channels) {
@@ -191,6 +259,8 @@
 
       document.querySelector('#song').textContent = getString(0, 20);
       const infoTableEl = document.querySelector('.info table');
+      infoTableEl.innerHTML = '';
+
       const numInsRows = Math.ceil(numIns / numInsCols);
       for (let row = 0; row < numInsRows; ++row) {
         const trEl = document.createElement('tr');
@@ -207,6 +277,7 @@
       }
 
       const trackEl = document.querySelector('.track');
+      trackEl.innerHTML = '';
       {
         const theadEl = document.createElement('thead');
         let thEl = document.createElement('th');
@@ -221,6 +292,7 @@
         trackEl.appendChild(theadEl);
       }
 
+      rowEls = [];
       {
         const tbodyEl = document.createElement('tbody');
         for (let row = 0; row < numRows; ++row) {
