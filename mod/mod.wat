@@ -481,7 +481,13 @@
               (global.set $next-row (i32.const 0))))
           br $X
         end $8 ;; set panning
-          unreachable
+          (br_if $X (i32.eq (global.get $num-channels) (i32.const 4)))
+          (i32.store8 offset=34 (local.get $channel)
+            (select
+              (local.get $param)
+              (i32.const 127)
+              (i32.lt_s (local.get $param) (i32.const 128))))
+          br $X
         end $7 ;; tremolo
           (if (i32.gt_s
                 (local.tee $param' (i32.shr_u (local.get $param) (i32.const 4)))
