@@ -10,25 +10,23 @@ https://github.com/chrismaltby/gb-studio/blob/v2beta/appData/js-emulator/index.h
   <link rel="stylesheet" href="index.css">
 </head>
 <body>
-  <div>
-    <div id="game">
-      <canvas width="160" height="144"></canvas>
-    </div>
-    <button id="load" class="capsuleBtn">Load</button>
-    <div id="gp">
-      <div id="gp_dpad">
-        <div id="gp_left"></div>
-        <div id="gp_right"></div>
-        <div id="gp_up"></div>
-        <div id="gp_down"></div>
-      </div>
-      <div id="gp_select" class="capsuleBtn">Select</div>
-      <div id="gp_start" class="capsuleBtn">Start</div>
-      <div id="gp_b" class="roundBtn">B</div>
-      <div id="gp_a" class="roundBtn">A</div>
-    </div>
-    <input type="file" id="openfile" hidden>
+  <div id="game">
+    <canvas width="160" height="144"></canvas>
   </div>
+  <button id="load" class="capsuleBtn">Load</button>
+  <div id="gp">
+    <div id="gp_dpad">
+      <div id="gp_left"></div>
+      <div id="gp_right"></div>
+      <div id="gp_up"></div>
+      <div id="gp_down"></div>
+    </div>
+    <div id="gp_select" class="capsuleBtn">Select</div>
+    <div id="gp_start" class="capsuleBtn">Start</div>
+    <div id="gp_b" class="roundBtn">B</div>
+    <div id="gp_a" class="roundBtn">A</div>
+  </div>
+  <input type="file" id="openfile" hidden>
 
   <script>
     const $ = document.querySelector.bind(document);
