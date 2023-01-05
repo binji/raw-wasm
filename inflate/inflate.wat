@@ -430,7 +430,7 @@
       ;; Otherwise the code is a back-reference...
       ;; First, calculate the length.
       (local.set $min (i32.const 3))
-      (local.set $max (i32.const 29))
+      (local.set $max (i32.const 28))
       (local.set $shift (i32.const 2))
       (local.set $code (i32.sub (local.get $code) (i32.const 257)))
       (br $calc-length-dist)

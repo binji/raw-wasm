@@ -11,6 +11,7 @@ const examples = [
   {name:'tm.txt.gz', skip:17},
   {name:'inflate.wat.gz', skip:22},
   {name:'fixed.gz', skip:19},
+  {name:'helloworl.z', skip:0},
 ];
 
 const example = examples[0];
