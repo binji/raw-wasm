@@ -26,8 +26,8 @@
 (global $next-row (mut i32) (i32.const 0))
 (global $tick (mut i32) (i32.const 1))
 (global $speed (mut i32) (i32.const 6))
-(global $pl-count (mut i32) (i32.const 0))
-(global $pl-channel (mut i32) (i32.const 0))
+(global $pl-count (mut i32) (i32.const -1))
+(global $pl-channel (mut i32) (i32.const -1))
 (global $random-seed (mut i32) (i32.const 0))
 
 (func $read16be_2x (param $addr i32) (result i32)
@@ -38,10 +38,19 @@
     (i32.const 1))
 )
 
+(func $i32_clamp0_s (param $x i32) (param $max i32) (result i32)
+  (select
+    (i32.const 0)
+    (select
+      (local.get $max)
+      (local.get $x)
+      (i32.gt_s (local.get $x) (local.get $max)))
+    (i32.lt_s (local.get $x) (i32.const 0)))
+)
+
 (func $start
   ;; calculate number of channels
   (local $channel i32)
-  (local $channel-end i32)
   (local $channel-idx i32)
   (local $i i32)
   (local $j i32)
@@ -51,7 +60,6 @@
   (local $loop-start i32)
   (local $loop-length i32)
   (local $fine-tune i32)
-  (local $volume i32)
 
   ;; calculate number of patterns
   (local.set $i (i32.const 0x103b8))
@@ -115,8 +123,11 @@
         (local.set $loop-start (local.get $sample-length))
         (local.set $loop-length (i32.const 0))))
 
-    ;; Read fine-tune as [0,15], convert to [-8,7].
-    (local.set $fine-tune
+    (i32.store (local.get $j) (local.get $sample-data))
+    (f32.store offset=4 (local.get $j) (f32.convert_i32_u (local.get $loop-start)))
+    (f32.store offset=8 (local.get $j) (f32.convert_i32_u (local.get $loop-length)))
+    (i32.store8 offset=12 (local.get $j)
+      ;; Read fine-tune as [0,15], convert to [-8,7].
       (i32.add
         (i32.sub
           (i32.and
@@ -125,21 +136,12 @@
             (i32.const 7))
           (i32.and (local.get $fine-tune) (i32.const 8)))
         (i32.const 8)))
-
-    (local.set $volume
-      (select
-        (i32.const 64)
-        (local.tee $volume
-          (i32.and
-            (i32.load8_u offset=15 (local.get $i))
-            (i32.const 0x7f)))
-        (i32.gt_u (local.get $volume) (i32.const 64))))
-
-    (i32.store (local.get $j) (local.get $sample-data))
-    (f32.store offset=4 (local.get $j) (f32.convert_i32_u (local.get $loop-start)))
-    (f32.store offset=8 (local.get $j) (f32.convert_i32_u (local.get $loop-length)))
-    (i32.store8 offset=12 (local.get $j) (local.get $fine-tune))
-    (i32.store8 offset=13 (local.get $j) (local.get $volume))
+    (i32.store8 offset=13 (local.get $j)
+      (call $i32_clamp0_s
+        (i32.and
+          (i32.load8_u offset=15 (local.get $i))
+          (i32.const 0x7f))
+        (i32.const 64)))
 
     (local.set $sample-data (i32.add (local.get $sample-data) (local.get $sample-length)))
     (local.set $j (i32.add (local.get $j) (i32.const 14)))
@@ -148,54 +150,42 @@
 
   (global.set $c2-rate
     (select
-      (i32.const 8363)
-      (i32.const 8287)
+      (i32.const 3579364)
+      (i32.const 3546836)
       (i32.gt_u (global.get $num-channels) (i32.const 4))))
   (global.set $gain
     (f32.mul
       (global.get $gain)
-      (select
-        (f32.const 1)
-        (f32.const 2)
-        (i32.gt_u (global.get $num-channels) (i32.const 4)))))
+      (f32.convert_i32_u
+        (i32.add
+          (i32.le_u (global.get $num-channels) (i32.const 4))
+          (i32.const 1)))))
 
-  ;; next_row = 0
-  ;; TODO: remove? Already 0
-  (global.set $next-row (i32.const 0))
-  ;; tick = 1
-  (global.set $tick (i32.const 1))
-  ;; speed = 6
-  (global.set $speed (i32.const 6))
-  (global.set $tick-len
-    (i32.div_u (i32.mul (global.get $sample-rate) (i32.const 5)) (i32.const 250)))
-  (global.set $pl-count (i32.const -1))
-  (global.set $pl-channel (i32.const -1))
+  ;; (global.set $next-row (i32.const 0))
+  ;; (global.set $tick (i32.const 1))
+  ;; (global.set $speed (i32.const 6))
+  (global.set $tick-len (i32.div_u (global.get $sample-rate) (i32.const 50)))
+  ;; (global.set $pl-count (i32.const -1))
+  ;; (global.set $pl-channel (i32.const -1))
 
   (local.set $channel (i32.const 0x275))
-  (local.set $channel-end (i32.add (local.get $channel) (i32.mul (global.get $num-channels) (i32.const 52))))
   (loop $channel
     ;; set channel id
-    (i32.store8 offset=36 (local.get $channel)
-      (local.tee $channel-idx
-        (i32.div_u
-          (i32.sub
-            (local.get $channel)
-            (i32.const 0x275))
-          (i32.const 52))))
+    (i32.store8 offset=36 (local.get $channel) (local.get $channel-idx))
+    
     ;; set panning (channel 0,3 => 0; 1,2 => 127)
     (i32.store8 offset=34 (local.get $channel)
-      (select
-        (i32.const 0)
+      (i32.mul
         (i32.const 127)
-        (i32.lt_u
+        (i32.ge_u
           (i32.and
-            (i32.add (local.get $channel-idx) (i32.const 1))
+            (local.tee $channel-idx
+              (i32.add (local.get $channel-idx) (i32.const 1)))
             (i32.const 3))
           (i32.const 2))))
+    (local.set $channel (i32.add (local.get $channel) (i32.const 52)))
     (br_if $channel
-      (i32.lt_u (local.tee $channel
-                  (i32.add (local.get $channel) (i32.const 52)))
-                (local.get $channel-end))))
+      (i32.lt_u (local.get $channel-idx) (global.get $num-channels))))
 
   (call $sequence-tick)
 )
@@ -203,15 +193,16 @@
 
 (func $sequence-tick
   (local $channel-end i32)
+  (local $tick<0 i32)
   (local $pattern-offset i32)
   (local $channel i32)
   (local $pat0 i32)
-  (local $pat1 i32)
   (local $pat2 i32)
   (local $effect i32)
   (local $param i32)
-  (local $param' i32)
-  (local $volume i32)
+  (local $param-lo i32)
+  (local $param-hi i32)
+  (local $-param i32)
   (local $fx-count i32)
   (local $period i32)
 
@@ -219,7 +210,7 @@
   (local.set $channel-end (i32.add (local.get $channel) (i32.mul (global.get $num-channels) (i32.const 52))))
 
   (global.set $tick (i32.sub (global.get $tick) (i32.const 1)))
-  (if (i32.le_s (global.get $tick) (i32.const 0))
+  (if (local.tee $tick<0 (i32.le_s (global.get $tick) (i32.const 0)))
     (then
       (global.set $tick (global.get $speed))
 
@@ -239,7 +230,6 @@
           (global.set $pattern (global.get $break-pattern))
 
           ;; clear pl-row for each channel
-          (local.set $channel (i32.const 0x275))
           (loop $channel
             (i32.store8 offset=38 (local.get $channel) (i32.const 0))
             (br_if $channel
@@ -263,379 +253,377 @@
           (i32.mul
             (i32.mul
               (i32.add
-                (i32.mul
+                (i32.shl
                   (i32.load8_u offset=0x103b8 (global.get $pattern))
-                  (i32.const 64))
+                  (i32.const 6))
                 (global.get $row))
               (global.get $num-channels))
             (i32.const 4))
-          (i32.const 0x1043c)))
+          (i32.const 0x1043c)))))
 
-      (loop $channel
-        ;; set note-key
-        (i32.store16 offset=28 (local.get $channel)
-          (i32.or
-            (i32.shl
-              (i32.and
-                (local.tee $pat0 (i32.load8_u (local.get $pattern-offset)))
-                (i32.const 0xf))
-              (i32.const 8))
-            (i32.load8_u offset=1 (local.get $pattern-offset))))
-
-        ;; set note-instrument
-        (i32.store8 offset=30 (local.get $channel)
-          (i32.or
-            (i32.shr_u
-              (local.tee $pat2 (i32.load8_u offset=2 (local.get $pattern-offset)))
-              (i32.const 4))
-            (i32.and (local.get $pat0) (i32.const 0x10))))
-        ;; set note-effect
-        (local.set $effect (i32.and (local.get $pat2) (i32.const 0xf)))
-        ;; set note-param
-        (local.set $param (i32.load8_u offset=3 (local.get $pattern-offset)))
-
-        (local.set $pattern-offset (i32.add (local.get $pattern-offset) (i32.const 4)))
-
-        ;; Convert extend effects (0xE) into 0x1Y
-        (if (i32.eq (local.get $effect) (i32.const 0xE))
-          (then
-            (local.set $effect
-              (i32.or (i32.const 0x10) (i32.shr_u (local.get $param) (i32.const 4))))
-            (local.set $param (i32.and (local.get $param) (i32.const 0xf)))))
-
-        ;; Convert effect 0 to effect 0xE
-        (if (i32.and (i32.eqz (local.get $effect))
-                     (i32.gt_s (local.get $param) (i32.const 0)))
-          (then
-            (local.set $effect (i32.const 0xE))))
-
-        (i32.store8 offset=31 (local.get $channel) (local.get $effect))
-        (i32.store8 offset=32 (local.get $channel) (local.get $param))
-
-        ;; channel row
-
-        ;; TODO: Move these variables so they can be cleared with one i32 write
-        ;; fx-count = 0
-        (i32.store8 offset=39 (local.get $channel) (i32.const 0))
-        ;; vibrato_add = 0
-        (i32.store8 offset=44 (local.get $channel) (i32.const 0))
-        ;; tremolo_add = 0
-        (i32.store8 offset=49 (local.get $channel) (i32.const 0))
-        ;; arpeggio_add = 0
-        (i32.store8 offset=50 (local.get $channel) (i32.const 0))
-
-        ;; If it's not a note delay, trigger the note.
-        (if (i32.eqz (i32.and (i32.eq (local.get $effect) (i32.const 0x1d))
-                              (i32.gt_s (local.get $param) (i32.const 0))))
-          (then
-            (call $trigger (local.get $channel))))
-
-        block $X
-        block $3
-        block $6
-        block $4
-        block $7
-        block $8
-        block $b
-        block $c
-        block $d
-        block $f
-        block $11
-        block $12
-        block $14
-        block $16
-        block $17
-        block $1a
-        block $1b
-        block $1c
-        block $1e
-          (br_table $X $X  $X  $3 $4  $X $6   $7 $8 $X $X  $b   $c $d $X  $f
-                    $X $11 $12 $X $14 $X $16 $17 $X $X $1a $1b $1c $X $1e $X
-                    (local.get $effect))
-        end $1e ;; pattern delay
-          (global.set $tick
-            (i32.add
-              (global.get $speed)
-              (i32.mul (global.get $speed) (local.get $param))))
-          br $X
-        end $1c ;; note cut
-          (br_if $X (i32.gt_s (local.get $param) (i32.const 0)))
-          (i32.store8 offset=33 (local.get $channel) (i32.const 0))
-          br $X
-        end $1b ;; fine volume down
-          (i32.store8 offset=33 (local.get $channel)
-            (select
-              (i32.const 0)
-              (local.tee $volume
-                (i32.sub
-                  (i32.load8_u offset=33 (local.get $channel))
-                  (local.get $param)))
-              (i32.lt_s (local.get $volume) (i32.const 0))))
-          br $X
-        end $1a ;; fine volume up
-          (i32.store8 offset=33 (local.get $channel)
-            (select
-              (i32.const 64)
-              (local.tee $volume
-                (i32.add
-                  (i32.load8_u offset=33 (local.get $channel))
-                  (local.get $param)))
-              (i32.gt_s (local.get $volume) (i32.const 64))))
-          br $X
-        end $17 ;; set tremolo waveform
-          unreachable
-        end $16 ;; pattern loop
-          (if (i32.eqz (local.get $param))
-            (then
-              (i32.store8 offset=38 (local.get $channel) (global.get $row))))
-
-          (br_if $X
+    (loop $channel
+      block $X
+      (if (local.get $tick<0)
+        (then
+          ;; set note-key
+          (i32.store16 offset=28 (local.get $channel)
             (i32.or
-              (i32.ge_s
-                (i32.load8_u offset=38 (local.get $channel))
-                (global.get $row))
-              (i32.ge_s (global.get $break-pattern) (i32.const 0))))
+              (i32.shl
+                (i32.and
+                  (local.tee $pat0 (i32.load8_u (local.get $pattern-offset)))
+                  (i32.const 0xf))
+                (i32.const 8))
+              (i32.load8_u offset=1 (local.get $pattern-offset))))
 
-          (if (i32.lt_s (global.get $pl-count) (i32.const 0))
-            (then
-              (global.set $pl-count (local.get $param))
-              (global.set $pl-channel (i32.load8_u offset=36 (local.get $channel)))))
-          (br_if $X
-            (i32.ne (global.get $pl-channel)
-                    (i32.load8_u offset=36 (local.get $channel))))
-          (if (i32.eqz (global.get $pl-count))
-            (then
-              (i32.store8 offset=38 (local.get $channel)
-                (i32.add (global.get $row) (i32.const 1))))
-            (else
-              (global.set $next-row (i32.load8_u offset=38 (local.get $channel)))))
-          (global.set $pl-count
-            (i32.sub
-              (global.get $pl-count)
-              (i32.const 1)))
-          br $X
-        end $14 ;; set vibrato waveform
-          (br_if $X (i32.ge_s (local.get $param) (i32.const 8)))
-          (i32.store8 offset=40 (local.get $channel) (local.get $param))
-          br $X
-        end $12 ;; fine portamento down
-          (i32.store16 offset=24 (local.get $channel)
-            (select
-              (i32.const 65535)
-              (local.tee $period
-                (i32.add
-                  (i32.load16_u offset=24 (local.get $channel))
-                  (local.get $param)))
-              (i32.gt_s (local.get $period) (i32.const 65535))))
-          br $X
-        end $11 ;; fine portamento up
-          (i32.store16 offset=24 (local.get $channel)
-            (select
-              (i32.const 0)
-              (local.tee $period
-                (i32.sub
-                  (i32.load16_u offset=24 (local.get $channel))
-                  (local.get $param)))
-              (i32.lt_s (local.get $period) (i32.const 0))))
-          br $X
-        end $f  ;; set speed
-          (br_if $X (i32.le_s (local.get $param) (i32.const 0)))
-          (if (i32.lt_s (local.get $param) (i32.const 32))
-            (then
-              (global.set $tick (local.get $param))
-              (global.set $speed (local.get $param)))
-            (else
-              (global.set $tick-len
-                (i32.div_u (i32.mul (global.get $sample-rate) (i32.const 5))
-                           (i32.shl (local.get $param) (i32.const 1))))))
-          br $X
-        end $d  ;; pattern break
-          (br_if $X (i32.ge_s (global.get $pl-count) (i32.const 0)))
+          ;; set note-instrument
+          (i32.store8 offset=30 (local.get $channel)
+            (i32.or
+              (i32.shr_u
+                (local.tee $pat2 (i32.load8_u offset=2 (local.get $pattern-offset)))
+                (i32.const 4))
+              (i32.and (local.get $pat0) (i32.const 0x10))))
+          ;; set note-effect
+          (local.set $effect (i32.and (local.get $pat2) (i32.const 0xf)))
+          ;; set note-param
+          (local.set $param (i32.load8_u offset=3 (local.get $pattern-offset)))
+          (local.set $param-lo (i32.and (local.get $param) (i32.const 0xf)))
+          (local.set $param-hi (i32.shr_u (local.get $param) (i32.const 4)))
 
-          (if (i32.lt_s (global.get $break-pattern) (i32.const 0))
-            (then
-              (global.set $break-pattern
-                (i32.add (global.get $pattern) (i32.const 1)))))
-          (global.set $next-row
-            (i32.add
-              (i32.mul
-                (i32.shr_u (local.get $param) (i32.const 4))
-                (i32.const 10))
-              (i32.and (local.get $param) (i32.const 0xf))))
+          (local.set $pattern-offset (i32.add (local.get $pattern-offset) (i32.const 4)))
 
-          (br_if $X (i32.lt_s (global.get $next-row) (i32.const 64)))
-          (global.set $next-row (i32.const 0))
-          br $X
-        end $c  ;; set volume
-          (i32.store8 offset=33 (local.get $channel)
-            (select
-              (i32.const 64)
-              (local.get $param)
-              (i32.gt_s (local.get $param) (i32.const 64))))
-          br $X
-        end $b ;; pattern jump
-          (br_if $X (i32.ge_s (global.get $pl-count) (i32.const 0)))
-          (global.set $break-pattern (local.get $param))
-          (global.set $next-row (i32.const 0))
-          br $X
-        end $8 ;; set panning
-          (br_if $X (i32.eq (global.get $num-channels) (i32.const 4)))
-          (i32.store8 offset=34 (local.get $channel)
-            (select
-              (local.get $param)
-              (i32.const 127)
-              (i32.lt_s (local.get $param) (i32.const 128))))
-          br $X
-        end $7 ;; tremolo
-          (if (i32.gt_s
-                (local.tee $param' (i32.shr_u (local.get $param) (i32.const 4)))
-                (i32.const 0))
+          ;; Convert extend effects (0xE) into 0x1Y
+          (if (i32.eq (local.get $effect) (i32.const 0xE))
             (then
-              (i32.store8 offset=47 (local.get $channel) (local.get $param'))))
-          (if (i32.gt_s
-                (local.tee $param' (i32.and (local.get $param) (i32.const 0xf)))
-                (i32.const 0))
-            (then
-              (i32.store8 offset=48 (local.get $channel) (local.get $param'))))
-          (call $tremolo (local.get $channel))
-          br $X
-        end $4  ;; vibrato
-          (if (i32.gt_s
-                (local.tee $param' (i32.shr_u (local.get $param) (i32.const 4)))
-                (i32.const 0))
-            (then
-              (i32.store8 offset=42 (local.get $channel) (local.get $param'))))
-          (if (i32.gt_s
-                (local.tee $param' (i32.and (local.get $param) (i32.const 0xf)))
-                (i32.const 0))
-            (then
-              (i32.store8 offset=43 (local.get $channel) (local.get $param'))))
-          ;; fallthrough
-        end $6 ;; vibrato + volume slide
-          (call $vibrato (local.get $channel))
-          br $X
-        end $3  ;; tone portamento
-          (br_if $X (i32.le_s (local.get $param) (i32.const 0)))
-          (i32.store8 offset=37 (local.get $channel) (local.get $param))
-          ;; fallthrough
-        end $X
+              (local.set $effect (i32.or (i32.const 0x10) (local.get $param-hi)))
+              (local.set $param (local.get $param-lo))
+              (local.set $param-hi (i32.const 0))))
 
-        (call $update-frequency (local.get $channel))
-        (br_if $channel (i32.lt_u (local.tee $channel (i32.add (local.get $channel) (i32.const 52)))
-                                (local.get $channel-end)))))
-    (else
-      (loop $channel
-        ;; channel tick
-        (local.set $effect (i32.load8_u offset=31 (local.get $channel)))
-        (local.set $param (i32.load8_u offset=32 (local.get $channel)))
-        ;; fx-count++
-        (i32.store8 offset=39 (local.get $channel)
-          (local.tee $fx-count
-            (i32.add (i32.load8_u offset=39 (local.get $channel)) (i32.const 1))))
+          ;; Convert effect 0 to effect 0xE
+          (if (i32.and (i32.eqz (local.get $effect))
+                       (i32.ne (local.get $param) (i32.const 0)))
+            (then
+              (local.set $effect (i32.const 0xE))))
 
-        (local.set $period (i32.load16_u offset=24 (local.get $channel)))
+          (local.set $-param (i32.sub (i32.const 0) (local.get $param)))
 
-        block $X
-        block $1
-        block $2
-        block $3
-        block $a
-        block $5
-        block $4
-        block $6
-        block $7
-        block $e
-        block $19
-        block $1c
-        block $1d
-          (br_table $X $1 $2 $3 $4 $5 $6 $7 $X $X  $a $X $X  $X  $e $X
-                    $X $X $X $X $X $X $X $X $X $19 $X $X $1c $1d $X
-                    (local.get $effect))
-        end $1d ;; note delay
-          (br_if $X (i32.ne (local.get $param) (local.get $fx-count)))
-          (call $trigger (local.get $channel))
-          br $X
-        end $1c ;; note cut
-          (br_if $X (i32.ne (local.get $param) (local.get $fx-count)))
-          (i32.store8 offset=33 (local.get $channel) (i32.const 0))
-          br $X
-        end $19 ;; retrigger
-          (br_if $X (i32.lt_s (local.get $fx-count) (local.get $param)))
+          (i32.store8 offset=31 (local.get $channel) (local.get $effect))
+          (i32.store8 offset=32 (local.get $channel) (local.get $param))
+
+          ;; channel row
+
+          ;; TODO: Move these variables so they can be cleared with one i32 write
+          ;; fx-count = 0
           (i32.store8 offset=39 (local.get $channel) (i32.const 0))
-          (f32.store offset=12 (local.get $channel) (f32.const 0))
-          br $X
-        end $e ;; arpeggio
-          block $fx-arp-add (result i32)
-          block $fx2
-          block $fx1
-          block $fx0
-          block $fxN
-            (br_table $fx0 $fx1 $fx2 $fxN (local.get $fx-count))
-          end $fxN
-            (i32.store8 offset=39 (local.get $channel) (i32.const 0))
+          ;; vibrato_add = 0
+          (i32.store8 offset=44 (local.get $channel) (i32.const 0))
+          ;; tremolo_add = 0
+          (i32.store8 offset=49 (local.get $channel) (i32.const 0))
+          ;; arpeggio_add = 0
+          (i32.store8 offset=50 (local.get $channel) (i32.const 0))
+
+          ;; If it's not a note delay, trigger the note.
+          (if (i32.or (i32.ne (local.get $effect) (i32.const 0x1d))
+                      (i32.eqz (local.get $param)))
+            (then
+              (call $trigger (local.get $channel))))
+
+          block $3
+          block $6
+          block $4
+          block $7
+          block $8
+          block $b
+          block $c
+          block $d
+          block $f
+          block $11
+          block $12
+          block $14
+          block $16
+          block $17
+          block $1a
+          block $1b
+          block $1c
+          block $1e
+            (br_table $X $X  $X  $3 $4  $X $6   $7 $8 $X $X  $b   $c $d $X  $f
+                      $X $11 $12 $X $14 $X $16 $17 $X $X $1a $1b $1c $X $1e $X
+                      (local.get $effect))
+          end $1e ;; pattern delay
+            (global.set $tick
+              (i32.add
+                (global.get $speed)
+                (i32.mul (global.get $speed) (local.get $param))))
             br $X
-          end $fx0
-            (br $fx-arp-add (i32.const 0))
-          end $fx1
-            (br $fx-arp-add (i32.shr_u (local.get $param) (i32.const 4)))
-          end $fx2
-            (br $fx-arp-add (i32.and (local.get $param) (i32.const 0xf)))
-          end $fx-arp-add
-            (i32.store8 offset=50 (local.get $channel) (; value ;))
-          br $X
-        end $7 ;; tremolo
-          (i32.store8 offset=46 (local.get $channel)
-            (i32.add
-              (i32.load8_u offset=46 (local.get $channel))
-              (i32.load8_u offset=47 (local.get $channel))))
-          (call $tremolo (local.get $channel))
-          br $X
-        end $6 ;; vibrato + volume slide
-          (call $volume-slide (local.get $channel) (local.get $param))
-          ;; fallthrough
-        end $4
-          (i32.store8 offset=41 (local.get $channel)
-            (i32.add
-              (i32.load8_u offset=41 (local.get $channel))
-              (i32.load8_u offset=42 (local.get $channel))))
-          (call $vibrato (local.get $channel))
-          br $X
-        end $5 ;; tone portamento + volume slide
-          (call $tone-portamento (local.get $channel))
-          ;; fallthrough
-        end $a ;; volume slide
-          (call $volume-slide (local.get $channel) (local.get $param))
-          br $X
-        end $3  ;; tone portamento
-          (call $tone-portamento (local.get $channel))
-          br $X
-        end $2 ;; portamento down
-          (i32.store16 offset=24 (local.get $channel)
-            (select
-              (i32.const 65535)
-              (local.tee $period
+          end $1c ;; note cut
+            (br_if $X (local.get $param))
+            (i32.store8 offset=33 (local.get $channel) (i32.const 0))
+            br $X
+          end $1b ;; fine volume down
+            (local.set $param (local.get $-param))
+            ;; fallthrough
+          end $1a ;; fine volume up
+            (i32.store8 offset=33 (local.get $channel)
+              (call $i32_clamp0_s
                 (i32.add
-                  (local.get $period)
-                  (local.get $param)))
-              (i32.gt_u (local.get $period) (i32.const 65535))))
-          br $X
-        end $1 ;; portamento up
-          (i32.store16 offset=24 (local.get $channel)
-            (select
-              (i32.const 0)
-              (local.tee $period
+                  (i32.load8_u offset=33 (local.get $channel))
+                  (local.get $param))
+                (i32.const 64)))
+            br $X
+          end $17 ;; set tremolo waveform
+            unreachable
+          end $16 ;; pattern loop
+            (if (i32.eqz (local.get $param))
+              (then
+                (i32.store8 offset=38 (local.get $channel) (global.get $row))))
+
+            (br_if $X
+              (i32.or
+                (i32.ge_s
+                  (i32.load8_u offset=38 (local.get $channel))
+                  (global.get $row))
+                (i32.ge_s (global.get $break-pattern) (i32.const 0))))
+
+            (if (i32.lt_s (global.get $pl-count) (i32.const 0))
+              (then
+                (global.set $pl-count (local.get $param))
+                (global.set $pl-channel (i32.load8_u offset=36 (local.get $channel)))))
+            (br_if $X
+              (i32.ne (global.get $pl-channel)
+                      (i32.load8_u offset=36 (local.get $channel))))
+            (if (i32.eqz (global.get $pl-count))
+              (then
+                (i32.store8 offset=38 (local.get $channel)
+                  (i32.add (global.get $row) (i32.const 1))))
+              (else
+                (global.set $next-row (i32.load8_u offset=38 (local.get $channel)))))
+            (global.set $pl-count
+              (i32.sub
+                (global.get $pl-count)
+                (i32.const 1)))
+            br $X
+          end $14 ;; set vibrato waveform
+            (br_if $X (i32.ge_s (local.get $param) (i32.const 8)))
+            (i32.store8 offset=40 (local.get $channel) (local.get $param))
+            br $X
+          end $12 ;; fine portamento down
+            (local.set $param (local.get $-param))
+            ;; fallthrough
+          end $11 ;; fine portamento up
+            (i32.store16 offset=24 (local.get $channel)
+              (call $i32_clamp0_s
                 (i32.sub
-                  (local.get $period)
-                  (local.get $param)))
-              (i32.lt_s (local.get $period) (i32.const 0))))
+                  (i32.load16_u offset=24 (local.get $channel))
+                  (local.get $param))
+                (i32.const 65535)))
+            br $X
+          end $f  ;; set speed
+            (br_if $X (i32.eqz (local.get $param)))
+            (if (i32.lt_s (local.get $param) (i32.const 32))
+              (then
+                (global.set $tick (local.get $param))
+                (global.set $speed (local.get $param)))
+              (else
+                (global.set $tick-len
+                  (i32.div_u (i32.mul (global.get $sample-rate) (i32.const 5))
+                             (i32.shl (local.get $param) (i32.const 1))))))
+            br $X
+          end $d  ;; pattern break
+            (br_if $X (i32.ge_s (global.get $pl-count) (i32.const 0)))
+
+            (if (i32.lt_s (global.get $break-pattern) (i32.const 0))
+              (then
+                (global.set $break-pattern
+                  (i32.add (global.get $pattern) (i32.const 1)))))
+            (global.set $next-row
+              (i32.add
+                (i32.mul (local.get $param-hi) (i32.const 10))
+                (local.get $param-lo)))
+
+            (br_if $X (i32.lt_s (global.get $next-row) (i32.const 64)))
+            (global.set $next-row (i32.const 0))
+            br $X
+          end $c  ;; set volume
+            (i32.store8 offset=33 (local.get $channel)
+              (call $i32_clamp0_s (local.get $param) (i32.const 64)))
+            br $X
+          end $b ;; pattern jump
+            (br_if $X (i32.ge_s (global.get $pl-count) (i32.const 0)))
+            (global.set $break-pattern (local.get $param))
+            (global.set $next-row (i32.const 0))
+            br $X
+          end $8 ;; set panning
+            (br_if $X (i32.eq (global.get $num-channels) (i32.const 4)))
+            (i32.store8 offset=34 (local.get $channel)
+              (call $i32_clamp0_s (local.get $param) (i32.const 127)))
+            br $X
+          end $7 ;; tremolo
+            (if (local.get $param-hi)
+              (then
+                (i32.store8 offset=47 (local.get $channel) (local.get $param-hi))))
+            (if (local.get $param-lo)
+              (then
+                (i32.store8 offset=48 (local.get $channel) (local.get $param-lo))))
+            (call $vibrato-tremolo
+              (i32.add (local.get $channel) (i32.const 5))
+              (i32.const 6))
+            br $X
+          end $4  ;; vibrato
+            (if (local.get $param-hi)
+              (then
+                (i32.store8 offset=42 (local.get $channel) (local.get $param-hi))))
+            (if (local.get $param-lo)
+              (then
+                (i32.store8 offset=43 (local.get $channel) (local.get $param-lo))))
+            ;; fallthrough
+          end $6 ;; vibrato + volume slide
+            (call $vibrato-tremolo (local.get $channel) (i32.const 7))
+            br $X
+          end $3  ;; tone portamento
+            (br_if $X (i32.eqz (local.get $param)))
+            (i32.store8 offset=37 (local.get $channel) (local.get $param)))
+        (else
+          ;; channel tick
+          (local.set $effect (i32.load8_u offset=31 (local.get $channel)))
+          (local.set $param (i32.load8_u offset=32 (local.get $channel)))
+          ;; fx-count++
+          (i32.store8 offset=39 (local.get $channel)
+            (local.tee $fx-count
+              (i32.add (i32.load8_u offset=39 (local.get $channel)) (i32.const 1))))
+
+          block $1
+          block $2
+          block $3
+          block $a
+          block $5
+          block $4
+          block $6
+          block $7
+          block $e
+          block $19
+          block $1c
+          block $1d
+            (br_table $X $1 $2 $3 $4 $5 $6 $7 $X $X  $a $X $X  $X  $e $X
+                      $X $X $X $X $X $X $X $X $X $19 $X $X $1c $1d $X
+                      (local.get $effect))
+          end $1d ;; note delay
+            (br_if $X (i32.ne (local.get $param) (local.get $fx-count)))
+            (call $trigger (local.get $channel))
+            br $X
+          end $1c ;; note cut
+            (br_if $X (i32.ne (local.get $param) (local.get $fx-count)))
+            (i32.store8 offset=33 (local.get $channel) (i32.const 0))
+            br $X
+          end $19 ;; retrigger
+            (br_if $X (i32.lt_s (local.get $fx-count) (local.get $param)))
+            (i32.store8 offset=39 (local.get $channel) (i32.const 0))
+            (f32.store offset=12 (local.get $channel) (f32.const 0))
+            br $X
+          end $e ;; arpeggio
+            block $fx-arp-add (result i32)
+            block $fx2
+            block $fx1
+            block $fx0
+            block $fxN
+              (br_table $fx0 $fx1 $fx2 $fxN (local.get $fx-count))
+            end $fxN
+              (i32.store8 offset=39 (local.get $channel) (i32.const 0))
+              br $X
+            end $fx0
+              (br $fx-arp-add (i32.const 0))
+            end $fx1
+              (br $fx-arp-add (i32.shr_u (local.get $param) (i32.const 4)))
+            end $fx2
+              (br $fx-arp-add (i32.and (local.get $param) (i32.const 0xf)))
+            end $fx-arp-add
+              (i32.store8 offset=50 (local.get $channel) (; value ;))
+            br $X
+          end $7 ;; tremolo
+            (i32.store8 offset=46 (local.get $channel)
+              (i32.add
+                (i32.load8_u offset=46 (local.get $channel))
+                (i32.load8_u offset=47 (local.get $channel))))
+            (call $vibrato-tremolo
+              (i32.add (local.get $channel) (i32.const 5))
+              (i32.const 6))
+            br $X
+          end $6 ;; vibrato + volume slide
+            (call $volume-slide (local.get $channel) (local.get $param))
+            ;; fallthrough
+          end $4
+            (i32.store8 offset=41 (local.get $channel)
+              (i32.add
+                (i32.load8_u offset=41 (local.get $channel))
+                (i32.load8_u offset=42 (local.get $channel))))
+            (call $vibrato-tremolo (local.get $channel) (i32.const 7))
+            br $X
+          end $5 ;; tone portamento + volume slide
+            (call $tone-portamento (local.get $channel))
+            ;; fallthrough
+          end $a ;; volume slide
+            (call $volume-slide (local.get $channel) (local.get $param))
+            br $X
+          end $3  ;; tone portamento
+            (call $tone-portamento (local.get $channel))
+            br $X
+          end $2 ;; portamento down
+            (local.set $param (local.get $-param))
+            ;; fallthrough
+          end $1 ;; portamento up
+            (i32.store16 offset=24 (local.get $channel)
+              (call $i32_clamp0_s
+                (i32.sub
+                  (i32.load16_u offset=24 (local.get $channel))
+                  (local.get $param))
+                (i32.const 65535)))))
         end $X
 
-        (if (i32.gt_s (local.get $effect) (i32.const 0))
+        (if (i32.or (i32.ne (local.get $effect) (i32.const 0))
+                    (local.get $tick<0))
           (then
-            (call $update-frequency (local.get $channel))))
+            (local.set $period
+              (select
+                (i32.const 6848)
+                (local.tee $period
+                  (i32.add
+                    (i32.shr_u
+                      (local.tee $period
+                        (i32.shr_u
+                          (i32.mul
+                            (i32.add
+                              (i32.load16_u offset=24 (local.get $channel))    ;; period
+                              (i32.load8_u offset=44 (local.get $channel)))    ;; vibrato_add
+                            (i32.load16_u offset=0x95                          ;; arp_tuning
+                              (i32.shl
+                                (i32.load8_u offset=50 (local.get $channel))   ;; arpeggio_add
+                                (i32.const 1))))
+                          (i32.const 11)))
+                      (i32.const 1))
+                    (i32.and (local.get $period) (i32.const 1))))
+                (i32.lt_u (local.get $period) (i32.const 14))))
 
-        (br_if $channel (i32.lt_u (local.tee $channel (i32.add (local.get $channel) (i32.const 52)))
-                                (local.get $channel-end))))))
+            ;; set channel step
+            (f32.store offset=16 (local.get $channel)
+              (f32.div
+                (f32.convert_i32_u
+                  (i32.div_u (global.get $c2-rate) (local.get $period)))
+                (f32.convert_i32_u (global.get $sample-rate))))
+
+            ;; set channel amplitude
+            (f32.store offset=20 (local.get $channel)
+              (f32.mul
+                (f32.mul
+                  (f32.convert_i32_u
+                    (call $i32_clamp0_s
+                      (i32.add
+                        (i32.load8_u offset=33 (local.get $channel))   ;; volume
+                        (i32.load8_u offset=49 (local.get $channel)))  ;; tremolo_add
+                      (i32.const 64)))
+                  (global.get $gain))
+                (f32.const 0.03125)))))
+      (br_if $channel
+        (i32.lt_u
+          (local.tee $channel (i32.add (local.get $channel) (i32.const 52)))
+          (local.get $channel-end))))
 )
 
 (func $tone-portamento (param $channel i32)
@@ -647,68 +635,45 @@
   (i32.store16 offset=24 (local.get $channel)
     (if (result i32) (i32.lt_s (local.get $source) (local.get $dest))
       (then
-        (select
+       (select
           (local.get $dest)
           (local.tee $source
             (i32.add (local.get $source)
-                     (i32.load8_u offset=37 (local.get $channel))))
-          (i32.gt_s (local.get $source) (local.get $dest))))
+                    (i32.load8_u offset=37 (local.get $channel))))
+         (i32.gt_s (local.get $source) (local.get $dest))))
       (else
-        (select
+       (select
           (local.get $dest)
           (local.tee $source
             (i32.sub (local.get $source)
-                     (i32.load8_u offset=37 (local.get $channel))))
-          (i32.lt_s (local.get $source) (local.get $dest))))))
+                    (i32.load8_u offset=37 (local.get $channel))))
+         (i32.lt_s (local.get $source) (local.get $dest))))))
 )
 
 (func $volume-slide (param $channel i32) (param $param i32)
-  (local $volume i32)
   (i32.store8 offset=33 (local.get $channel)
-    (select
-      (i32.const 64)
-      (select
-        (i32.const 0)
-        (local.tee $volume
-          (i32.sub
-            (i32.add
-              (i32.load8_u offset=33 (local.get $channel))
-              (i32.shr_u (local.get $param) (i32.const 4)))
-            (i32.and (local.get $param) (i32.const 0xf))))
-        (i32.lt_s (local.get $volume) (i32.const 0)))
-      (i32.gt_s (local.get $volume) (i32.const 64))))
+    (call $i32_clamp0_s
+      (i32.sub
+        (i32.add
+          (i32.load8_u offset=33 (local.get $channel))
+          (i32.shr_u (local.get $param) (i32.const 4)))
+        (i32.and (local.get $param) (i32.const 0xf)))
+      (i32.const 64)))
 )
 
-(func $vibrato (param $channel i32)
-  (i32.store8 offset=44 (local.get $channel)
-    (i32.shr_u
-      (i32.mul
-        (call $waveform
-          (i32.load8_u offset=41 (local.get $channel))
-          (i32.load8_u offset=40 (local.get $channel)))
-        (i32.load8_u offset=43 (local.get $channel)))
-      (i32.const 7)))
-)
-
-(func $tremolo (param $channel i32)
-  (i32.store8 offset=49 (local.get $channel)
-    (i32.shr_u
-      (i32.mul
-        (call $waveform
-          (i32.load8_u offset=46 (local.get $channel))
-          (i32.load8_u offset=45 (local.get $channel)))
-        (i32.load8_u offset=48 (local.get $channel)))
-      (i32.const 6)))
-)
-
-(func $waveform (param $phase i32) (param $type i32) (result i32)
+(func $vibrato-tremolo (param $channel i32) (param $shift i32)
   (local $amp i32)
+  (local $phase i32)
+  (local.set $phase (i32.load8_u offset=41 (local.get $channel)))
   block $done
   block $0
   block $1
   block $2
   block $3
-    (br_table $0 $1 $2 $3 (i32.and (local.get $type) (i32.const 3)))
+    (br_table $0 $1 $2 $3
+      (i32.and
+        (i32.load8_u offset=40 (local.get $channel))
+        (i32.const 3)))
   end $3  ;; Random
     (local.set $amp
       (i32.sub (i32.shr_u (global.get $random-seed) (i32.const 20))
@@ -741,9 +706,14 @@
           (i32.const 3))))
     (br $done)
   end $0
-    ;; TODO: sine
+  ;; TODO: sine
   end $done
-  (local.get $amp)
+  (i32.store8 offset=44 (local.get $channel)
+    (i32.shr_u
+      (i32.mul
+        (local.get $amp)
+        (i32.load8_u offset=43 (local.get $channel)))
+      (local.get $shift)))
 )
 
 (func $trigger (param $channel i32)
@@ -773,7 +743,7 @@
       ;; set channel instrument if the loop length > 0 and the current instrument is > 0.
       (if (i32.and
             (f32.gt (f32.load offset=8 (local.get $instrument-ptr)) (f32.const 0))
-            (i32.gt_s (i32.load (local.get $channel)) (i32.const 0)))
+            (i32.ne (i32.load (local.get $channel)) (i32.const 0)))
         (then
           (i32.store (local.get $channel) (local.get $instrument-ptr))))))
 
@@ -793,10 +763,8 @@
           (i32.store8 offset=35 (local.get $channel)
             (i32.load8_u offset=32 (local.get $channel)))))))
 
-  ;; key is non-zezro
-  (if (i32.gt_s
-        (local.tee $key (i32.load16_u offset=28 (local.get $channel)))
-        (i32.const 0))
+  ;; key is non-zero
+  (if (local.tee $key (i32.load16_u offset=28 (local.get $channel)))
     (then
       ;; Calculate period w/ fine-tuning.
       (local.set $period
@@ -820,7 +788,6 @@
             (i32.ne (local.get $effect) (i32.const 3))
             (i32.ne (local.get $effect) (i32.const 5)))
         (then
-
           ;; Set instrument pointer to assigned instrument.
           (i32.store (local.get $channel) (i32.load offset=4 (local.get $channel)))
           ;; Set period to porta period.
@@ -838,59 +805,6 @@
           (if (i32.lt_u (i32.load8_u offset=45 (local.get $channel)) (i32.const 4))
             (then
               (i32.store8 offset=46 (local.get $channel) (i32.const 0))))))))
-)
-
-(func $update-frequency (param $channel i32)
-  (local $period i32)
-  (local $volume i32)
-
-  (local.set $period
-    (select
-      (i32.const 6848)
-      (local.tee $period
-        (i32.add
-          (i32.shr_u
-            (local.tee $period
-              (i32.shr_u
-                (i32.mul
-                  (i32.add
-                    (i32.load16_u offset=24 (local.get $channel))    ;; period
-                    (i32.load8_u offset=44 (local.get $channel)))    ;; vibrato_add
-                  (i32.load16_u offset=0x95                          ;; arp_tuning
-                    (i32.shl
-                      (i32.load8_u offset=50 (local.get $channel))   ;; arpeggio_add
-                      (i32.const 1))))
-                (i32.const 11)))
-            (i32.const 1))
-          (i32.and (local.get $period) (i32.const 1))))
-      (i32.lt_u (local.get $period) (i32.const 14))))
-
-  ;; set channel step
-  (f32.store offset=16 (local.get $channel)
-    (f32.div
-      (f32.convert_i32_u
-        (i32.div_u
-          (i32.mul (global.get $c2-rate) (i32.const 428))
-          (local.get $period)))
-      (f32.convert_i32_u (global.get $sample-rate))))
-
-  ;; set channel amplitude
-  (f32.store offset=20 (local.get $channel)
-    (f32.mul
-      (f32.mul
-        (f32.convert_i32_u
-          (select
-            (i32.const 0)
-            (select
-              (i32.const 64)
-              (local.tee $volume
-                (i32.add
-                  (i32.load8_u offset=33 (local.get $channel))   ;; volume
-                  (i32.load8_u offset=49 (local.get $channel)))) ;; tremolo_add
-              (i32.gt_s (local.get $volume) (i32.const 64)))
-            (i32.lt_s (local.get $volume) (i32.const 0))))
-        (global.get $gain))
-      (f32.const 0.03125)))
 )
 
 (func (export "run") (param $count i32)
@@ -918,10 +832,9 @@
   (loop $loop
     ;; calculate number of ticks to run
     (local.set $remain
-      (select
-        (local.get $count)
-        (local.tee $remain (i32.sub (global.get $tick-len) (global.get $tick-offset)))
-        (i32.gt_s (local.get $remain) (local.get $count))))
+      (call $i32_clamp0_s
+        (i32.sub (global.get $tick-len) (global.get $tick-offset))
+        (local.get $count)))
 
     (local.set $channel (i32.const 0x275))
     (local.set $channel-end
