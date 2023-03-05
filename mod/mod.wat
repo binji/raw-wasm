@@ -204,7 +204,15 @@
   (local $param-hi i32)
   (local $-param i32)
   (local $fx-count i32)
+  ;; update-frequency
   (local $period i32)
+  ;; tone-portamento
+  (local $source i32)
+  (local $dest i32)
+  ;; vibrato-tremolo
+  (local $addr i32)
+  (local $amp i32)
+  (local $phase i32)
 
   (local.set $channel (i32.const 0x275))
   (local.set $channel-end (i32.add (local.get $channel) (i32.mul (global.get $num-channels) (i32.const 52))))
@@ -263,6 +271,10 @@
 
     (loop $channel
       block $X
+      block $volume-slide
+      block $vibrato-tremolo
+      block $tone-portamento
+
       (if (local.get $tick<0)
         (then
           ;; set note-key
@@ -328,9 +340,6 @@
               (call $trigger (local.get $channel))))
 
           block $3
-          block $6
-          block $4
-          block $7
           block $8
           block $b
           block $c
@@ -345,8 +354,8 @@
           block $1b
           block $1c
           block $1e
-            (br_table $X $X  $X  $3 $4  $X $6   $7 $8 $X $X  $b   $c $d $X  $f
-                      $X $11 $12 $X $14 $X $16 $17 $X $X $1a $1b $1c $X $1e $X
+            (br_table $X $X  $X  $3 $vibrato-tremolo  $X $vibrato-tremolo $vibrato-tremolo  $8 $X $X  $b   $c $d $X  $f
+                      $X $11 $12 $X $14 $X $16      $17 $X $X $1a $1b $1c $X $1e $X
                       (local.get $effect))
           end $1e ;; pattern delay
             (global.set $tick
@@ -456,28 +465,6 @@
             (i32.store8 offset=34 (local.get $channel)
               (call $i32_clamp0_s (local.get $param) (i32.const 127)))
             br $X
-          end $7 ;; tremolo
-            (if (local.get $param-hi)
-              (then
-                (i32.store8 offset=47 (local.get $channel) (local.get $param-hi))))
-            (if (local.get $param-lo)
-              (then
-                (i32.store8 offset=48 (local.get $channel) (local.get $param-lo))))
-            (call $vibrato-tremolo
-              (i32.add (local.get $channel) (i32.const 5))
-              (i32.const 6))
-            br $X
-          end $4  ;; vibrato
-            (if (local.get $param-hi)
-              (then
-                (i32.store8 offset=42 (local.get $channel) (local.get $param-hi))))
-            (if (local.get $param-lo)
-              (then
-                (i32.store8 offset=43 (local.get $channel) (local.get $param-lo))))
-            ;; fallthrough
-          end $6 ;; vibrato + volume slide
-            (call $vibrato-tremolo (local.get $channel) (i32.const 7))
-            br $X
           end $3  ;; tone portamento
             (br_if $X (i32.eqz (local.get $param)))
             (i32.store8 offset=37 (local.get $channel) (local.get $param)))
@@ -492,18 +479,14 @@
 
           block $1
           block $2
-          block $3
-          block $a
-          block $5
-          block $4
-          block $6
-          block $7
           block $e
           block $19
           block $1c
           block $1d
-            (br_table $X $1 $2 $3 $4 $5 $6 $7 $X $X  $a $X $X  $X  $e $X
-                      $X $X $X $X $X $X $X $X $X $19 $X $X $1c $1d $X
+            (br_table $X $1            $2  $tone-portamento $vibrato-tremolo $tone-portamento $vibrato-tremolo $vibrato-tremolo $X
+                      $X $volume-slide $X  $X               $X   $e               $X   $X  $X
+                      $X $X            $X  $X               $X   $X               $X   $19 $X
+                      $X $1c           $1d $X
                       (local.get $effect))
           end $1d ;; note delay
             (br_if $X (i32.ne (local.get $param) (local.get $fx-count)))
@@ -537,34 +520,6 @@
             end $fx-arp-add
               (i32.store8 offset=50 (local.get $channel) (; value ;))
             br $X
-          end $7 ;; tremolo
-            (i32.store8 offset=46 (local.get $channel)
-              (i32.add
-                (i32.load8_u offset=46 (local.get $channel))
-                (i32.load8_u offset=47 (local.get $channel))))
-            (call $vibrato-tremolo
-              (i32.add (local.get $channel) (i32.const 5))
-              (i32.const 6))
-            br $X
-          end $6 ;; vibrato + volume slide
-            (call $volume-slide (local.get $channel) (local.get $param))
-            ;; fallthrough
-          end $4
-            (i32.store8 offset=41 (local.get $channel)
-              (i32.add
-                (i32.load8_u offset=41 (local.get $channel))
-                (i32.load8_u offset=42 (local.get $channel))))
-            (call $vibrato-tremolo (local.get $channel) (i32.const 7))
-            br $X
-          end $5 ;; tone portamento + volume slide
-            (call $tone-portamento (local.get $channel))
-            ;; fallthrough
-          end $a ;; volume slide
-            (call $volume-slide (local.get $channel) (local.get $param))
-            br $X
-          end $3  ;; tone portamento
-            (call $tone-portamento (local.get $channel))
-            br $X
           end $2 ;; portamento down
             (local.set $param (local.get $-param))
             ;; fallthrough
@@ -575,8 +530,127 @@
                   (i32.load16_u offset=24 (local.get $channel))
                   (local.get $param))
                 (i32.const 65535)))))
+            br $X
+
+        ;; 3:tone portamento
+        ;; 4:vibrato
+        ;; 5:tone portamento + volume slide
+        ;; 6:vibrato + volume slide
+        ;; 7:tremolo
+        ;; a:volume slide
+
+        end $tone-portamento
+          (local.set $source (i32.load16_u offset=24 (local.get $channel)))
+          (local.set $dest (i32.load16_u offset=26 (local.get $channel)))
+          (i32.store16 offset=24 (local.get $channel)
+            (if (result i32) (i32.lt_s (local.get $source) (local.get $dest))
+              (then
+               (select
+                  (local.get $dest)
+                  (local.tee $source
+                    (i32.add (local.get $source)
+                            (i32.load8_u offset=37 (local.get $channel))))
+                 (i32.gt_s (local.get $source) (local.get $dest))))
+              (else
+               (select
+                  (local.get $dest)
+                  (local.tee $source
+                    (i32.sub (local.get $source)
+                            (i32.load8_u offset=37 (local.get $channel))))
+                 (i32.lt_s (local.get $source) (local.get $dest))))))
+          br $volume-slide
+        end $vibrato-tremolo
+          (local.set $addr
+            (select
+              (i32.add (local.get $channel) (i32.const 5))
+              (local.get $channel)
+              (i32.eq (local.get $effect) (i32.const 7))))
+          (if (local.get $tick<0)
+            (then
+              (if (local.get $param-hi)
+                (then
+                  (i32.store8 offset=42 (local.get $channel) (local.get $param-hi))))
+              (if (local.get $param-lo)
+                (then
+                  (i32.store8 offset=43 (local.get $channel) (local.get $param-lo)))))
+            (else
+              (i32.store8 offset=41 (local.get $addr)
+                (i32.add
+                  (i32.load8_u offset=41 (local.get $addr))
+                  (i32.load8_u offset=42 (local.get $addr))))))
+          (local.set $phase (i32.load8_u offset=41 (local.get $addr)))
+          block $done
+          block $0
+          block $1
+          block $2
+          block $3
+            (br_table $0 $1 $2 $3
+              (i32.and
+                (i32.load8_u offset=40 (local.get $addr))
+                (i32.const 3)))
+          end $3  ;; Random
+            (local.set $amp
+              (i32.sub (i32.shr_u (global.get $random-seed) (i32.const 20))
+                       (i32.const 255)))
+            (global.set $random-seed
+              (i32.and
+                (i32.add
+                  (i32.mul
+                    (global.get $random-seed)
+                    (i32.const 65))
+                  (i32.const 17))
+                (i32.const 0x1FFFFFFF)))
+            (br $done)
+          end $2  ;; Square wave
+            (local.set $amp
+              (i32.sub
+                (i32.const 255)
+                (i32.shl
+                  (i32.and (local.get $phase) (i32.const 0x20))
+                  (i32.const 4))))
+            (br $done)
+          end $1   ;; Saw down
+            (local.set $amp
+              (i32.sub
+                (i32.const 255)
+                (i32.shl
+                  (i32.and
+                    (i32.add (local.get $phase) (i32.const 0x20))
+                    (i32.const 0x3f))
+                  (i32.const 3))))
+            (br $done)
+          end $0
+          ;; TODO: sine
+          end $done
+          (i32.store8 offset=44 (local.get $addr)
+            (i32.shr_u
+              (i32.mul
+                (local.get $amp)
+                (i32.load8_u offset=43 (local.get $addr)))
+            (select
+              (i32.const 6)
+              (i32.const 7)
+              (i32.eq (local.get $effect) (i32.const 7)))))
+          ;; fallthrough
+        end $volume-slide
+          (br_if $X
+            (i32.or
+              (i32.or
+                (i32.lt_u (local.get $effect) (i32.const 5))
+                (i32.eq (local.get $effect (i32.const 7))))
+              (local.get $tick<0)))
+          (i32.store8 offset=33 (local.get $channel)
+            (call $i32_clamp0_s
+              (i32.sub
+                (i32.add
+                  (i32.load8_u offset=33 (local.get $channel))
+                  (i32.shr_u (local.get $param) (i32.const 4)))
+                (i32.and (local.get $param) (i32.const 0xf)))
+              (i32.const 64)))
+          ;; fallthrough
         end $X
 
+        ;; update frequency
         (if (i32.or (i32.ne (local.get $effect) (i32.const 0))
                     (local.get $tick<0))
           (then
@@ -624,96 +698,6 @@
         (i32.lt_u
           (local.tee $channel (i32.add (local.get $channel) (i32.const 52)))
           (local.get $channel-end))))
-)
-
-(func $tone-portamento (param $channel i32)
-  (local $source i32)
-  (local $dest i32)
-  (local.set $source (i32.load16_u offset=24 (local.get $channel)))
-  (local.set $dest (i32.load16_u offset=26 (local.get $channel)))
-
-  (i32.store16 offset=24 (local.get $channel)
-    (if (result i32) (i32.lt_s (local.get $source) (local.get $dest))
-      (then
-       (select
-          (local.get $dest)
-          (local.tee $source
-            (i32.add (local.get $source)
-                    (i32.load8_u offset=37 (local.get $channel))))
-         (i32.gt_s (local.get $source) (local.get $dest))))
-      (else
-       (select
-          (local.get $dest)
-          (local.tee $source
-            (i32.sub (local.get $source)
-                    (i32.load8_u offset=37 (local.get $channel))))
-         (i32.lt_s (local.get $source) (local.get $dest))))))
-)
-
-(func $volume-slide (param $channel i32) (param $param i32)
-  (i32.store8 offset=33 (local.get $channel)
-    (call $i32_clamp0_s
-      (i32.sub
-        (i32.add
-          (i32.load8_u offset=33 (local.get $channel))
-          (i32.shr_u (local.get $param) (i32.const 4)))
-        (i32.and (local.get $param) (i32.const 0xf)))
-      (i32.const 64)))
-)
-
-(func $vibrato-tremolo (param $channel i32) (param $shift i32)
-  (local $amp i32)
-  (local $phase i32)
-  (local.set $phase (i32.load8_u offset=41 (local.get $channel)))
-  block $done
-  block $0
-  block $1
-  block $2
-  block $3
-    (br_table $0 $1 $2 $3
-      (i32.and
-        (i32.load8_u offset=40 (local.get $channel))
-        (i32.const 3)))
-  end $3  ;; Random
-    (local.set $amp
-      (i32.sub (i32.shr_u (global.get $random-seed) (i32.const 20))
-               (i32.const 255)))
-    (global.set $random-seed
-      (i32.and
-        (i32.add
-          (i32.mul
-            (global.get $random-seed)
-            (i32.const 65))
-          (i32.const 17))
-        (i32.const 0x1FFFFFFF)))
-    (br $done)
-  end $2  ;; Square wave
-    (local.set $amp
-      (i32.sub
-        (i32.const 255)
-        (i32.shl
-          (i32.and (local.get $phase) (i32.const 0x20))
-          (i32.const 4))))
-    (br $done)
-  end $1   ;; Saw down
-    (local.set $amp
-      (i32.sub
-        (i32.const 255)
-        (i32.shl
-          (i32.and
-            (i32.add (local.get $phase) (i32.const 0x20))
-            (i32.const 0x3f))
-          (i32.const 3))))
-    (br $done)
-  end $0
-  ;; TODO: sine
-  end $done
-  (i32.store8 offset=44 (local.get $channel)
-    (i32.shr_u
-      (i32.mul
-        (local.get $amp)
-        (i32.load8_u offset=43 (local.get $channel)))
-      (local.get $shift)))
 )
 
 (func $trigger (param $channel i32)
