@@ -59,7 +59,6 @@
   (local $sample-length i32)
   (local $loop-start i32)
   (local $loop-length i32)
-  (local $fine-tune i32)
 
   ;; calculate number of patterns
   (local.set $i (i32.const 0x103b8))
@@ -127,15 +126,7 @@
     (f32.store offset=4 (local.get $j) (f32.convert_i32_u (local.get $loop-start)))
     (f32.store offset=8 (local.get $j) (f32.convert_i32_u (local.get $loop-length)))
     (i32.store8 offset=12 (local.get $j)
-      ;; Read fine-tune as [0,15], convert to [-8,7].
-      (i32.add
-        (i32.sub
-          (i32.and
-            (local.tee $fine-tune
-              (i32.and (i32.load8_u offset=14 (local.get $i)) (i32.const 0xf)))
-            (i32.const 7))
-          (i32.and (local.get $fine-tune) (i32.const 8)))
-        (i32.const 8)))
+      (i32.and (i32.load8_u offset=14 (local.get $i)) (i32.const 0xf)))
     (i32.store8 offset=13 (local.get $j)
       (call $i32_clamp0_s
         (i32.and
@@ -270,9 +261,9 @@
 
     (loop $channel
       block $X
-      block $volume-slide
-      block $vibrato-tremolo
-      block $tone-portamento
+      block $vs  ;; volume-slide
+      block $vt  ;; vibrato-tremolo
+      block $tp  ;; tone-portamento
 
       (if (local.get $tick<0)
         (then
@@ -349,8 +340,8 @@
           block $1b
           block $1c
           block $1e
-            (br_table $X $X  $X  $3 $vibrato-tremolo  $X $vibrato-tremolo $vibrato-tremolo  $8 $X $X  $b   $c $d $X  $f
-                      $X $11 $12 $X $14 $X $16      $17 $X $X $1a $1b $1c $X $1e $X
+            (br_table $X  $X  $X  $3 $vt $X  $vt $vt $8 $X  $X  $b  $c $d  $X  $f $X
+                      $11 $12 $X $14 $X  $16 $17 $X  $X $1a $1b $1c $X $1e $X
                       (local.get $effect))
           end $1e ;; pattern delay
             (global.set $tick
@@ -478,10 +469,8 @@
           block $19
           block $1c
           block $1d
-            (br_table $X $1            $2  $tone-portamento $vibrato-tremolo $tone-portamento $vibrato-tremolo $vibrato-tremolo $X
-                      $X $volume-slide $X  $X               $X   $e               $X   $X  $X
-                      $X $X            $X  $X               $X   $X               $X   $19 $X
-                      $X $1c           $1d $X
+            (br_table $X $1 $2 $tp $vt $tp $vt $vt $X $X  $vs $X $X  $X  $e $X
+                      $X $X $X $X  $X  $X  $X  $X  $X $19 $X  $X $1c $1d $X
                       (local.get $effect))
           end $1d ;; note delay
             (br_if $X (i32.ne (local.get $param) (local.get $fx-count)))
@@ -534,7 +523,7 @@
         ;; 7:tremolo
         ;; a:volume slide
 
-        end $tone-portamento
+        end $tp
           (local.set $source (i32.load16_u offset=24 (local.get $channel)))
           (local.set $dest (i32.load16_u offset=26 (local.get $channel)))
           (i32.store16 offset=24 (local.get $channel)
@@ -553,8 +542,8 @@
                     (i32.sub (local.get $source)
                             (i32.load8_u offset=37 (local.get $channel))))
                  (i32.lt_s (local.get $source) (local.get $dest))))))
-          br $volume-slide
-        end $vibrato-tremolo
+          br $vs
+        end $vt ;; vibrato-tremolo
           (local.set $addr
             ;; difference between vibrato-type and tremolo-type
             (i32.add
@@ -630,7 +619,7 @@
               ;; Divide by 6 or 7 for vibrato or tremolo respectively.
               (i32.sub (i32.const 7) (local.get $effect=7))))
           ;; fallthrough
-        end $volume-slide
+        end $vs
           (br_if $X
             (i32.or
               (i32.or
@@ -961,8 +950,8 @@
        8  7 59  8 59  7 59  7)
 
   ;; =0x0075 - fine tuning (32 bytes)
-  (i16 4340 4308 4277 4247 4216 4186 4156 4126
-	     4096 4067 4037 4008 3979 3951 3922 3894)
+  (i16 4096 4067 4037 4008 3979 3951 3922 3894
+       4340 4308 4277 4247 4216 4186 4156 4126)
 
   ;; =0x0095 - arp tuning (32 bytes)
   (i16 4096 3866 3649 3444 3251 3069 2896 2734
