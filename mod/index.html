@@ -69,10 +69,12 @@
 <body>
   <div class="body-wrapper">
     <div class="controls-wrapper bborder">
+      <div>All files hosted by <a href="https://modarchive.org">modarchive.org</a>, chosen from recent featured tracks</div>
       <div class="config">
         <button id="play">play</button>
         <select id="select">
         </select>
+        <span id="loading" hidden>loading...</span>
         <table>
           <tr>
             <th>song</th>
@@ -134,89 +136,57 @@
     })();
 
     async function load(name) {
-      let [_, response] = await Promise.all([initialized, await fetch(name)]);
-      const file = await response.arrayBuffer();
-      dv = new DataView(file);
-      node.port.postMessage({msg: 'load', file});
+      $('#loading').hidden = false;
+      $('#play').disabled = true;
+      try {
+        let [_, response] = await Promise.all([initialized, await fetch(name)]);
+        const file = await response.arrayBuffer();
+        dv = new DataView(file);
+        node.port.postMessage({msg: 'load', file});
+        $('#play').disabled = false;
+      } finally {
+        $('#loading').hidden = true;
+      }
     }
 
     const songs = [
-      '95-ravers-megamix.mod',
-      'GSLINGER.MOD',
-      'adkd_-_absalon_junction.mod',
-      'adkd_-_resting.mod',
-      'adkd_-_solitary_work.mod',
-      'apocalypse_1.mod',
-      'assassin_-_do-not-press.mod',
-      'atariklang_4k.mod',
-      'back_again.mod',
-      'back_to_the_past.mod',
-      'backwithavengeance!.mod',
-      'ballada.mod',
-      'bananasplit.mod',
-      'beyond_music.mod',
-      'bombastic-968.mod',
-      'bonefish_and_mygg_-_brofists.mod',
-      'calcpreculation.mod',
-      'clairvoy.mod',
-      'comatron_-_d4wn.mod',
-      'conqueror_of_virgins.mod',
-      'cream_of_the_earth.mod',
-      'curt_cool_-_diskthief.mod',
-      'dascon_-_begrenzt_viruzid.mod',
-      'eightbm_the_new_republic_cafe.mod',
-      'eightbm_tove_janssons_groove.mod',
-      'enigma.mod',
-      'etro.mod',
-      'gmz.mod',
-      'h0ffman_-_technova.mod',
-      'hoffman_and_daytripper_-_professional_tracker.mod',
-      'hymn_to_aurora.mod',
-      'josss_-_churrasco.mod',
-      'josss_-_distortion.mod',
-      'josss_-_greased_machine.mod',
-      'josss_-_khromical_science.mod',
-      'josss_-_sunny_soul.mod',
-      'kayoto.mod',
-      'lazydayz.mod',
-      'liqube_-_persuadertron.mod',
-      'maze_-_virtual_disco_chip.mod',
-      'moby_and_ra_-_bud_rap.mod',
-      'mrs_beanbag_-_its_a_holiday.mod',
-      'orbit_lex_nine9.mod',
-      'overture.mod',
-      'physical_presence.mod',
-      'radix-rainy_summerdays.mod',
-      'raiden_-_claustrophobic_effect.mod',
-      'random_voice_-_monday.mod',
-      'robyn_and_dhr2_-_fashion_statement.mod',
-      'scrambld.mod',
-      'seaoflov.mod',
-      'slaze_-_the_ark_of_untruths.mod',
-      'space_debris.mod',
-      'stardstm.mod',
-      'subi_-_wreckonciled.mod',
-      'syphus_-_olden_days.mod',
-      'szudi_-_prestige.mod',
-      'tempest-acidjazz.mod',
-      'tilbury_fair.mod',
-      'triace_-_12_bars_-_all_closed.mod',
-      'ufo_tune.mod',
-      'virgill_-_cherry_coke.mod',
-      'virgill_and_slimey_-_the_codewizard.mod',
-      'wizardry.mod',
-      'xtd-ride.mod',
-      'xtd_-_revision_x.mod',
-      'zedsdead.mod',
+      'https://api.modarchive.org/downloads.php?moduleid=199742#mygg_josss_bonefish_-_turn_it_up.mod',
+      'https://api.modarchive.org/downloads.php?moduleid=199739#kefka_-_amazinggrejs.mod',
+      'https://api.modarchive.org/downloads.php?moduleid=199609#saxxonpike_-_dusk_ritual.mod',
+      'https://api.modarchive.org/downloads.php?moduleid=199607#manwe-mainspring.mod',
+      'https://api.modarchive.org/downloads.php?moduleid=199505#esau_-_3d-demo-2013.mod',
+      'https://api.modarchive.org/downloads.php?moduleid=199356#fluid_freak.mod',
+      'https://api.modarchive.org/downloads.php?moduleid=199345#generation_compoed.mod',
+      'https://api.modarchive.org/downloads.php?moduleid=199342#hot_dots.mod',
+      'https://api.modarchive.org/downloads.php?moduleid=199330#optimal_workflow.mod',
+      'https://api.modarchive.org/downloads.php?moduleid=199324#freerunner.mod',
+      'https://api.modarchive.org/downloads.php?moduleid=199193#tero_risti_-_social_engineering.mod',
+      'https://api.modarchive.org/downloads.php?moduleid=199122#at_the_sunrise.mod',
+      'https://api.modarchive.org/downloads.php?moduleid=198232#adkd_-_message_of_surabhi.mod',
+      'https://api.modarchive.org/downloads.php?moduleid=198223#richard_horvath-a_new_beginning.mod',
+      'https://api.modarchive.org/downloads.php?moduleid=198041#h0ffman_-_technova.mod',
+      'https://api.modarchive.org/downloads.php?moduleid=198040#mrs_beanbag_-_its_a_holiday.mod',
+      'https://api.modarchive.org/downloads.php?moduleid=197982#conqueror_of_virgins.mod',
+      'https://api.modarchive.org/downloads.php?moduleid=197870#bombastic-968.mod',
+      'https://api.modarchive.org/downloads.php?moduleid=197758#gmz.mod',
+      'https://api.modarchive.org/downloads.php?moduleid=197709#josss_-_khromical_science.mod',
+      'https://api.modarchive.org/downloads.php?moduleid=197707#josss_-_greased_machine.mod',
+      'https://api.modarchive.org/downloads.php?moduleid=197706#josss_-_sunny_soul.mod',
+      'https://api.modarchive.org/downloads.php?moduleid=197703#josss_-_churrasco.mod',
+      'https://api.modarchive.org/downloads.php?moduleid=197403#etro.mod',
+      'https://api.modarchive.org/downloads.php?moduleid=197293#uprough-15_years_of_fame.mod',
+      'https://api.modarchive.org/downloads.php?moduleid=197218#alpha_flight_-_hard.mod',
+      'https://api.modarchive.org/downloads.php?moduleid=197203#szudi_-_prestige.mod',
     ];
-    load(`mods/${songs[0]}`);
+    load(songs[0]);
 
     for (let i = 0; i < songs.length; ++i) {
       const optionEl = document.createElement('option');
       if (i === 0) {
         optionEl.selected = true;
       }
-      optionEl.textContent = songs[i];
+      let hash = songs[i].indexOf('#')
+      optionEl.textContent = songs[i].substr(hash + 1);
       optionEl.value = i;
       selectEl.appendChild(optionEl);
     }
@@ -239,7 +209,7 @@
 
     selectEl.addEventListener('change', event => {
       setPlaying(false);
-      load(`mods/${songs[event.target.value]}`);
+      load(songs[event.target.value]);
     });
 
     function init(channels) {
