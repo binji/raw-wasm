@@ -67,9 +67,14 @@
     .controls {
       display: flex;
       flex-direction: row;
+      flex-wrap: wrap;
     }
-    .controls > * { margin: 0 2px; align-self: center; }
+    .controls > * { margin: 0 2px; }
+    .volume-label { flex: 1; display: flex; flex-direction: row; }
+    #volume-text { align-self: center; }
     #volume { flex: 1; }
+    #mono-text { vertical-align: middle; }
+    #mono { vertical-align: middle; }
   </style>
 </head>
 <body>
@@ -81,10 +86,8 @@
           <select id="select">
           </select>
           <button id="play">play</button>
-          <label for="volume">volume</label>
-          <input type="range" id="volume" min="0" max="100" value="50">
-          <label for="mono">mono</label>
-          <input type="checkbox" id="mono">
+          <label class="volume-label"><span id="volume-text">volume</span><input type="range" id="volume" min="0" max="100" value="50"></label>
+          <label><span id="mono-text">mono</span><input type="checkbox" id="mono"></label>
         </div>
         <table>
           <tr>
