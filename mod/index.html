@@ -64,6 +64,12 @@
     .ins { width: 1rem; }
     .fx { width: 2rem; }
     .hl { background-color: #777; color: white; }
+    .controls {
+      display: flex;
+      flex-direction: row;
+    }
+    .controls > * { margin: 0 2px; align-self: center; }
+    #volume { flex: 1; }
   </style>
 </head>
 <body>
@@ -71,10 +77,15 @@
     <div class="controls-wrapper bborder">
       <div>All files hosted by <a href="https://modarchive.org">modarchive.org</a>, chosen from recent featured tracks</div>
       <div class="config">
-        <button id="play">play</button>
-        <select id="select">
-        </select>
-        <span id="loading" hidden>loading...</span>
+        <div class="controls">
+          <select id="select">
+          </select>
+          <button id="play">play</button>
+          <label for="volume">volume</label>
+          <input type="range" id="volume" min="0" max="100" value="50">
+          <label for="mono">mono</label>
+          <input type="checkbox" id="mono">
+        </div>
         <table>
           <tr>
             <th>song</th>
@@ -102,7 +113,10 @@
     const $ = document.querySelector.bind(document);
     const playEl = $('#play');
     const selectEl = $('#select');
+    const volumeEl = $('#volume');
+    const monoEl = $('#mono');
     const audio = new AudioContext;
+    const gainNode = audio.createGain();
 
     const AUDIO_FRAMES = 4096;
     const fontSize = 16;
@@ -120,7 +134,7 @@
       module = await WebAssembly.compile(
             await (await fetch('mod.wasm')).arrayBuffer());
 
-      await audio.audioWorklet.addModule('worklet.js');
+      await audio.audioWorklet.addModule('worklet.js?t=22');
       node = new AudioWorkletNode(audio, 'player', {
         numberOfInputs: 0,
         numberOfOutputs: 1,
@@ -136,16 +150,16 @@
     })();
 
     async function load(name) {
-      $('#loading').hidden = false;
-      $('#play').disabled = true;
+      playEl.textContent = "loading...";
+      playEl.disabled = true;
       try {
         let [_, response] = await Promise.all([initialized, await fetch(name)]);
         const file = await response.arrayBuffer();
         dv = new DataView(file);
         node.port.postMessage({msg: 'load', file});
-        $('#play').disabled = false;
+        playEl.disabled = false;
       } finally {
-        $('#loading').hidden = true;
+        playEl.textContent = "play";
       }
     }
 
@@ -202,7 +216,8 @@
       if (!started) {
         started = true;
         audio.resume();
-        node.connect(audio.destination);
+        node.connect(gainNode);
+        gainNode.connect(audio.destination);
       }
       setPlaying(!playing);
     });
@@ -210,6 +225,14 @@
     selectEl.addEventListener('change', event => {
       setPlaying(false);
       load(songs[event.target.value]);
+    });
+
+    volumeEl.addEventListener('input', event => {
+      gainNode.gain.setValueAtTime(event.target.value / 100, audio.currentTime);
+    });
+
+    monoEl.addEventListener('change', event => {
+      audio.destination.channelCount = event.target.checked ? 1 : 2;
     });
 
     function init(channels) {

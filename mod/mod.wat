@@ -16,7 +16,7 @@
 (global $num-channels (mut i32) (i32.const 0))
 (global $num-patterns (mut i32) (i32.const 0))
 
-(global $gain (mut f32) (f32.const 0.1))
+(global $gain (mut f32) (f32.const 0.5))
 (global $c2-rate (mut i32) (i32.const 0))
 (global $tick-len (mut i32) (i32.const 6))
 (global $tick-offset (mut i32) (i32.const 0))
