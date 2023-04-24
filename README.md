@@ -84,6 +84,13 @@ different emojis. [**2662 bytes**]
 
 [Demo!][21]
 
+## Mod
+
+A mod music player, based on code from [micromod][25]. Supports most effects.
+[**2833 bytes**]
+
+[Demo!][26]
+
 ## BadGB
 
 A very simple gameboy emulator that only plays a few games. [**3072 bytes**]
@@ -114,3 +121,5 @@ A very simple gameboy emulator that only plays a few games. [**3072 bytes**]
 [22]: https://binji.github.io/raw-wasm/badgb
 [23]: https://en.wikipedia.org/wiki/Shunting_yard_algorithm
 [24]: https://binji.github.io/raw-wasm/jit
+[25]: https://github.com/martincameron/micromod
+[26]: https://binji.github.io/raw-wasm/mod
