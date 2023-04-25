@@ -235,7 +235,9 @@
     });
 
     monoEl.addEventListener('change', event => {
+      gainNode.disconnect();
       audio.destination.channelCount = event.target.checked ? 1 : 2;
+      gainNode.connect(audio.destination);
     });
 
     function init(channels) {
