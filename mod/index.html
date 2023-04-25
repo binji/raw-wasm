@@ -86,7 +86,7 @@
           <select id="select">
           </select>
           <button id="play">play</button>
-          <label class="volume-label"><span id="volume-text">volume</span><input type="range" id="volume" min="0" max="100" value="50"></label>
+          <label class="volume-label"><span id="volume-text">volume</span><input type="range" id="volume" min="0" max="100" value="30"></label>
           <label><span id="mono-text">mono</span><input type="checkbox" id="mono"></label>
         </div>
         <table>
@@ -137,7 +137,7 @@
       module = await WebAssembly.compile(
             await (await fetch('mod.wasm')).arrayBuffer());
 
-      await audio.audioWorklet.addModule('worklet.js?t=22');
+      await audio.audioWorklet.addModule('worklet.js');
       node = new AudioWorkletNode(audio, 'player', {
         numberOfInputs: 0,
         numberOfOutputs: 1,
@@ -214,11 +214,11 @@
       playEl.textContent = playing ? 'pause' : 'play';
     }
 
-    playEl.addEventListener('click', _ => {
+    playEl.addEventListener('click', async _ => {
       // Wait to connect on user action.
       if (!started) {
         started = true;
-        audio.resume();
+        await audio.resume();
         node.connect(gainNode);
         gainNode.connect(audio.destination);
       }
