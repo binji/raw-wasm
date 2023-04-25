@@ -120,6 +120,7 @@
     const monoEl = $('#mono');
     const audio = new AudioContext;
     const gainNode = audio.createGain();
+    gainNode.gain.setValueAtTime(volumeEl.value / 100, audio.currentTime);
 
     const AUDIO_FRAMES = 4096;
     const fontSize = 16;
