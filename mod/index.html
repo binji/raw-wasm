@@ -80,7 +80,7 @@
 <body>
   <div class="body-wrapper">
     <div class="controls-wrapper bborder">
-      <div>All files hosted by <a href="https://modarchive.org">modarchive.org</a>, chosen from recent featured tracks</div>
+      <div>All files hosted by <a href="https://modarchive.org">modarchive.org</a>, chosen from recent featured tracks and requests</div>
       <div class="config">
         <div class="controls">
           <select id="select">
@@ -195,7 +195,16 @@
       'https://api.modarchive.org/downloads.php?moduleid=197293#uprough-15_years_of_fame.mod',
       'https://api.modarchive.org/downloads.php?moduleid=197218#alpha_flight_-_hard.mod',
       'https://api.modarchive.org/downloads.php?moduleid=197203#szudi_-_prestige.mod',
+      'https://api.modarchive.org/downloads.php?moduleid=191474#bonefish_and_mygg_-_brofists.mod',
+      'https://api.modarchive.org/downloads.php?moduleid=42919#garbage.mod',
     ];
+    if (window.location.search) {
+      let number = window.location.search.substr(1)|0;
+      let name = `moduleid=${number}`;
+      let url = `https://api.modarchive.org/downloads.php?${name}`;
+      songs.splice(0, 0, url);
+      load(songs[0]);
+    }
     load(songs[0]);
 
     for (let i = 0; i < songs.length; ++i) {
