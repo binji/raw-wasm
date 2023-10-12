@@ -66,6 +66,7 @@
     (block $nextpc
     (block $set-vx (result i32)
     (block $set-vf-vx (result i32)
+    (block $set-vf0-vx (result i32)
     (block $skip (result i32)
     (block $do-copy
     (block $do-copy-update-i
@@ -158,15 +159,15 @@
 
       )
       ;; 0x8XY1  v[x] |= v[y]
-      (br $set-vx (i32.or (local.get $vx) (local.get $vy)))
+      (br $set-vf0-vx (i32.or (local.get $vx) (local.get $vy)))
 
       )
       ;; 0x8XY2  v[x] &= v[y]
-      (br $set-vx (i32.and (local.get $vx) (local.get $vy)))
+      (br $set-vf0-vx (i32.and (local.get $vx) (local.get $vy)))
 
       )
       ;; 0x8XY3  v[x] ^= v[y]
-      (br $set-vx (i32.xor (local.get $vx) (local.get $vy)))
+      (br $set-vf0-vx (i32.xor (local.get $vx) (local.get $vy)))
 
       )
       ;; 0x8XY4  v[x] += v[y], vf = carry
@@ -444,10 +445,17 @@
       (i32.add (i32.shl (i32.const 1) (;(i32.const <skip>);)) (local.get $nextpc)))
 
     )
+    ;; $set-vf0-vx
+    (local.set $vx (;(i32.const <new-vx>);))
+    (i32.const 0)
+    ;; fallthrough
+
+    )
     ;; $set-vf-vx
     ;; update vf
     (local.set $vf (;(i32.const <new-vf>);))
     (i32.store8 offset=0xf (i32.const 0) (local.get $vf))
+    (br_if $nextpc (i32.eq (local.get $x) (i32.const 0xf)))
     (local.get $vx)
     ;; fallthrough
 
