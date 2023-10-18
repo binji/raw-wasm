@@ -113,6 +113,7 @@
   </div>
 
   <script>
+    "use strict";
     const $ = document.querySelector.bind(document);
     const playEl = $('#play');
     const selectEl = $('#select');
@@ -135,7 +136,7 @@
     let rowEls = [];
 
     let initialized = (async function() {
-      module = await WebAssembly.compile(
+      const module = await WebAssembly.compile(
             await (await fetch('mod.wasm')).arrayBuffer());
 
       await audio.audioWorklet.addModule('worklet.js');
