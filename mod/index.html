@@ -370,7 +370,7 @@
 
           noteEl.textContent = notes[key];
           insEl.textContent = ins ? hex2(ins) : '-';
-          fxEl.textContent = effect ? `${hex(effect)}${hex2(param)}` : '---';
+          fxEl.textContent = effect || param ? `${hex(effect)}${hex2(param)}` : '---';
 
           offset += 4;
         }

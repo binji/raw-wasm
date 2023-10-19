@@ -87,7 +87,7 @@ different emojis. [**2662 bytes**]
 ## Mod
 
 A mod music player, based on code from [micromod][25]. Supports most effects.
-[**2833 bytes**]
+[**2840 bytes**]
 
 [Demo!][26]
 

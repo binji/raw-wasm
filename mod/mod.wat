@@ -203,6 +203,7 @@
   (local $addr i32)
   (local $amp i32)
   (local $phase i32)
+  (local $temp i32)
 
   (local.set $channel (i32.const 0x275))
   (local.set $channel-end (i32.add (local.get $channel) (i32.mul (global.get $num-channels) (i32.const 52))))
@@ -502,10 +503,11 @@
             end $fx2
               (br $fx-arp-add (i32.and (local.get $param) (i32.const 0xf)))
             end $fx-arp-add
-              (i32.store8 offset=42 (local.get $channel) (; value ;))
+              (local.set $temp (; value ;))
+              (i32.store8 offset=42 (local.get $channel) (local.get $temp))
             br $X
           end $2 ;; portamento down
-            (local.set $param (local.get $-param))
+            (local.set $param (i32.sub (i32.const 0) (local.get $param)))
             ;; fallthrough
           end $1 ;; portamento up
             (i32.store16 offset=24 (local.get $channel)
@@ -523,7 +525,7 @@
         ;; 7:tremolo
         ;; a:volume slide
 
-        end $tp
+        end $tp  ;; tone portamento -- reached by 3, 5
           (local.set $source (i32.load16_u offset=24 (local.get $channel)))
           (local.set $dest (i32.load16_u offset=26 (local.get $channel)))
           (i32.store16 offset=24 (local.get $channel)
@@ -543,7 +545,7 @@
                             (i32.load8_u offset=37 (local.get $channel))))
                  (i32.lt_s (local.get $source) (local.get $dest))))))
           br $vs
-        end $vt ;; vibrato-tremolo
+        end $vt ;; vibrato-tremolo -- reached by 4, 6, 7
           (local.set $addr
             ;; difference between vibrato-type and tremolo-type
             (i32.add
@@ -556,10 +558,10 @@
             (then
               (if (local.get $param-hi)
                 (then
-                  (i32.store8 offset=45 (local.get $channel) (local.get $param-hi))))
+                  (i32.store8 offset=45 (local.get $addr) (local.get $param-hi))))
               (if (local.get $param-lo)
                 (then
-                  (i32.store8 offset=46 (local.get $channel) (local.get $param-lo)))))
+                  (i32.store8 offset=46 (local.get $addr) (local.get $param-lo)))))
             (else
               (i32.store8 offset=44 (local.get $addr)
                 (i32.add
@@ -611,22 +613,22 @@
           end $done
           (i32.store8 offset=40
             ;; Use vibrato-add or tremolo-add
-            (i32.add (local.get $addr) (local.get $effect=7))
+            (i32.add (local.get $channel) (local.get $effect=7))
             (i32.shr_u
               (i32.mul
                 (local.get $amp)
                 (i32.load8_u offset=46 (local.get $addr)))
-              ;; Divide by 6 or 7 for vibrato or tremolo respectively.
+              ;; Divide by 2**6 or 2**7 for vibrato or tremolo respectively.
               (i32.sub (i32.const 7) (local.get $effect=7))))
           ;; fallthrough
-        end $vs
-          (br_if $X
+        end $vs  ;; volume slide -- reached by 3, 4, 5, 6, 7, a
+          (br_if $X  ;; exit if 3, 4 or 7
             (i32.or
-              (i32.or
-                (i32.lt_u (local.get $effect) (i32.const 5))
-                ;; Can't use $effect=7 since it may not be set by the time we
-                ;; get here.
-                (i32.eq (local.get $effect (i32.const 7))))
+              (i32.lt_u
+                (i32.and
+                  (i32.add (local.get $effect) (i32.const 1))
+                  (i32.const 3))
+                (i32.const 2))
               (local.get $tick<0)))
           (i32.store8 offset=34 (local.get $channel)
             (call $i32_clamp0_s
