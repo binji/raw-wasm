@@ -100,7 +100,7 @@
                                               (global.get $num-channels))
                                      (i32.const 8))))
   (local.set $i (i32.const 0x1001e))
-  (local.set $j (i32.const 0xc3))  ;; 0xb5 + 14
+  (local.set $j (i32.const 0xe3))  ;; 0xd5 + 14
   (loop $loop
     (local.set $sample-length (call $read16be_2x (i32.add (local.get $i) (i32.const 12))))
     (local.set $loop-start (call $read16be_2x (i32.add (local.get $i) (i32.const 16))))
@@ -159,7 +159,7 @@
     (i32.store8 offset=36
       (local.tee $channel
         (i32.add
-          (i32.const 0x275)
+          (i32.const 0x295)
           (i32.mul (local.get $channel-idx) (i32.const 52))))
       (local.get $channel-idx))
 
@@ -205,7 +205,7 @@
   (local $phase i32)
   (local $temp i32)
 
-  (local.set $channel (i32.const 0x275))
+  (local.set $channel (i32.const 0x295))
   (local.set $channel-end (i32.add (local.get $channel) (i32.mul (global.get $num-channels) (i32.const 52))))
 
   (global.set $tick (i32.sub (global.get $tick) (i32.const 1)))
@@ -236,7 +236,7 @@
                           (i32.add (local.get $channel) (i32.const 52)))
                         (local.get $channel-end))))
 
-          (local.set $channel (i32.const 0x275))
+          (local.set $channel (i32.const 0x295))
           (global.set $break-pattern (i32.const -1))))
 
       (global.set $row (global.get $next-row))
@@ -556,13 +556,17 @@
                 (i32.const 2))))
           (if (local.get $tick<0)
             (then
-              (if (local.get $param-hi)
+              ;; update vibrato/tremolo-speed and vibrato/tremolo-depth from param
+              (if (i32.ne (local.get $effect) (i32.const 6))
                 (then
-                  (i32.store8 offset=45 (local.get $addr) (local.get $param-hi))))
-              (if (local.get $param-lo)
-                (then
-                  (i32.store8 offset=46 (local.get $addr) (local.get $param-lo)))))
+                  (if (local.get $param-hi)
+                    (then
+                      (i32.store8 offset=45 (local.get $addr) (local.get $param-hi))))
+                  (if (local.get $param-lo)
+                    (then
+                      (i32.store8 offset=46 (local.get $addr) (local.get $param-lo)))))))
             (else
+              ;; vibrato/tremolo-phase += vibrato/tremolo-speed
               (i32.store8 offset=44 (local.get $addr)
                 (i32.add
                   (i32.load8_u offset=44 (local.get $addr))
@@ -609,7 +613,18 @@
                   (i32.const 3))))
             (br $done)
           end $0
-          ;; TODO: sine
+            (local.set $amp
+              (select
+                (i32.mul
+                  (local.tee $temp
+                    (i32.load8_u offset=0xb5
+                      (i32.and
+                        (local.get $phase)
+                        (i32.const 0x1f))))
+                  (i32.const -1))
+                (local.get $temp)
+                (i32.and (local.get $phase) (i32.const 0x20))))
+            ;; fallthrough
           end $done
           (i32.store8 offset=40
             ;; Use vibrato-add or tremolo-add
@@ -656,10 +671,10 @@
                           (i32.mul
                             (i32.add
                               (i32.load16_u offset=24 (local.get $channel))    ;; period
-                              (i32.load8_u offset=40 (local.get $channel)))    ;; vibrato_add
+                              (i32.load8_s offset=40 (local.get $channel)))    ;; vibrato_add
                             (i32.load16_u offset=0x95                          ;; arp_tuning
                               (i32.shl
-                                (i32.load8_u offset=42 (local.get $channel))   ;; arpeggio_add
+                                (i32.load8_s offset=42 (local.get $channel))   ;; arpeggio_add
                                 (i32.const 1))))
                           (i32.const 11)))
                       (i32.const 1))
@@ -681,7 +696,7 @@
                     (call $i32_clamp0_s
                       (i32.add
                         (i32.load8_u offset=34 (local.get $channel))   ;; volume
-                        (i32.load8_u offset=41 (local.get $channel)))  ;; tremolo_add
+                        (i32.load8_s offset=41 (local.get $channel)))  ;; tremolo_add
                       (i32.const 64)))
                   (global.get $gain))
                 (f32.const 0.03125)))))
@@ -709,7 +724,7 @@
         ;; convert from instrument number to instrument offset
         (local.tee $instrument-ptr
           (i32.add (i32.mul (local.get $ins) (i32.const 14))
-                   (i32.const 0xb5))))
+                   (i32.const 0xd5))))
       (i32.store offset=8 (local.get $channel) (i32.const 0))        ;; sample_offset
       ;; copy fine tune and volume
       (i32.store16 offset=33 (local.get $channel)
@@ -819,7 +834,7 @@
         (f32.load offset=12
           (local.tee $channel
             (i32.add
-              (i32.const 0x275)
+              (i32.const 0x295)
               (i32.mul (local.get $channel-idx) (i32.const 52))))))
       (local.set $sample-step (f32.load offset=16 (local.get $channel)))
       (local.set $loop-end
@@ -957,16 +972,20 @@
 
   ;; =0x0095 - arp tuning (32 bytes)
   (i16 4096 3866 3649 3444 3251 3069 2896 2734
-	     2580 2435 2299 2170 2048 1933 1825 1722)
+       2580 2435 2299 2170 2048 1933 1825 1722)
 
-  ;; =0x00b5 - instrument data (32 x 14 bytes = 448 bytes)
+  ;; =0x00b5 - sine table (32 bytes)
+  (i8   0  24  49  74  97 120 141 161 180 197 212 224 235 244 250 253
+      255 253 250 244 235 224 212 197 180 161 141 120  97  74  49  24)
+
+  ;; =0x00d5 - instrument data (32 x 14 bytes = 448 bytes)
     ;;  0 i32 sample data offset
     ;;  4 f32 loop start
     ;;  8 f32 loop length
     ;; 12 s8  fine tune  [-8, 7]
     ;; 13 u8  volume     [0, 64]
 
-  ;; =0x0275 - channel data (32 x 52 bytes = 1664 bytes)
+  ;; =0x0295 - channel data (32 x 52 bytes = 1664 bytes)
     ;;  0 i32 instrument pointer
     ;;  4 i32 assigned instrument pointer
 
